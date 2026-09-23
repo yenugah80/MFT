@@ -1,122 +1,116 @@
-/**
- * Hydration Analytics - dedicated deep-dive screen
- *
- * Split out of the unified /analytics screen (which stacks Wellness, Nutrition,
- * Mood, Activity and Hydration behind one tab bar) so hydration gets the same
- * treatment as its own insights/recommendations screens: one domain, one story,
- * no tab hunting.
- *
- * Deliberately does NOT repeat what the tracker modal already shows. The tracker
- * answers "how am I doing right now"; this screen answers "how have I been
- * doing, when do I drink, what do I drink, and what should I expect tomorrow".
- * Today's ring is kept only as a small anchor at the top for context.
- *
- * Data sources (all existing endpoints, no backend changes):
- *   GET /hydration/analytics/dashboard  → patterns, persona, prediction, cold start
- *   GET /water/history                  → per-day series for the trend chart
- *   GET /water/today                    → today's total (shared cache with the log tab)
- */
-
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
+  Alert,
   RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import apiClient from '../../services/apiClient';
 import { useHydrationAnalytics, useHydrationHistory } from '../../hooks/useHydrationAnalytics';
 import { useDashboard } from '../../hooks/useDashboard';
-import { BEVERAGE_TYPES } from '../../constants/beverageConstants';
+import { useWaterLog } from '../../hooks/useWaterLog';
+import { BEVERAGE_TYPES, DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 import HydrationTrendChart from '../../components/hydration/HydrationTrendChart';
-import ProgressRing from '../../components/analytics/ProgressRing';
 import {
-  TEXT,
-  SURFACES,
-  SPACING,
+  buildHydrationInsights,
+  HYDRATION_PERIODS,
+  HYDRATION_RANGE_OPTIONS,
+  summarizeHydrationRange,
+} from '../../utils/hydrationHistory';
+import {
   RADIUS,
+  SHADOWS,
+  SPACING,
+  SURFACES,
+  TEXT,
   TYPOGRAPHY,
-  CARD_SYSTEM,
-  SEMANTIC,
-  VIBRANT_WELLNESS,
 } from '../../constants/premiumTheme';
 
-const RANGES = [
-  { key: 7, label: '7 Days' },
-  { key: 30, label: '30 Days' },
-];
+const HYDRATION = {
+  primary: '#4169E1',
+  bright: '#5B8DEE',
+  cyan: '#0891B2',
+  pale: '#EEF4FF',
+  border: '#D9E5FF',
+  gradient: ['#5B8DEE', '#4169E1', '#2E4A7D'],
+};
 
-const HYDRATION_BLUE = VIBRANT_WELLNESS.hydration.solid; // #0891B2
-const HYDRATION_LIGHT = '#7DD3EF';
+const INITIAL_ENTRY_COUNT = 8;
 
-/**
- * Persona types whose classification uses only volume and beverage mix.
- *
- * The remaining four (CONSISTENT_SIPPER, MORNING_DEHYDRATOR, EVENING_CATCHUP,
- * MEAL_ANCHORED) are scored from periodDistribution, which is derived from
- * log timestamps — and those record when the user tapped, not when they drank.
- * Presenting them states a drinking habit the data cannot support, so they stay
- * suppressed until water logs carry a consumption time.
- */
-const VOLUME_DERIVED_PERSONAS = new Set(['CAFFEINE_COMPENSATOR', 'HYDRATION_CHAMPION']);
-
-const PERIODS = [
-  { key: 'morning', label: 'Morning', hint: '6am–12pm', icon: 'sunny-outline' },
-  { key: 'afternoon', label: 'Afternoon', hint: '12pm–6pm', icon: 'partly-sunny-outline' },
-  { key: 'evening', label: 'Evening', hint: '6pm–12am', icon: 'moon-outline' },
-];
-
-function formatHour(hour) {
-  if (hour === undefined || hour === null) return null;
-  const suffix = hour >= 12 ? 'PM' : 'AM';
-  const h = hour % 12 || 12;
-  return `${h}${suffix}`;
+function formatVolume(ml, compact = false) {
+  const value = Math.max(0, Number(ml) || 0);
+  if (value < 1000) return `${Math.round(value)} ml`;
+  const liters = value / 1000;
+  return `${liters.toFixed(compact && liters % 1 === 0 ? 0 : 1)} L`;
 }
 
-function formatVolume(ml) {
-  if (!ml || ml < 0) return '0ml';
-  if (ml < 1000) return `${Math.round(ml)}ml`;
-  return `${(ml / 1000).toFixed(1)}L`;
+function formatEntryTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return date.toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
 }
 
-export default function HydrationAnalyticsScreen() {
+function formatDay(value) {
+  if (!value) return 'No logged day';
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric',
+  });
+}
+
+function titleCase(value) {
+  if (!value) return 'None yet';
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getBeverageMeta(type) {
+  return BEVERAGE_TYPES[type] || {
+    label: titleCase(type || 'drink'),
+    icon: 'ellipse-outline',
+    color: HYDRATION.primary,
+  };
+}
+
+export default function HydrationHistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [rangeDays, setRangeDays] = useState(7);
+  const [rangeKey, setRangeKey] = useState('month');
   const [refreshing, setRefreshing] = useState(false);
+  const [insightsExpanded, setInsightsExpanded] = useState(false);
+  const [visibleEntryCount, setVisibleEntryCount] = useState(INITIAL_ENTRY_COUNT);
+  const [deletingEntryId, setDeletingEntryId] = useState(null);
+
+  const selectedRange = HYDRATION_RANGE_OPTIONS.find((range) => range.key === rangeKey)
+    || HYDRATION_RANGE_OPTIONS[2];
 
   const {
     analytics,
     isLoading: analyticsLoading,
     refetch: refetchAnalytics,
   } = useHydrationAnalytics();
-
-  // Always pull 30 days; the range toggle slices locally. Streaks and averages
-  // off a 7-day fetch would understate a longer run, and toggling would refetch
-  // data we already have.
   const {
     series: fullSeries,
+    logs,
     isLoading: historyLoading,
     hasFailed: historyFailed,
     refetch: refetchHistory,
-  } = useHydrationHistory(30);
+  } = useHydrationHistory(90);
+  const { data: dashboard, refetch: refetchDashboard } = useDashboard();
+  const { removeWater } = useWaterLog();
 
-  const series = useMemo(
-    () => fullSeries.slice(-rangeDays),
-    [fullSeries, rangeDays]
-  );
-
-  // Same query key as the log tab so today's number never disagrees between screens
   const { data: waterToday, refetch: refetchToday } = useQuery({
     queryKey: ['waterToday'],
     queryFn: async () => {
@@ -126,1038 +120,637 @@ export default function HydrationAnalyticsScreen() {
     staleTime: 30 * 1000,
   });
 
-  const { data: dashboard } = useDashboard();
+  const goalMl = Math.round(
+    (Number(dashboard?.goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS) * 1000,
+  );
+  const summary = useMemo(() => summarizeHydrationRange({
+    fullSeries,
+    logs,
+    rangeDays: selectedRange.days,
+    goalMl,
+  }), [fullSeries, goalMl, logs, selectedRange.days]);
 
-  const patterns = analytics?.patterns;
-  const persona = analytics?.persona;
-  const prediction = analytics?.prediction;
-  const coldStart = analytics?.coldStart;
-
-  // patterns is null until there's at least one log in the lookback window, so
-  // a brand-new user would otherwise be measured against a hardcoded 2L rather
-  // than the goal they set in onboarding.
-  const goalMl =
-    patterns?.goalMl ||
-    Math.round((dashboard?.goals?.waterLiters || 0) * 1000) ||
-    2000;
-  const todayMl = Math.round((waterToday?.totalLiters || 0) * 1000);
+  const todaySeriesMl = Number(fullSeries[fullSeries.length - 1]?.ml) || 0;
+  const todayMl = Math.round(
+    Number.isFinite(Number(waterToday?.totalLiters))
+      ? Number(waterToday?.totalLiters) * 1000
+      : todaySeriesMl,
+  );
   const todayPercent = goalMl > 0 ? Math.round((todayMl / goalMl) * 100) : 0;
+  const isDay = selectedRange.days === 1;
+  const hasHistory = (logs || []).length > 0 || fullSeries.some((day) => day.ml > 0);
+  const selectedRangeHasData = summary.daysTracked > 0;
+  const isLoading = historyLoading && !hasHistory;
+  const showLoadError = historyFailed && !hasHistory;
+  const visibleEntries = summary.rangeLogs.slice(0, visibleEntryCount);
+  const remainingEntries = Math.max(summary.rangeLogs.length - visibleEntries.length, 0);
+  const insights = useMemo(
+    () => buildHydrationInsights(summary, goalMl),
+    [goalMl, summary],
+  );
 
-  // Derived stats from the day series — computed here rather than trusting the
-  // aggregate endpoint so the numbers always match the bars on screen.
-  const rangeStats = useMemo(() => {
-    const loggedDays = series.filter((d) => d.ml > 0);
-    const total = loggedDays.reduce((sum, d) => sum + d.ml, 0);
-    const daysOnTarget = series.filter((d) => d.ml >= goalMl).length;
-    const best = series.reduce((m, d) => (d.ml > (m?.ml || 0) ? d : m), null);
-
-    // Streak runs over the full 30-day window, not the visible slice — a
-    // 12-day run shouldn't read as "7" just because the 7-day view is open.
-    // Today is excluded from breaking it: a day still in progress isn't a miss.
-    // Threshold is 80% of goal, matching the backend's rule.
-    let streak = 0;
-    for (let i = fullSeries.length - 1; i >= 0; i--) {
-      const day = fullSeries[i];
-      if (day.ml >= goalMl * 0.8) streak++;
-      else if (day.isToday) continue;
-      else break;
+  const metrics = useMemo(() => {
+    const topBeverage = getBeverageMeta(summary.topBeverageType);
+    if (isDay) {
+      return [
+        { icon: 'water-outline', value: formatVolume(todayMl), label: 'Hydration today' },
+        { icon: 'flag-outline', value: `${todayPercent}%`, label: 'Daily goal' },
+        { icon: 'add-circle-outline', value: `${summary.rangeLogs.length}`, label: 'Drinks logged' },
+        { icon: topBeverage.icon, value: summary.topBeverageType ? topBeverage.label : 'None yet', label: 'Top drink' },
+      ];
     }
+    return [
+      { icon: 'water-outline', value: formatVolume(summary.averageLoggedDayMl), label: 'Avg logged day' },
+      { icon: 'flag-outline', value: `${summary.daysOnTarget}/${summary.series.length}`, label: 'Goal days' },
+      { icon: 'calendar-outline', value: `${summary.daysTracked}/${summary.series.length}`, label: 'Days tracked' },
+      { icon: topBeverage.icon, value: summary.topBeverageType ? topBeverage.label : 'None yet', label: 'Top drink' },
+    ];
+  }, [isDay, summary, todayMl, todayPercent]);
 
-    return {
-      avgMl: loggedDays.length ? Math.round(total / loggedDays.length) : 0,
-      daysLogged: loggedDays.length,
-      daysOnTarget,
-      bestMl: best?.ml || 0,
-      streak,
-      consistency: series.length ? Math.round((loggedDays.length / series.length) * 100) : 0,
-    };
-  }, [series, fullSeries, goalMl]);
+  const prediction = analytics?.prediction;
 
-  const beverages = useMemo(() => {
-    const breakdown = patterns?.beverageBreakdown;
-    if (!breakdown) return [];
-    return Object.entries(breakdown)
-      .map(([type, value]) => ({
-        type,
-        // Falling back to BEVERAGE_TYPES.water would label an unrecognised
-        // type "Water" — silently wrong. Show the raw type instead.
-        meta: BEVERAGE_TYPES[type] || {
-          label: type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' '),
-          icon: 'ellipse-outline',
-          color: HYDRATION_BLUE,
-        },
-        volumeMl: Math.round((value?.volume || 0) * 1000),
-        percentage: Math.round((value?.percentage || 0) * 100),
-      }))
-      .filter((b) => b.volumeMl > 0)
-      .sort((a, b) => b.volumeMl - a.volumeMl);
-  }, [patterns]);
-
-  const peakHourLabel = formatHour(patterns?.peakHour);
-  const isPersonaSound = Boolean(persona?.title) && VOLUME_DERIVED_PERSONAS.has(persona?.type);
-  const hasAnyLogs =
-    (coldStart?.totalLogs || 0) > 0 ||
-    todayMl > 0 ||
-    fullSeries.some((d) => d.ml > 0);
-  // A failed history fetch must not masquerade as "you've never logged water".
-  const showLoadError = historyFailed && !hasAnyLogs;
-  const isLoading = (analyticsLoading || historyLoading) && !hasAnyLogs && !historyFailed;
+  useEffect(() => {
+    setVisibleEntryCount(INITIAL_ENTRY_COUNT);
+  }, [rangeKey]);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/dashboard');
-    }
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/dashboard');
   }, [router]);
-
-  const handleRangeChange = useCallback((days) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setRangeDays(days);
-  }, []);
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([refetchAnalytics(), refetchHistory(), refetchToday()]);
-    } catch {
-      // Non-fatal — the screen keeps whatever it already has
-    }
-    setRefreshing(false);
-  }, [refetchAnalytics, refetchHistory, refetchToday]);
 
   const handleLogWater = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/(tabs)/log?focus=hydration');
   }, [router]);
 
+  const handleRangeChange = useCallback((nextRange) => {
+    Haptics.selectionAsync();
+    setRangeKey(nextRange);
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchAnalytics(), refetchHistory(), refetchToday(), refetchDashboard(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchAnalytics, refetchDashboard, refetchHistory, refetchToday]);
+
+  const handleDeleteEntry = useCallback((entry) => {
+    const rawLiters = Number(entry?.amountLiters) || 0;
+    const hydrationLiters = Number(entry?.hydrationLiters) || rawLiters;
+    const amountMl = Math.round(rawLiters * 1000);
+    const beverage = getBeverageMeta(entry?.beverageType);
+
+    Alert.alert(
+      'Delete hydration entry?',
+      `Remove ${amountMl} ml of ${beverage.label} from your history?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingEntryId(entry.id);
+            try {
+              await removeWater(Number(entry.id), rawLiters, hydrationLiters);
+              await Promise.all([refetchAnalytics(), refetchHistory(), refetchToday()]);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch {
+              Alert.alert('Could not delete entry', 'Your hydration entry is still safe. Please try again.');
+            } finally {
+              setDeletingEntryId(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [refetchAnalytics, refetchHistory, refetchToday, removeWater]);
+
   return (
     <View style={styles.screen}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + SPACING[2] }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={26} color={TEXT.primary} />
-          </TouchableOpacity>
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.headerTitle}>Hydration</Text>
-            <Text style={styles.headerSubtitle}>Your water story</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleLogWater}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Log water"
-          >
-            <Ionicons name="add" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.rangeRow}>
-          {RANGES.map((range) => {
-            const selected = rangeDays === range.key;
-            return (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + SPACING[8] }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={HYDRATION.primary}
+            colors={[HYDRATION.primary]}
+          />
+        )}
+      >
+        <LinearGradient colors={HYDRATION.gradient} style={styles.hero}>
+          <View style={[styles.heroSafe, { paddingTop: insets.top + SPACING[2] }]}>
+            <View style={styles.navRow}>
               <TouchableOpacity
-                key={range.key}
-                style={[styles.rangeChip, selected && styles.rangeChipSelected]}
-                onPress={() => handleRangeChange(range.key)}
-                activeOpacity={0.8}
+                style={styles.navButton}
+                onPress={handleBack}
                 accessibilityRole="button"
-                accessibilityState={{ selected }}
+                accessibilityLabel="Go back"
               >
-                <Text style={[styles.rangeText, selected && styles.rangeTextSelected]}>
-                  {range.label}
-                </Text>
+                <Ionicons name="chevron-back" size={24} color={TEXT.white} />
               </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+              <Text style={styles.navTitle}>Hydration history</Text>
+              <TouchableOpacity
+                style={styles.navButton}
+                onPress={handleLogWater}
+                accessibilityRole="button"
+                accessibilityLabel="Log water"
+              >
+                <Ionicons name="add" size={25} color={TEXT.white} />
+              </TouchableOpacity>
+            </View>
 
-      {isLoading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color={HYDRATION_BLUE} />
-          <Text style={styles.loadingText}>Loading your hydration data…</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={HYDRATION_BLUE}
-              colors={[HYDRATION_BLUE]}
+            <View style={styles.heroCopy}>
+              <View style={styles.heroIcon}>
+                <Ionicons name="water-outline" size={25} color={TEXT.white} />
+              </View>
+              <View style={styles.heroTextBlock}>
+                <Text style={styles.heroTitle}>See how your water story flows</Text>
+                <Text style={styles.heroSubtitle}>
+                  Intake, consistency, drinks, and logging rhythm in one timeline.
+                </Text>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.content}>
+        <RangeSelector selectedKey={rangeKey} onSelect={handleRangeChange} />
+
+        {isLoading ? (
+          <StateCard
+            loading
+            title="Bringing your hydration history together"
+            body="Your live entries and trends are loading."
+          />
+        ) : showLoadError ? (
+          <StateCard
+            icon="cloud-offline-outline"
+            title="Hydration history is taking a pause"
+            body="Your entries are safe. Check your connection and try again."
+            actionLabel="Try again"
+            onAction={handleRefresh}
+          />
+        ) : !hasHistory ? (
+          <StateCard
+            icon="water-outline"
+            title="Your hydration story starts here"
+            body="Log a drink to begin tracking intake, consistency, and patterns."
+            actionLabel="Log water"
+            onAction={handleLogWater}
+          />
+        ) : (
+          <>
+            {historyFailed && (
+              <View style={styles.staleNotice}>
+                <Ionicons name="cloud-offline-outline" size={17} color="#9A6700" />
+                <Text style={styles.staleNoticeText}>Showing saved hydration data. Pull to refresh.</Text>
+              </View>
+            )}
+
+            <View style={styles.metricsGrid}>
+              {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
+            </View>
+
+            {!selectedRangeHasData && (
+              <View style={styles.rangeEmptyCard}>
+                <View style={styles.rangeEmptyIcon}>
+                  <Ionicons name="water-outline" size={24} color={HYDRATION.primary} />
+                </View>
+                <View style={styles.rangeEmptyCopy}>
+                  <Text style={styles.rangeEmptyTitle}>Nothing logged in this range</Text>
+                  <Text style={styles.rangeEmptyText}>Choose a longer range or add your first drink for today.</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.rangeEmptyAction}
+                  onPress={handleLogWater}
+                  accessibilityRole="button"
+                  accessibilityLabel="Log water"
+                >
+                  <Ionicons name="add" size={20} color={TEXT.white} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <InsightsCard
+              expanded={insightsExpanded}
+              onToggle={() => setInsightsExpanded((current) => !current)}
+              insights={insights}
+              summary={summary}
+              prediction={prediction}
+              rangeLabel={selectedRange.label}
             />
-          }
-        >
-          {showLoadError ? (
-            <LoadErrorState onRetry={handleRefresh} />
-          ) : !hasAnyLogs ? (
-            <EmptyState onLogWater={handleLogWater} />
-          ) : (
-            <>
-              {/* TODAY — small anchor, not the main event */}
-              <View style={styles.todayCard}>
-                <ProgressRing
-                  value={todayMl}
-                  goal={goalMl}
-                  size={104}
-                  strokeWidth={10}
-                  color={todayPercent >= 100 ? SEMANTIC.success.base : HYDRATION_BLUE}
-                  centerValue={`${todayPercent}%`}
-                  centerLabel="today"
-                />
-                <View style={styles.todayDetails}>
-                  <Text style={styles.todayValue}>
-                    {formatVolume(todayMl)}
-                    <Text style={styles.todayGoal}> / {formatVolume(goalMl)}</Text>
+
+            <View style={styles.sectionHeading}>
+              <Text style={styles.eyebrow}>TRACKING</Text>
+              <Text style={styles.sectionTitle}>
+                {isDay ? 'Today at a glance' : `Your last ${selectedRange.label}`}
+              </Text>
+            </View>
+
+            <View style={styles.trendCard}>
+              <View style={styles.cardHeader}>
+                <View style={styles.cardTitleBlock}>
+                  <Text style={styles.cardTitle}>{isDay ? 'Logged rhythm' : 'Hydration trend'}</Text>
+                  <Text style={styles.cardSubtitle}>
+                    {isDay
+                      ? 'Volume by the time it was recorded'
+                      : (selectedRange.days > 14
+                        ? 'Weekly average on logged days'
+                        : 'Hydration-adjusted daily totals')}
                   </Text>
-                  <Text style={styles.todayCaption}>
-                    {todayMl >= goalMl
-                      ? 'Goal met — nice work'
-                      : `${formatVolume(goalMl - todayMl)} left today`}
+                </View>
+                <View style={styles.headerPill}>
+                  <Text style={styles.headerPillText}>
+                    {isDay ? `${summary.rangeLogs.length} logs` : `${summary.daysOnTarget} goal days`}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.todayCta}
-                    onPress={handleLogWater}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="water" size={14} color={HYDRATION_BLUE} />
-                    <Text style={styles.todayCtaText}>Log water</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
 
-              {/* TREND — the reason this screen exists */}
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>Last {rangeDays} days</Text>
-                  <Text style={styles.cardMeta}>
-                    {rangeStats.daysOnTarget}/{series.length} on target
-                  </Text>
-                </View>
+              {isDay ? (
+                <DayRhythmChart periodTotals={summary.periodTotals} />
+              ) : (
                 <HydrationTrendChart
-                  series={series}
+                  series={summary.series}
                   goalMl={goalMl}
-                  height={rangeDays > 7 ? 130 : 150}
+                  height={selectedRange.days >= 90 ? 132 : 148}
                 />
-                {rangeStats.avgMl > 0 && (
-                  <Text style={styles.cardFooterNote}>
-                    You averaged {formatVolume(rangeStats.avgMl)} on the days you logged —{' '}
-                    {Math.round((rangeStats.avgMl / goalMl) * 100)}% of your{' '}
-                    {formatVolume(goalMl)} goal.
-                  </Text>
+              )}
+
+              <View style={styles.trendSummary}>
+                <View style={styles.trendSummaryItem}>
+                  <Text style={styles.trendSummaryValue}>{formatVolume(summary.averageLoggedDayMl)}</Text>
+                  <Text style={styles.trendSummaryLabel}>Avg on logged days</Text>
+                </View>
+                <View style={styles.trendDivider} />
+                <View style={styles.trendSummaryItem}>
+                  <Text style={styles.trendSummaryValue}>{summary.streak}</Text>
+                  <Text style={styles.trendSummaryLabel}>Current 80% streak</Text>
+                </View>
+                <View style={styles.trendDivider} />
+                <View style={styles.trendSummaryItem}>
+                  <Text style={styles.trendSummaryValue}>{formatDay(summary.bestDay?.date)}</Text>
+                  <Text style={styles.trendSummaryLabel}>Best logged day</Text>
+                </View>
+              </View>
+
+              <View style={styles.evidenceNote}>
+                <Ionicons name="information-circle-outline" size={15} color={TEXT.tertiary} />
+                <Text style={styles.evidenceText}>
+                  Averages use {summary.daysTracked} {summary.daysTracked === 1 ? 'day' : 'days'} with at least one entry. Missing days are shown as gaps, not counted as zero intake.
+                  {selectedRange.days > 14 ? ' Long ranges are grouped into calendar weeks.' : ''}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.eyebrow}>RECENT</Text>
+                <Text style={styles.sectionTitle}>Drinks</Text>
+              </View>
+              <Text style={styles.sectionCount}>{summary.rangeLogs.length} in range</Text>
+            </View>
+
+            {summary.rangeLogs.length > 0 ? (
+              <View style={styles.entriesCard}>
+                {visibleEntries.map((entry, index) => (
+                  <HydrationEntry
+                    key={entry.id}
+                    entry={entry}
+                    isLast={index === visibleEntries.length - 1 && remainingEntries === 0}
+                    deleting={deletingEntryId === entry.id}
+                    onDelete={() => handleDeleteEntry(entry)}
+                  />
+                ))}
+                {remainingEntries > 0 && (
+                  <TouchableOpacity
+                    style={styles.showMoreButton}
+                    onPress={() => setVisibleEntryCount((count) => count + INITIAL_ENTRY_COUNT)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show more hydration entries. ${remainingEntries} remaining`}
+                  >
+                    <Text style={styles.showMoreText}>Show {Math.min(INITIAL_ENTRY_COUNT, remainingEntries)} more</Text>
+                    <Ionicons name="chevron-down" size={17} color={HYDRATION.primary} />
+                  </TouchableOpacity>
                 )}
               </View>
-
-              {/* CONSISTENCY */}
-              <View style={styles.statsRow}>
-                <StatTile
-                  value={formatVolume(rangeStats.avgMl)}
-                  label="Daily avg"
-                  icon="water-outline"
-                  color={HYDRATION_BLUE}
-                />
-                <StatTile
-                  value={`${rangeStats.streak}`}
-                  label="Day streak"
-                  icon="flame-outline"
-                  color={rangeStats.streak > 0 ? '#F97316' : TEXT.tertiary}
-                />
-                <StatTile
-                  value={`${rangeStats.consistency}%`}
-                  label="Days logged"
-                  icon="calendar-outline"
-                  color={HYDRATION_BLUE}
-                />
+            ) : (
+              <View style={styles.noEntriesCard}>
+                <Text style={styles.noEntriesText}>No drinks were recorded in this range.</Text>
               </View>
+            )}
+          </>
+        )}
 
-              {/* WHEN YOU LOG
-                  Not "when you drink". The client sends loggedDate = new Date()
-                  at tap time and there is no consumption-time picker anywhere in
-                  the hydration UI, so every timestamp is when the user opened
-                  the app, not when they drank. Labelling this "when you drink"
-                  asserted a behaviour the data cannot show. Kept — logging
-                  rhythm is genuinely useful for reminder timing — but named for
-                  what it actually measures. */}
-              {patterns?.periodDistribution && (
-                <View style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardTitleBlock}>
-                      <Text style={styles.cardTitle}>When you log</Text>
-                      <Text style={styles.cardSubtitle}>Times you recorded a drink</Text>
+        {analyticsLoading && hasHistory && (
+          <Text style={styles.analyticsLoadingText}>Refreshing deeper hydration insights...</Text>
+        )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function RangeSelector({ selectedKey, onSelect }) {
+  return (
+    <View style={styles.rangeSelector}>
+      {HYDRATION_RANGE_OPTIONS.map((range) => {
+        const selected = range.key === selectedKey;
+        return (
+          <TouchableOpacity
+            key={range.key}
+            style={[styles.rangeButton, selected && styles.rangeButtonActive]}
+            onPress={() => onSelect(range.key)}
+            accessibilityRole="button"
+            accessibilityLabel={`Show ${range.label}`}
+            accessibilityState={{ selected }}
+          >
+            <Text style={[styles.rangeButtonText, selected && styles.rangeButtonTextActive]}>{range.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function MetricCard({ icon, value, label }) {
+  return (
+    <View style={styles.metricCard} accessible accessibilityLabel={`${label}: ${value}`}>
+      <View style={styles.metricIcon}><Ionicons name={icon} size={18} color={HYDRATION.primary} /></View>
+      <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function InsightsCard({ expanded, onToggle, insights, summary, prediction, rangeLabel }) {
+  const beverageRows = Object.entries(summary.beverageTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+  const beverageTotal = Object.values(summary.beverageTotals)
+    .reduce((total, ml) => total + ml, 0);
+  const evidenceLabel = rangeLabel === 'Day'
+    ? "Observed from today's live entries"
+    : `Observed from ${rangeLabel.toLowerCase()} of live entries`;
+
+  return (
+    <View style={styles.insightsCard}>
+      <TouchableOpacity
+        style={styles.insightsHeader}
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityLabel="Hydration insights"
+        accessibilityState={{ expanded }}
+      >
+        <View style={styles.insightsIcon}><Ionicons name="analytics-outline" size={21} color={HYDRATION.primary} /></View>
+        <View style={styles.insightsHeadingCopy}>
+          <Text style={styles.insightsEyebrow}>INSIGHTS</Text>
+          <Text style={styles.insightsTitle}>Understand your hydration patterns</Text>
+          <Text style={styles.insightsSubtitle}>{evidenceLabel}</Text>
+        </View>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={TEXT.tertiary} />
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.insightsBody}>
+          {insights.map((insight) => (
+            <View key={insight.key} style={styles.insightRow}>
+              <View style={styles.insightRowIcon}><Ionicons name={insight.icon} size={17} color={HYDRATION.primary} /></View>
+              <View style={styles.insightRowCopy}>
+                <Text style={styles.insightRowTitle}>{insight.title}</Text>
+                <Text style={styles.insightRowBody}>{insight.body}</Text>
+              </View>
+            </View>
+          ))}
+
+          {beverageRows.length > 0 && (
+            <View style={styles.mixSection}>
+              <Text style={styles.mixTitle}>Hydration counted by drink</Text>
+              {beverageRows.map(([type, ml]) => {
+                const beverage = getBeverageMeta(type);
+                const share = beverageTotal > 0 ? Math.round((ml / beverageTotal) * 100) : 0;
+                return (
+                  <View key={type} style={styles.mixRow}>
+                    <View style={[styles.mixDot, { backgroundColor: beverage.color }]} />
+                    <Text style={styles.mixLabel}>{beverage.label}</Text>
+                    <View style={styles.mixTrack}>
+                      <View style={[styles.mixFill, { width: `${share}%`, backgroundColor: beverage.color }]} />
                     </View>
-                    {peakHourLabel && (
-                      <View style={styles.peakChip}>
-                        <Ionicons name="time-outline" size={12} color={HYDRATION_BLUE} />
-                        <Text style={styles.peakChipText}>Peak {peakHourLabel}</Text>
-                      </View>
-                    )}
+                    <Text style={styles.mixValue}>{share}%</Text>
                   </View>
-                  <View style={styles.periodList}>
-                    {PERIODS.map((period) => {
-                      const share = Math.round(
-                        (patterns.periodDistribution[period.key] || 0) * 100
-                      );
-                      return (
-                        <View key={period.key} style={styles.periodRow}>
-                          <Ionicons name={period.icon} size={16} color={TEXT.tertiary} />
-                          <View style={styles.periodLabelBlock}>
-                            <Text style={styles.periodLabel}>{period.label}</Text>
-                            <Text style={styles.periodHint}>{period.hint}</Text>
-                          </View>
-                          <View style={styles.periodBarTrack}>
-                            <View
-                              style={[
-                                styles.periodBarFill,
-                                { width: `${Math.min(share, 100)}%` },
-                              ]}
-                            />
-                          </View>
-                          <Text style={styles.periodValue}>{share}%</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                  {/* The previous copy here advised front-loading water to
-                      "hold energy steadier" — a causal claim about drinking
-                      behaviour, sitting under a chart of logging times, with no
-                      energy data anywhere in this payload. Replaced with a
-                      statement of what the chart is. */}
-                  <Text style={styles.cardFooterNote}>
-                    These are the times you opened the app to log, which may differ
-                    from when you actually drank.
-                  </Text>
-                  <EvidenceFooter days={patterns?.daysLogged} />
-                </View>
-              )}
-
-              {/* WHAT YOU DRINK */}
-              {beverages.length > 0 && (
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>What you drink</Text>
-                  <View style={styles.beverageList}>
-                    {beverages.slice(0, 6).map((bev) => (
-                      <View key={bev.type} style={styles.beverageRow}>
-                        <View
-                          style={[
-                            styles.beverageIcon,
-                            { backgroundColor: `${bev.meta.color}18` },
-                          ]}
-                        >
-                          <Ionicons
-                            name={bev.meta.icon}
-                            size={15}
-                            color={bev.meta.color}
-                          />
-                        </View>
-                        <Text style={styles.beverageLabel}>{bev.meta.label}</Text>
-                        <View style={styles.beverageBarTrack}>
-                          <View
-                            style={[
-                              styles.beverageBarFill,
-                              {
-                                width: `${Math.min(bev.percentage, 100)}%`,
-                                backgroundColor: bev.meta.color,
-                              },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.beverageValue}>{bev.percentage}%</Text>
-                      </View>
-                    ))}
-                  </View>
-                  <Text style={styles.cardFooterNote}>
-                    Shares are of hydration counted, not raw volume — coffee and tea are
-                    already discounted by their hydration factor.
-                  </Text>
-
-                  {/* Ported from the old Hydration & Energy screen, which was
-                      otherwise a duplicate of this one. */}
-                  {(patterns?.coffeeToWaterRatio || 0) > 0.3 && (
-                    <View style={styles.caffeineNote}>
-                      <Ionicons name="cafe-outline" size={16} color="#B45309" />
-                      <Text style={styles.caffeineNoteText}>
-                        Your caffeine intake is high relative to water — this can affect
-                        focus later in the day.
-                      </Text>
-                    </View>
-                  )}
-                  <EvidenceFooter days={patterns?.daysLogged} />
-                </View>
-              )}
-
-              {/* PERSONA — gated by what the classifier actually measures.
-                  classifyPersona scores six types. Four of them
-                  (CONSISTENT_SIPPER, MORNING_DEHYDRATOR, EVENING_CATCHUP,
-                  MEAL_ANCHORED) are scored purely off periodDistribution, which
-                  is built from logging hours — so "you underhydrate in the
-                  morning" is really "you don't open the app in the morning".
-                  Those are suppressed until consumption time is captured.
-                  CAFFEINE_COMPENSATOR (beverage mix) and HYDRATION_CHAMPION
-                  (goal attainment) use volume only and remain sound. */}
-              {isPersonaSound ? (
-                <LinearGradient
-                  colors={VIBRANT_WELLNESS.hydration.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.personaCard}
-                >
-                  <View style={styles.personaHeader}>
-                    <View style={styles.personaIcon}>
-                      <Ionicons
-                        name={persona.icon || 'water-outline'}
-                        size={20}
-                        color="#FFFFFF"
-                      />
-                    </View>
-                    <View style={styles.personaTitleBlock}>
-                      <Text style={styles.personaEyebrow}>Your hydration type</Text>
-                      <Text style={styles.personaTitle}>{persona.title}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.personaDescription}>{persona.description}</Text>
-                  {persona.recommendation && (
-                    <View style={styles.personaTip}>
-                      <Ionicons name="bulb-outline" size={14} color="#FFFFFF" />
-                      <Text style={styles.personaTipText}>{persona.recommendation}</Text>
-                    </View>
-                  )}
-                </LinearGradient>
-              ) : persona?.title ? null : (
-                /* Only shown when no type has been determined at all. When a
-                   type exists but is timing-derived we render nothing rather
-                   than explaining our data model to the user.
-                   The old copy promised a "morning dehydrator / evening
-                   catch-up" verdict — precisely the classifications that are
-                   now suppressed — so it advertised something undeliverable. */
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Your hydration type</Text>
-                  <Text style={styles.progressiveText}>
-                    Keep logging. Once there's about a week of data we can describe
-                    how steady your intake is and how much of it comes from water
-                    rather than caffeinated drinks.
-                  </Text>
-                  <ProgressTrack
-                    current={coldStart?.distinctDays || rangeStats.daysLogged}
-                    target={7}
-                  />
-                </View>
-              )}
-
-              {/* TOMORROW */}
-              {prediction?.hasPrediction && (
-                <View style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>Tomorrow's target</Text>
-                    <Text style={styles.cardMeta}>
-                      {Math.round((prediction.confidence || 0.6) * 100)}% confidence
-                    </Text>
-                  </View>
-                  <Text style={styles.predictionValue}>
-                    {(prediction.predictedNeedLiters || 0).toFixed(1)}L
-                  </Text>
-                  {/* Deliberately does not restate a daily average — the
-                      prediction uses a 14-day window while the stat tile above
-                      uses the selected range, and showing both put two
-                      different "typical day" numbers on one screen. */}
-                  <Text style={styles.predictionCaption}>
-                    Your {(prediction.baseGoalLiters || 2).toFixed(1)}L goal, raised when
-                    your recent intake trends above it.
-                  </Text>
-                  {(prediction.factors || []).map((factor, index) => (
-                    <View key={factor.type || index} style={styles.factorRow}>
-                      <Ionicons name="arrow-up-circle-outline" size={14} color={HYDRATION_BLUE} />
-                      <Text style={styles.factorText}>{factor.description}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-            </>
+                );
+              })}
+            </View>
           )}
 
-          <View style={styles.bottomPadding} />
-        </ScrollView>
+          {prediction?.hasPrediction && (
+            <View style={styles.tomorrowCard}>
+              <View style={styles.tomorrowIcon}><Ionicons name="sparkles-outline" size={18} color={HYDRATION.primary} /></View>
+              <View style={styles.tomorrowCopy}>
+                <Text style={styles.tomorrowLabel}>TOMORROW'S ESTIMATE</Text>
+                <Text style={styles.tomorrowValue}>{(Number(prediction.predictedNeedLiters) || 0).toFixed(1)} L target</Text>
+                <Text style={styles.tomorrowText}>Based on your goal and recent hydration history.</Text>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.patternDisclaimer}>
+            <Ionicons name="shield-checkmark-outline" size={15} color={TEXT.tertiary} />
+            <Text style={styles.patternDisclaimerText}>Patterns describe your records. They do not prove cause or health outcomes.</Text>
+          </View>
+        </View>
       )}
     </View>
   );
 }
 
-/**
- * Sample-size disclosure. Every card that aggregates across days states how
- * many days it is built from, so a figure from 3 days is never presented with
- * the same authority as one from 30.
- */
-function EvidenceFooter({ days, unit = 'days' }) {
-  if (!days || days < 1) return null;
+function DayRhythmChart({ periodTotals }) {
+  const max = Math.max(...Object.values(periodTotals), 1);
   return (
-    <View style={styles.evidenceRow}>
-      <Ionicons name="information-circle-outline" size={13} color={TEXT.tertiary} />
-      <Text style={styles.evidenceText}>
-        Based on {days} logged {days === 1 ? unit.replace(/s$/, '') : unit}
-        {days < 7 ? ' — still early' : ''}
-      </Text>
+    <View style={styles.dayChart}>
+      {HYDRATION_PERIODS.map((period) => {
+        const amount = Number(periodTotals[period.key]) || 0;
+        const height = amount > 0 ? Math.max(24, (amount / max) * 104) : 6;
+        return (
+          <View key={period.key} style={styles.dayBarColumn}>
+            <Text style={styles.dayBarValue}>{amount > 0 ? formatVolume(amount, true) : '0'}</Text>
+            <View style={styles.dayBarArea}>
+              <LinearGradient
+                colors={[HYDRATION.bright, HYDRATION.primary]}
+                style={[styles.dayBar, { height, opacity: amount > 0 ? 1 : 0.18 }]}
+              />
+            </View>
+            <Text style={styles.dayBarLabel}>{period.label}</Text>
+            <Text style={styles.dayBarHours}>{period.hours}</Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
 
-function StatTile({ value, label, icon, color }) {
-  return (
-    <View style={styles.statTile}>
-      <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
-        <Ionicons name={icon} size={16} color={color} />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
+function HydrationEntry({ entry, deleting, isLast, onDelete }) {
+  const beverage = getBeverageMeta(entry.beverageType);
+  const rawMl = Math.round((Number(entry.amountLiters) || 0) * 1000);
+  const hydrationMl = Math.round((Number(entry.hydrationLiters) || Number(entry.amountLiters) || 0) * 1000);
+  const adjusted = hydrationMl !== rawMl;
 
-function ProgressTrack({ current = 0, target = 7 }) {
-  const clamped = Math.min(current, target);
   return (
-    <View style={styles.progressTrackWrap}>
-      <View style={styles.progressTrack}>
-        <View
-          style={[styles.progressFill, { width: `${(clamped / target) * 100}%` }]}
-        />
+    <View style={[styles.entryRow, !isLast && styles.entryDivider]}>
+      <View style={[styles.entryIcon, { backgroundColor: `${beverage.color}14` }]}>
+        <Ionicons name={beverage.icon} size={21} color={beverage.color} />
       </View>
-      <Text style={styles.progressTrackLabel}>
-        {clamped} of {target} days
-      </Text>
-    </View>
-  );
-}
-
-function LoadErrorState({ onRetry }) {
-  return (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIcon}>
-        <Ionicons name="cloud-offline-outline" size={36} color={TEXT.tertiary} />
+      <View style={styles.entryCopy}>
+        <Text style={styles.entryTitle}>{formatVolume(rawMl)} {beverage.label}</Text>
+        <Text style={styles.entryTime}>{formatEntryTime(entry.loggedDate)}</Text>
+        {adjusted && <Text style={styles.entryAdjustment}>{formatVolume(hydrationMl)} hydration counted</Text>}
       </View>
-      <Text style={styles.emptyTitle}>Couldn't load your hydration data</Text>
-      <Text style={styles.emptyText}>
-        Your logs are safe — we just couldn't reach them right now.
-      </Text>
-      <TouchableOpacity style={styles.emptyCta} onPress={onRetry} activeOpacity={0.85}>
-        <Ionicons name="refresh" size={18} color="#FFFFFF" />
-        <Text style={styles.emptyCtaText}>Try again</Text>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={onDelete}
+        disabled={deleting}
+        accessibilityRole="button"
+        accessibilityLabel={`Delete ${rawMl} milliliter ${beverage.label} entry`}
+      >
+        {deleting
+          ? <ActivityIndicator size="small" color="#C96B6B" />
+          : <Ionicons name="trash-outline" size={20} color="#C96B6B" />}
       </TouchableOpacity>
     </View>
   );
 }
 
-function EmptyState({ onLogWater }) {
+function StateCard({ loading, icon, title, body, actionLabel, onAction }) {
   return (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIcon}>
-        <Ionicons name="water-outline" size={36} color={HYDRATION_BLUE} />
-      </View>
-      <Text style={styles.emptyTitle}>No hydration data yet</Text>
-      <Text style={styles.emptyText}>
-        Log a drink and this screen fills in with your daily trend, when you drink, and
-        what you drink.
-      </Text>
-      <TouchableOpacity style={styles.emptyCta} onPress={onLogWater} activeOpacity={0.85}>
-        <Ionicons name="add" size={18} color="#FFFFFF" />
-        <Text style={styles.emptyCtaText}>Log your first drink</Text>
-      </TouchableOpacity>
+    <View style={styles.stateCard}>
+      {loading
+        ? <ActivityIndicator size="large" color={HYDRATION.primary} />
+        : <View style={styles.stateIcon}><Ionicons name={icon} size={32} color={HYDRATION.primary} /></View>}
+      <Text style={styles.stateTitle}>{title}</Text>
+      <Text style={styles.stateBody}>{body}</Text>
+      {actionLabel && (
+        <TouchableOpacity style={styles.stateAction} onPress={onAction} accessibilityRole="button">
+          <Text style={styles.stateActionText}>{actionLabel}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: SURFACES.background.primary,
-  },
-  header: {
-    paddingHorizontal: SPACING[4],
-    paddingBottom: SPACING[3],
-    backgroundColor: SURFACES.card.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: SURFACES.divider,
-    gap: SPACING[3],
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: SURFACES.background.tertiary,
-  },
-  headerTitleBlock: {
-    flex: 1,
-    marginLeft: SPACING[1],
-  },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 1,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: HYDRATION_BLUE,
-  },
-  rangeRow: {
-    flexDirection: 'row',
-    gap: SPACING[2],
-  },
-  rangeChip: {
-    paddingHorizontal: SPACING[4],
-    paddingVertical: SPACING[2],
-    borderRadius: RADIUS.full,
-    backgroundColor: SURFACES.background.tertiary,
-  },
-  rangeChipSelected: {
-    backgroundColor: `${HYDRATION_BLUE}15`,
-    borderWidth: 1,
-    borderColor: HYDRATION_BLUE,
-  },
-  rangeText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.secondary,
-  },
-  rangeTextSelected: {
-    color: HYDRATION_BLUE,
-    fontFamily: TYPOGRAPHY.family.semibold,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: SPACING[4],
-  },
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING[3],
-  },
-  loadingText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-  },
-
-  // Today anchor
-  todayCard: {
-    ...CARD_SYSTEM.standard,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[4],
-  },
-  todayDetails: {
-    flex: 1,
-    gap: SPACING[1],
-  },
-  todayValue: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-  },
-  todayGoal: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.tertiary,
-  },
-  todayCaption: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-  },
-  todayCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: SPACING[1],
-    marginTop: SPACING[2],
-    paddingHorizontal: SPACING[3],
-    paddingVertical: SPACING[1.5],
-    borderRadius: RADIUS.full,
-    backgroundColor: `${HYDRATION_BLUE}12`,
-  },
-  todayCtaText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: HYDRATION_BLUE,
-  },
-
-  // Generic card
-  card: {
-    ...CARD_SYSTEM.standard,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING[3],
-  },
-  cardTitleBlock: {
-    flex: 1,
-    paddingRight: SPACING[2],
-  },
-  cardTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  cardSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 1,
-  },
-  evidenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[1.5],
-    marginTop: SPACING[3],
-    paddingTop: SPACING[3],
-    borderTopWidth: 1,
-    borderTopColor: SURFACES.divider,
-  },
-  evidenceText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-  },
-  cardMeta: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-  },
-  cardFooterNote: {
-    fontSize: TYPOGRAPHY.size.xs,
-    lineHeight: 17,
-    color: TEXT.tertiary,
-    marginTop: SPACING[3],
-  },
-
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    gap: SPACING[3],
-    marginBottom: SPACING[3],
-  },
-  statTile: {
-    flex: 1,
-    alignItems: 'center',
-    ...CARD_SYSTEM.standard,
-    marginBottom: 0,
-    paddingVertical: SPACING[4],
-    paddingHorizontal: SPACING[2],
-  },
-  statIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING[2],
-  },
-  statValue: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-  },
-  statLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-
-  // When you drink
-  peakChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[1],
-    paddingHorizontal: SPACING[2],
-    paddingVertical: SPACING[1],
-    borderRadius: RADIUS.full,
-    backgroundColor: `${HYDRATION_BLUE}12`,
-  },
-  peakChipText: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: HYDRATION_BLUE,
-  },
-  periodList: {
-    gap: SPACING[3],
-  },
-  periodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  periodLabelBlock: {
-    width: 76,
-  },
-  periodLabel: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.medium,
-    color: TEXT.primary,
-  },
-  periodHint: {
-    fontSize: 10,
-    color: TEXT.tertiary,
-  },
-  periodBarTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: SURFACES.background.tertiary,
-    overflow: 'hidden',
-  },
-  periodBarFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: HYDRATION_BLUE,
-  },
-  periodValue: {
-    width: 38,
-    textAlign: 'right',
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-  },
-
-  // Beverages
-  beverageList: {
-    gap: SPACING[3],
-  },
-  beverageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  beverageIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  beverageLabel: {
-    width: 84,
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.primary,
-  },
-  beverageBarTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: SURFACES.background.tertiary,
-    overflow: 'hidden',
-  },
-  beverageBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  caffeineNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING[2],
-    marginTop: SPACING[3],
-    padding: SPACING[3],
-    borderRadius: RADIUS.md,
-    backgroundColor: '#FEF6E7',
-  },
-  caffeineNoteText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.xs,
-    lineHeight: 17,
-    color: '#7C4A03',
-  },
-  beverageValue: {
-    width: 38,
-    textAlign: 'right',
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-  },
-
-  // Persona
-  personaCard: {
-    borderRadius: RADIUS.xl,
-    padding: SPACING[4],
-    marginBottom: SPACING[3],
-    gap: SPACING[3],
-  },
-  personaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  personaIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-  },
-  personaTitleBlock: {
-    flex: 1,
-  },
-  personaEyebrow: {
-    fontSize: 10,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontFamily: TYPOGRAPHY.family.semibold,
-  },
-  personaTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: '#FFFFFF',
-  },
-  personaDescription: {
-    fontSize: TYPOGRAPHY.size.sm,
-    lineHeight: 20,
-    color: 'rgba(255, 255, 255, 0.92)',
-  },
-  personaTip: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING[2],
-    padding: SPACING[3],
-    borderRadius: RADIUS.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-  },
-  personaTipText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.xs,
-    lineHeight: 17,
-    color: '#FFFFFF',
-  },
-
-  // Progressive disclosure
-  progressiveText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    lineHeight: 20,
-    color: TEXT.secondary,
-  },
-  progressTrackWrap: {
-    marginTop: SPACING[3],
-    gap: SPACING[2],
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: SURFACES.background.tertiary,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: HYDRATION_LIGHT,
-  },
-  progressTrackLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-  },
-
-  // Prediction
-  predictionValue: {
-    fontSize: TYPOGRAPHY.size['3xl'],
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: HYDRATION_BLUE,
-  },
-  predictionCaption: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    marginTop: SPACING[1],
-  },
-  factorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginTop: SPACING[2],
-  },
-  factorText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.secondary,
-  },
-
-  linkIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${HYDRATION_BLUE}12`,
-  },
-
-  // Empty
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING[12],
-    paddingHorizontal: SPACING[6],
-    gap: SPACING[3],
-  },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${HYDRATION_BLUE}12`,
-  },
-  emptyTitle: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  emptyText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    lineHeight: 20,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-  },
-  emptyCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-    marginTop: SPACING[2],
-    paddingHorizontal: SPACING[5],
-    paddingVertical: SPACING[3],
-    borderRadius: RADIUS.full,
-    backgroundColor: HYDRATION_BLUE,
-  },
-  emptyCtaText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: '#FFFFFF',
-  },
-
-  bottomPadding: {
-    height: SPACING[10],
-  },
+  screen: { flex: 1, backgroundColor: SURFACES.background.primary },
+  hero: { paddingBottom: SPACING[5], borderBottomLeftRadius: RADIUS['2xl'], borderBottomRightRadius: RADIUS['2xl'], overflow: 'hidden' },
+  heroSafe: { paddingHorizontal: SPACING[4] },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  navButton: { width: 44, height: 44, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)' },
+  navTitle: { color: TEXT.white, fontSize: TYPOGRAPHY.size.base, fontFamily: TYPOGRAPHY.family.semibold },
+  heroCopy: { flexDirection: 'row', alignItems: 'center', gap: SPACING[3], paddingHorizontal: SPACING[1], paddingTop: SPACING[4] },
+  heroIcon: { width: 48, height: 48, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)' },
+  heroTextBlock: { flex: 1 },
+  heroTitle: { color: TEXT.white, fontSize: TYPOGRAPHY.size.xl, fontFamily: TYPOGRAPHY.family.bold, letterSpacing: -0.35 },
+  heroSubtitle: { marginTop: SPACING[1], color: 'rgba(255,255,255,0.86)', fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.regular, lineHeight: 17 },
+  scroll: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  content: { padding: SPACING[4] },
+  rangeSelector: { flexDirection: 'row', padding: 4, marginBottom: SPACING[4], borderRadius: RADIUS.lg, backgroundColor: SURFACES.card.primary, ...SHADOWS.md },
+  rangeButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.md },
+  rangeButtonActive: { backgroundColor: HYDRATION.primary },
+  rangeButtonText: { color: TEXT.secondary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  rangeButtonTextActive: { color: TEXT.white },
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING[3], marginBottom: SPACING[4] },
+  metricCard: { width: '48%', flexGrow: 1, minHeight: 112, padding: SPACING[4], borderRadius: RADIUS.xl, borderWidth: 1, borderColor: SURFACES.card.border, backgroundColor: SURFACES.card.primary, ...SHADOWS.sm },
+  metricIcon: { width: 32, height: 32, marginBottom: SPACING[2], borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: HYDRATION.pale },
+  metricValue: { color: TEXT.primary, fontSize: TYPOGRAPHY.size.lg, fontFamily: TYPOGRAPHY.family.bold },
+  metricLabel: { marginTop: 3, color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.medium },
+  staleNotice: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], padding: SPACING[3], marginBottom: SPACING[3], borderRadius: RADIUS.md, backgroundColor: '#FFF8E8' },
+  staleNoticeText: { flex: 1, color: '#7A5200', fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.medium },
+  rangeEmptyCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING[3], padding: SPACING[4], marginBottom: SPACING[4], borderRadius: RADIUS.lg, borderWidth: 1, borderColor: HYDRATION.border, backgroundColor: HYDRATION.pale },
+  rangeEmptyIcon: { width: 44, height: 44, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: TEXT.white },
+  rangeEmptyCopy: { flex: 1 },
+  rangeEmptyTitle: { color: TEXT.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  rangeEmptyText: { marginTop: 3, color: TEXT.secondary, fontSize: TYPOGRAPHY.size.xs, lineHeight: 17 },
+  rangeEmptyAction: { width: 44, height: 44, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: HYDRATION.primary },
+  insightsCard: { marginBottom: SPACING[5], borderRadius: RADIUS.xl, borderWidth: 1, borderColor: HYDRATION.border, backgroundColor: SURFACES.card.primary, overflow: 'hidden', ...SHADOWS.sm },
+  insightsHeader: { minHeight: 84, flexDirection: 'row', alignItems: 'center', gap: SPACING[3], padding: SPACING[4], borderLeftWidth: 4, borderLeftColor: HYDRATION.primary },
+  insightsIcon: { width: 42, height: 42, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: HYDRATION.pale },
+  insightsHeadingCopy: { flex: 1 },
+  insightsEyebrow: { color: HYDRATION.primary, fontSize: 10, letterSpacing: 1.1, fontFamily: TYPOGRAPHY.family.bold },
+  insightsTitle: { marginTop: 2, color: TEXT.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  insightsSubtitle: { marginTop: 2, color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs },
+  insightsBody: { paddingHorizontal: SPACING[4], paddingBottom: SPACING[4], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  insightRow: { flexDirection: 'row', gap: SPACING[3], paddingVertical: SPACING[3], borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
+  insightRowIcon: { width: 34, height: 34, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: HYDRATION.pale },
+  insightRowCopy: { flex: 1 },
+  insightRowTitle: { color: TEXT.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  insightRowBody: { marginTop: 3, color: TEXT.secondary, fontSize: TYPOGRAPHY.size.xs, lineHeight: 17 },
+  mixSection: { paddingTop: SPACING[4] },
+  mixTitle: { marginBottom: SPACING[3], color: TEXT.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  mixRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2], marginBottom: SPACING[3] },
+  mixDot: { width: 9, height: 9, borderRadius: RADIUS.full },
+  mixLabel: { width: 74, color: TEXT.secondary, fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.medium },
+  mixTrack: { flex: 1, height: 7, borderRadius: RADIUS.full, backgroundColor: SURFACES.background.tertiary, overflow: 'hidden' },
+  mixFill: { height: '100%', borderRadius: RADIUS.full },
+  mixValue: { width: 34, color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs, textAlign: 'right', fontFamily: TYPOGRAPHY.family.medium },
+  tomorrowCard: { flexDirection: 'row', gap: SPACING[3], padding: SPACING[3], marginTop: SPACING[2], borderRadius: RADIUS.md, backgroundColor: HYDRATION.pale },
+  tomorrowIcon: { width: 36, height: 36, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: TEXT.white },
+  tomorrowCopy: { flex: 1 },
+  tomorrowLabel: { color: HYDRATION.primary, fontSize: 9, letterSpacing: 0.9, fontFamily: TYPOGRAPHY.family.bold },
+  tomorrowValue: { marginTop: 2, color: TEXT.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  tomorrowText: { marginTop: 2, color: TEXT.secondary, fontSize: TYPOGRAPHY.size.xs },
+  patternDisclaimer: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[2], marginTop: SPACING[3] },
+  patternDisclaimerText: { flex: 1, color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs, lineHeight: 17 },
+  sectionHeading: { marginBottom: SPACING[3] },
+  eyebrow: { color: HYDRATION.primary, fontSize: 10, letterSpacing: 1.2, fontFamily: TYPOGRAPHY.family.bold },
+  sectionTitle: { marginTop: 3, color: TEXT.primary, fontSize: TYPOGRAPHY.size.lg, fontFamily: TYPOGRAPHY.family.bold },
+  trendCard: { padding: SPACING[4], marginBottom: SPACING[5], borderRadius: RADIUS.xl, borderWidth: 1, borderColor: SURFACES.card.border, backgroundColor: SURFACES.card.primary, ...SHADOWS.sm },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: SPACING[3], marginBottom: SPACING[4] },
+  cardTitleBlock: { flex: 1 },
+  cardTitle: { color: TEXT.primary, fontSize: TYPOGRAPHY.size.md, fontFamily: TYPOGRAPHY.family.semibold },
+  cardSubtitle: { marginTop: 3, color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs },
+  headerPill: { paddingHorizontal: SPACING[3], paddingVertical: SPACING[2], borderRadius: RADIUS.full, backgroundColor: HYDRATION.pale },
+  headerPillText: { color: HYDRATION.primary, fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.semibold },
+  dayChart: { height: 178, flexDirection: 'row', alignItems: 'flex-end', gap: SPACING[2] },
+  dayBarColumn: { flex: 1, alignItems: 'center' },
+  dayBarValue: { marginBottom: SPACING[2], color: TEXT.secondary, fontSize: 10, fontFamily: TYPOGRAPHY.family.medium },
+  dayBarArea: { height: 104, width: '100%', alignItems: 'center', justifyContent: 'flex-end' },
+  dayBar: { width: '62%', maxWidth: 42, borderRadius: RADIUS.md },
+  dayBarLabel: { marginTop: SPACING[2], color: TEXT.secondary, fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.semibold },
+  dayBarHours: { marginTop: 2, color: TEXT.muted, fontSize: 8, textAlign: 'center' },
+  trendSummary: { flexDirection: 'row', alignItems: 'stretch', marginTop: SPACING[4], paddingTop: SPACING[4], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  trendSummaryItem: { flex: 1, alignItems: 'center', paddingHorizontal: SPACING[1] },
+  trendSummaryValue: { color: TEXT.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.bold, textAlign: 'center' },
+  trendSummaryLabel: { marginTop: 3, color: TEXT.tertiary, fontSize: 9, lineHeight: 13, textAlign: 'center' },
+  trendDivider: { width: 1, backgroundColor: SURFACES.divider },
+  evidenceNote: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING[2], marginTop: SPACING[4], padding: SPACING[3], borderRadius: RADIUS.md, backgroundColor: SURFACES.background.tertiary },
+  evidenceText: { flex: 1, color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs, lineHeight: 17 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: SPACING[3] },
+  sectionCount: { color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.medium },
+  entriesCard: { borderRadius: RADIUS.xl, borderWidth: 1, borderColor: SURFACES.card.border, backgroundColor: SURFACES.card.primary, overflow: 'hidden', ...SHADOWS.sm },
+  entryRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: SPACING[3], paddingHorizontal: SPACING[4], paddingVertical: SPACING[3] },
+  entryDivider: { borderBottomWidth: 1, borderBottomColor: SURFACES.divider },
+  entryIcon: { width: 44, height: 44, borderRadius: RADIUS.lg, alignItems: 'center', justifyContent: 'center' },
+  entryCopy: { flex: 1 },
+  entryTitle: { color: TEXT.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  entryTime: { marginTop: 3, color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs },
+  entryAdjustment: { marginTop: 3, color: HYDRATION.cyan, fontSize: 10, fontFamily: TYPOGRAPHY.family.medium },
+  deleteButton: { width: 44, height: 44, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF1F1' },
+  showMoreButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING[2], borderTopWidth: 1, borderTopColor: SURFACES.divider },
+  showMoreText: { color: HYDRATION.primary, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  noEntriesCard: { padding: SPACING[5], borderRadius: RADIUS.lg, alignItems: 'center', backgroundColor: SURFACES.card.primary },
+  noEntriesText: { color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.sm },
+  stateCard: { minHeight: 260, alignItems: 'center', justifyContent: 'center', padding: SPACING[6], borderRadius: RADIUS.xl, borderWidth: 1, borderColor: SURFACES.card.border, backgroundColor: SURFACES.card.primary, ...SHADOWS.sm },
+  stateIcon: { width: 68, height: 68, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: HYDRATION.pale },
+  stateTitle: { marginTop: SPACING[4], color: TEXT.primary, fontSize: TYPOGRAPHY.size.lg, fontFamily: TYPOGRAPHY.family.bold, textAlign: 'center' },
+  stateBody: { marginTop: SPACING[2], color: TEXT.secondary, fontSize: TYPOGRAPHY.size.sm, lineHeight: 20, textAlign: 'center' },
+  stateAction: { minWidth: 140, minHeight: 46, alignItems: 'center', justifyContent: 'center', marginTop: SPACING[5], paddingHorizontal: SPACING[5], borderRadius: RADIUS.lg, backgroundColor: HYDRATION.primary },
+  stateActionText: { color: TEXT.white, fontSize: TYPOGRAPHY.size.sm, fontFamily: TYPOGRAPHY.family.semibold },
+  analyticsLoadingText: { marginTop: SPACING[3], color: TEXT.tertiary, fontSize: TYPOGRAPHY.size.xs, textAlign: 'center' },
 });

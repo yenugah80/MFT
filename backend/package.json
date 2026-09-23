@@ -9,13 +9,15 @@
     "test:watch": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules ../node_modules/jest/bin/jest.js --coverage",
     "harness:nutrition": "node scripts/nutritionPlausibilityHarness.mjs && node scripts/nutritionMacroReconciliationHarness.mjs",
+    "harness:streak-atomicity": "node scripts/streakAtomicityHarness.mjs",
     "eval:nutrition": "node scripts/nutritionAccuracyEval.mjs",
     "drizzle:generate": "drizzle-kit generate",
-    "drizzle:migrate": "node -e \"console.error('drizzle-kit migrate is not used here \u2014 its journal stops at 0012 while migrations run to 0042. Use: npm run db:migrate'); process.exit(1)\"",
+    "drizzle:migrate": "node -e \"console.error('drizzle-kit migrate is not used here — its journal stops at 0012 while migrations run to 0042. Use: npm run db:migrate'); process.exit(1)\"",
     "backfill:gamification": "node backfill-gamification.js",
     "backfill:mood-day-key": "node backfill-mood-day-key.js",
     "db:migrate": "node scripts/applyMigrations.mjs",
-    "db:migrate:dry": "node scripts/applyMigrations.mjs --dry-run"
+    "db:migrate:dry": "node scripts/applyMigrations.mjs --dry-run",
+    "check:schema-drift": "node scripts/checkSchemaDrift.mjs"
   },
   "keywords": [],
   "author": "",
@@ -36,15 +38,18 @@
     "express-rate-limit": "^8.2.1",
     "firebase-admin": "^13.0.2",
     "jstat": "^1.9.6",
+    "jszip": "^3.10.2",
     "multer": "^2.0.2",
     "node-cache": "^5.1.2",
     "openai": "^6.10.0",
+    "pdfkit": "^0.20.2",
     "postgres": "^3.4.9",
     "redis": "^5.10.0",
     "uuid": "^13.0.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "pdf-parse": "^2.4.5"
   }
 }

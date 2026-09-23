@@ -81,11 +81,53 @@ const USAGE_STRING_FOR = [
   { pkg: 'expo-image-picker', key: 'NSPhotoLibraryUsageDescription' },
   { pkg: '@react-native-voice/voice', key: 'NSMicrophoneUsageDescription' },
   { pkg: '@react-native-voice/voice', key: 'NSSpeechRecognitionUsageDescription' },
+  { pkg: 'expo-local-authentication', key: 'NSFaceIDUsageDescription' },
 ];
 
 for (const { pkg, key } of USAGE_STRING_FOR) {
   if (hasPackage(pkg) && !infoPlist[key]) {
     fail(`app.json: ${pkg} is installed but ios.infoPlist.${key} is missing — iOS terminates the app on first use`);
+  }
+}
+
+// And the HealthKit lesson applied to Face ID: a usage string with no module
+// behind it declares a capability the app cannot perform.
+if (infoPlist.NSFaceIDUsageDescription && !hasPackage('expo-local-authentication')) {
+  fail(
+    'app.json declares NSFaceIDUsageDescription but expo-local-authentication is not installed. ' +
+      'Remove the key or install the module.'
+  );
+}
+
+// ─── A security control must actually be enforced ────────────────────────────
+// The "Biometric lock" switch shipped for months writing a flag that nothing
+// read: the module was absent and no code gated the app. A security setting
+// that does nothing is worse than not offering one — it is both a trust problem
+// and an App Review problem. Assert the whole enforcement path exists whenever
+// the switch is offered.
+
+const privacyScreenPath = path.join(MOBILE_ROOT, 'app', 'profile', 'privacy.jsx');
+const rootLayoutPath = path.join(MOBILE_ROOT, 'app', '_layout.jsx');
+
+if (fs.existsSync(privacyScreenPath) && fs.existsSync(rootLayoutPath)) {
+  const privacyScreen = fs.readFileSync(privacyScreenPath, 'utf8');
+  const rootLayout = fs.readFileSync(rootLayoutPath, 'utf8');
+
+  const lockSwitchOffered = /useBiometricLock/.test(privacyScreen);
+  const providerMounted = /<BiometricLockProvider[\s>]/.test(rootLayout);
+
+  if (lockSwitchOffered && !hasPackage('expo-local-authentication')) {
+    fail(
+      'Privacy & Security offers the app-lock switch but expo-local-authentication is not installed — ' +
+        'the control would do nothing.'
+    );
+  }
+
+  if (lockSwitchOffered && !providerMounted) {
+    fail(
+      'Privacy & Security offers the app-lock switch but BiometricLockProvider is not mounted in ' +
+        'app/_layout.jsx — nothing would gate the app.'
+    );
   }
 }
 

@@ -10,8 +10,8 @@
  * - Satisfaction feedback collection
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -21,7 +21,6 @@ import {
   SPACING,
   RADIUS,
   TYPOGRAPHY,
-  VIBRANT_WELLNESS,
   BRAND,
 } from '../../constants/premiumTheme';
 
@@ -57,15 +56,6 @@ const TYPE_STYLES = {
   },
 };
 
-// Domain-specific icons
-const DOMAIN_ICONS = {
-  nutrition: 'nutrition',
-  mood: 'happy',
-  hydration: 'water',
-  activity: 'fitness',
-  wellness: 'heart',
-};
-
 export default function RecommendationCard({
   recommendation,
   onAction,
@@ -81,13 +71,18 @@ export default function RecommendationCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [completedSteps, setCompletedSteps] = useState([]);
   const [trackingId, setTrackingId] = useState(null);
+  const [isActionPending, setIsActionPending] = useState(false);
+  const [actionError, setActionError] = useState(null);
 
   // Extract values safely for hooks (before any early returns)
   const id = recommendation?.id;
   const type = recommendation?.type || 'insight';
   const title = recommendation?.title;
   const action = recommendation?.action;
-  const microActions = recommendation?.microActions || [];
+  const microActions = useMemo(
+    () => recommendation?.microActions || [],
+    [recommendation?.microActions]
+  );
 
   const typeStyle = TYPE_STYLES[type] || TYPE_STYLES.insight;
   const iconName = recommendation?.icon || typeStyle.icon;
@@ -104,64 +99,14 @@ export default function RecommendationCard({
     if (!recommendation) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    if (microActions.length > 0) {
+    if (microActions.length > 0 && !compact) {
       setIsExpanded(!isExpanded);
     } else if (action?.type === 'navigate' && action.target) {
       router.push(`/(tabs)/${action.target}`);
     } else if (onAction) {
       onAction(recommendation);
     }
-  }, [recommendation, microActions, isExpanded, action, router, onAction]);
-
-  const handleStepComplete = useCallback((stepIndex) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const newCompleted = [...completedSteps, stepIndex];
-    setCompletedSteps(newCompleted);
-
-    // Check if all steps completed
-    if (newCompleted.length >= microActions.length) {
-      handleActionComplete();
-    }
-  }, [completedSteps, microActions.length, handleActionComplete]);
-
-  const handleActionComplete = useCallback(async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    if (onComplete) {
-      const result = await onComplete(id, { recommendation });
-      if (result?.trackingId) {
-        setTrackingId(result.trackingId);
-      }
-    }
-
-    // Show satisfaction prompt after short delay
-    setTimeout(() => {
-      showSatisfactionPrompt();
-    }, 1500);
-  }, [id, onComplete, recommendation, showSatisfactionPrompt]);
-
-  const showSatisfactionPrompt = useCallback(() => {
-    Alert.alert(
-      'How helpful was this?',
-      title,
-      [
-        {
-          text: 'Not helpful',
-          onPress: () => recordSatisfaction(false, 2),
-          style: 'destructive',
-        },
-        {
-          text: 'Somewhat',
-          onPress: () => recordSatisfaction(true, 3),
-        },
-        {
-          text: 'Very helpful!',
-          onPress: () => recordSatisfaction(true, 5),
-        },
-      ],
-      { cancelable: true }
-    );
-  }, [title, recordSatisfaction]);
+  }, [recommendation, microActions, compact, isExpanded, action, router, onAction]);
 
   const recordSatisfaction = useCallback(async (helpful, rating) => {
     console.log(`[RecommendationCard] Recording satisfaction: helpful=${helpful}, rating=${rating}, trackingId=${trackingId}`);
@@ -179,23 +124,68 @@ export default function RecommendationCard({
     }
   }, [trackingId, onRecordSatisfaction]);
 
-  const handleDismiss = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (onDismiss) {
-      onDismiss(id, { recommendation });
+  const showSatisfactionPrompt = useCallback(() => {
+    Alert.alert(
+      'How helpful was this?',
+      title,
+      [
+        { text: 'Not helpful', onPress: () => recordSatisfaction(false, 2), style: 'destructive' },
+        { text: 'Somewhat', onPress: () => recordSatisfaction(true, 3) },
+        { text: 'Very helpful!', onPress: () => recordSatisfaction(true, 5) },
+      ],
+      { cancelable: true }
+    );
+  }, [recordSatisfaction, title]);
+
+  const handleActionComplete = useCallback(async () => {
+    if (isActionPending) return;
+    setActionError(null);
+    setIsActionPending(true);
+    try {
+      if (onComplete) {
+        const result = await onComplete(id, { recommendation });
+        if (result?.trackingId) setTrackingId(result.trackingId);
+      }
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (onRecordSatisfaction) setTimeout(showSatisfactionPrompt, 1500);
+    } catch {
+      setActionError('Could not save. Try again.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsActionPending(false);
     }
-  }, [id, onDismiss, recommendation]);
+  }, [id, isActionPending, onComplete, onRecordSatisfaction, recommendation, showSatisfactionPrompt]);
+
+  const handleStepComplete = useCallback((stepIndex) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const newCompleted = [...completedSteps, stepIndex];
+    setCompletedSteps(newCompleted);
+    if (newCompleted.length >= microActions.length) handleActionComplete();
+  }, [completedSteps, handleActionComplete, microActions.length]);
+
+  const handleDismiss = useCallback(async () => {
+    if (isActionPending) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActionError(null);
+    setIsActionPending(true);
+    try {
+      if (onDismiss) await onDismiss(id, { recommendation });
+    } catch {
+      setActionError('Could not save. Try again.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsActionPending(false);
+    }
+  }, [id, isActionPending, onDismiss, recommendation]);
 
   // Early return after all hooks
   if (!recommendation) return null;
 
   // Now safe to destructure remaining values
   const {
-    domain,
     message,
     metric,
     evidence,
-    correlation,
     predictionLink,
   } = recommendation;
 
@@ -208,6 +198,9 @@ export default function RecommendationCard({
         pressed && styles.containerPressed,
       ]}
       onPress={handlePress}
+      disabled={isActionPending}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${message}`}
     >
       {/* Header Row */}
       <View style={styles.header}>
@@ -355,6 +348,9 @@ export default function RecommendationCard({
                 style={[styles.microActionItem, isCompleted && styles.microActionItemCompleted]}
                 onPress={() => !isCompleted && handleStepComplete(index)}
                 disabled={isCompleted}
+                accessibilityRole="checkbox"
+                accessibilityLabel={step.label || step}
+                accessibilityState={{ checked: isCompleted, disabled: isCompleted }}
               >
                 <View style={[styles.microActionCheck, isCompleted && { backgroundColor: iconColor }]}>
                   {isCompleted && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
@@ -369,22 +365,31 @@ export default function RecommendationCard({
       )}
 
       {/* Action Buttons - Show when actions are enabled and not compact */}
-      {showActions && type === 'action' && !compact && !isExpanded && (
-        <View style={styles.actionButtons}>
+      {showActions && type === 'action' && !isExpanded && (
+        <View style={[styles.actionButtons, compact && styles.actionButtonsCompact]}>
           <TouchableOpacity
             style={[styles.actionButton, styles.actionButtonPrimary, { backgroundColor: iconColor }]}
             onPress={handleActionComplete}
+            disabled={isActionPending}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark "${title}" as done`}
+            accessibilityState={{ disabled: isActionPending, busy: isActionPending }}
           >
-            <Text style={styles.actionButtonTextPrimary}>Done</Text>
+            {isActionPending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.actionButtonTextPrimary}>Done</Text>}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleDismiss}
+            disabled={isActionPending}
+            accessibilityRole="button"
+            accessibilityLabel={`Dismiss "${title}" for later`}
+            accessibilityState={{ disabled: isActionPending }}
           >
             <Text style={styles.actionButtonText}>Later</Text>
           </TouchableOpacity>
         </View>
       )}
+      {!!actionError && <Text style={styles.actionError} accessibilityRole="alert">{actionError}</Text>}
     </Pressable>
   );
 }
@@ -400,7 +405,13 @@ export function RecommendationRow({ recommendation, onPress }) {
   const iconColor = color || typeStyle.gradient[0];
 
   return (
-    <TouchableOpacity style={styles.rowContainer} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.rowContainer}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${message}`}
+    >
       <View style={[styles.rowIcon, { backgroundColor: `${iconColor}15` }]}>
         <Ionicons name={icon || typeStyle.icon} size={18} color={iconColor} />
       </View>
@@ -427,7 +438,12 @@ export function RecommendationSection({ title, subtitle, recommendations = [], o
           {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
         </View>
         {onSeeAll && recommendations.length > 2 && (
-          <TouchableOpacity onPress={onSeeAll} style={styles.seeAllButton}>
+          <TouchableOpacity
+            onPress={onSeeAll}
+            style={styles.seeAllButton}
+            accessibilityRole="button"
+            accessibilityLabel={`See all ${title}`}
+          >
             <Text style={styles.seeAllText}>See All</Text>
             <Ionicons name="chevron-forward" size={14} color={BRAND.primary} />
           </TouchableOpacity>
@@ -794,6 +810,9 @@ const styles = StyleSheet.create({
     gap: SPACING[2],
     marginTop: SPACING[3],
   },
+  actionButtonsCompact: {
+    marginTop: SPACING[2],
+  },
   actionButton: {
     flex: 1,
     paddingVertical: SPACING[2],
@@ -816,5 +835,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  actionError: {
+    marginTop: SPACING[2],
+    fontSize: TYPOGRAPHY.size.xs,
+    color: '#B42318',
+    textAlign: 'center',
   },
 });

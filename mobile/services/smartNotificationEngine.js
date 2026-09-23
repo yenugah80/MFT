@@ -21,6 +21,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
+import { DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
 import {
   hydrationMessages,
   reminderMessages,
@@ -62,7 +63,7 @@ const fetchHydrationStatus = async () => {
 
     return {
       currentMl: Math.round((today.waterIntakeLiters || 0) * 1000),
-      goalMl: Math.round((goals.waterLiters || 2) * 1000),
+      goalMl: Math.round((goals.waterLiters || DEFAULT_WATER_GOAL_LITERS) * 1000),
       lastLogTime: today.waterLogs?.[0]?.loggedDate || null,
       logCount: today.waterLogs?.length || 0,
       streak: trends.currentStreak || 0,

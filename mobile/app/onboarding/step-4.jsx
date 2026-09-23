@@ -172,8 +172,10 @@ const Step4Screen = () => {
   const handleGetStarted = async () => {
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch (_) {}
 
-    // AI/OpenAI consent is now captured once, at sign-up, via the bundled
-    // Terms/Privacy checkbox — nothing to ask again here.
+    // AI/OpenAI consent is deliberately NOT asked here — it's a separate,
+    // explicit, un-pre-ticked ask handled by AIConsentPrompt on first tabs
+    // open (see components/consent/AIConsentPrompt.jsx), not during
+    // onboarding. Nothing to do about it in this step.
     // completeOnboarding handles errors internally via SAVE_ERROR dispatch.
     // The useEffect above shows the Alert when state.error is set.
     await completeOnboarding();

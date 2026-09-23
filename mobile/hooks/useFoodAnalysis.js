@@ -29,6 +29,7 @@ import { API_URL } from '../constants/api';
 import { calculateNetCarbs } from '../types/foodLog';
 import { normalizeNutritionData, detectAggregatedData } from '../utils/nutritionNormalizer';
 import { normalizeFoodName } from '../utils/displayText';
+import { getMealTypeFromTime as getMealTypeFromTimeShared } from '../utils/mealTypeFromTime';
 
 // Module-level cache to persist analysis result across component remounts
 // This prevents loss of analysis data when the tabs layout re-renders
@@ -177,13 +178,177 @@ const OCR_KEYWORDS = ['calories', 'protein', 'carb', 'fat', 'serving', 'nutritio
  * Detect meal type based on current time
  * @returns {'breakfast'|'lunch'|'dinner'|'snack'} Meal type
  */
+// Re-exported for existing importers (see mobile/utils/mealTypeFromTime.js
+// for why this now delegates to a single shared implementation instead of
+// keeping its own boundary logic — this one used to disagree with the
+// display-time classifiers for anything logged at or after 22:00).
 export function getMealTypeFromTime() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return 'breakfast';
-  if (hour >= 11 && hour < 15) return 'lunch';
-  if (hour >= 15 && hour < 17) return 'snack';
-  if (hour >= 17 && hour < 22) return 'dinner';
-  return 'snack';
+  return getMealTypeFromTimeShared();
+}
+
+/**
+ * Remove one ingredient from a food item, subtracting its macros AND micros
+ * from the item's totals. Returns a new item object; returns the original
+ * item unchanged if ingredientIndex is out of range.
+ * @param {object} item - Food item with ingredients/components, macros, micros
+ * @param {number} ingredientIndex - Index of ingredient to remove
+ * @returns {object} Updated item
+ */
+export function subtractIngredientFromItem(item, ingredientIndex) {
+  const ingredients = item.ingredients || item.components || [];
+  if (ingredientIndex < 0 || ingredientIndex >= ingredients.length) {
+    console.warn(`[useFoodAnalysis] Invalid ingredient index: ${ingredientIndex}`);
+    return item;
+  }
+
+  const removedIngredient = ingredients[ingredientIndex];
+
+  const removedMacros = {
+    calories_kcal: removedIngredient.calories || removedIngredient.calories_kcal || removedIngredient.macros?.calories_kcal || 0,
+    protein_g: removedIngredient.protein || removedIngredient.protein_g || removedIngredient.macros?.protein_g || 0,
+    carbs_g: removedIngredient.carbs || removedIngredient.carbs_g || removedIngredient.macros?.carbs_g || 0,
+    fat_g: removedIngredient.fat || removedIngredient.fat_g || removedIngredient.macros?.fat_g || 0,
+    fiber_g: removedIngredient.fiber || removedIngredient.fiber_g || removedIngredient.macros?.fiber_g || 0,
+    sugar_g: removedIngredient.sugar || removedIngredient.sugar_g || removedIngredient.macros?.sugar_g || 0,
+    sodium_mg: removedIngredient.sodium || removedIngredient.sodium_mg || removedIngredient.macros?.sodium_mg || 0,
+  };
+
+  const newIngredients = [...ingredients];
+  newIngredients.splice(ingredientIndex, 1);
+
+  const updatedMacros = {
+    calories_kcal: Math.max(0, (item.macros?.calories_kcal || 0) - removedMacros.calories_kcal),
+    protein_g: Math.max(0, (item.macros?.protein_g || 0) - removedMacros.protein_g),
+    carbs_g: Math.max(0, (item.macros?.carbs_g || 0) - removedMacros.carbs_g),
+    fat_g: Math.max(0, (item.macros?.fat_g || 0) - removedMacros.fat_g),
+    fiber_g: Math.max(0, (item.macros?.fiber_g || 0) - removedMacros.fiber_g),
+    sugar_g: Math.max(0, (item.macros?.sugar_g || 0) - removedMacros.sugar_g),
+    sodium_mg: Math.max(0, (item.macros?.sodium_mg || 0) - removedMacros.sodium_mg),
+  };
+
+  // Subtract the removed ingredient's own micros the same way macros are
+  // subtracted above, handling both {value, unit} and bare-number shapes
+  // (matches computeIngredientNutrition.js's handling). Without this, removing
+  // e.g. cheese correctly dropped calories/protein/fat but silently left
+  // calcium/etc. at the pre-removal total — overstated, not just missing.
+  const removedMicros = removedIngredient.micros || {};
+  const updatedMicros = {};
+  for (const [key, entry] of Object.entries(item.micros || {})) {
+    const isObjShape = entry && typeof entry === 'object';
+    const currentVal = isObjShape ? (entry.value || 0) : (entry || 0);
+    const removedEntry = removedMicros[key];
+    const removedVal = removedEntry && typeof removedEntry === 'object'
+      ? (removedEntry.value || 0)
+      : (removedEntry || 0);
+    const nextVal = Math.max(0, currentVal - removedVal);
+    updatedMicros[key] = isObjShape ? { ...entry, value: nextVal } : nextVal;
+  }
+
+  console.log(`[useFoodAnalysis] Removed ingredient "${removedIngredient.name || 'Unknown'}" from "${item.name}"`);
+
+  return {
+    ...item,
+    ingredients: item.ingredients ? newIngredients : undefined,
+    components: item.components ? newIngredients : undefined,
+    macros: updatedMacros,
+    micros: updatedMicros,
+  };
+}
+
+/**
+ * Rescale a resolved item to a new quantity/unit — recomputes macros,
+ * micros, AND each sub-ingredient's own macros proportionally from the
+ * gram-weight ratio, and marks the portion as no longer estimated (the
+ * user just explicitly confirmed a real amount). Returns the item
+ * unchanged if it can't be scaled (missing gramsEquivalent on the
+ * original portion, or an unrecognized target unit).
+ *
+ * Grams are derived in priority order, food-specific first:
+ *  1. Same unit as the item's current portion: scale proportionally from
+ *     THIS item's own resolved amount->gramsEquivalent ratio (2 rotis
+ *     known to be 80g means 1 roti is 40g; "1 serving" of a chicken curry
+ *     already resolved to 350g means 2 servings is 700g). This is the
+ *     path every real UI control here actually takes — QuantityAdjuster's
+ *     stepper/quick-buttons/suggested-options never change the unit, only
+ *     the count — so it must never be skipped in favor of a guess.
+ *  2. Only when the unit is genuinely CHANGING to something convertToGrams
+ *     recognizes (g, oz, cup, "serving" as a bare fallback, ...): fall
+ *     back to that generic table. This is an approximation and is used
+ *     only because no food-specific ratio exists for the new unit.
+ * Previously checked convertToGrams FIRST unconditionally — meaning any
+ * item whose unit happened to be "serving" (the majority of non-countable
+ * foods) always got rescaled using convertToGrams's universal "1 serving
+ * = 100g" assumption instead of that food's own real resolved weight,
+ * even though the unit never actually changed. A chicken curry correctly
+ * resolved to 350g/serving would have silently been treated as 100g/
+ * serving the moment its quantity was edited — recreating exactly the
+ * "the app claims to know a gram amount nobody supplied" problem this
+ * whole feature exists to fix.
+ * @param {object} item - Food item with macros/micros/ingredients/portion
+ * @param {number} newAmount - New quantity
+ * @param {string} newUnit - New unit
+ * @returns {object} Updated item
+ */
+export function rescaleItemToQuantity(item, newAmount, newUnit) {
+  const originalGrams = item.portion?.gramsEquivalent;
+  const originalAmount = item.portion?.amount;
+  if (!originalGrams) {
+    console.warn(`[useFoodAnalysis] Cannot update quantity for ${item.itemId}: missing gramsEquivalent`);
+    return item;
+  }
+
+  const sameUnit = item.portion?.unit && newUnit &&
+    item.portion.unit.toLowerCase().trim() === newUnit.toLowerCase().trim();
+  const newGrams = (sameUnit && originalAmount > 0 ? (originalGrams / originalAmount) * newAmount : null)
+    ?? convertToGrams(newAmount, newUnit);
+  if (!newGrams) {
+    console.warn(`[useFoodAnalysis] Cannot convert ${newAmount} ${newUnit} to grams`);
+    return item;
+  }
+
+  const scaleFactor = newGrams / originalGrams;
+
+  const scaledMacros = {};
+  Object.entries(item.macros || {}).forEach(([key, value]) => {
+    scaledMacros[key] = value !== null ? value * scaleFactor : null;
+  });
+
+  const scaledMicros = {};
+  Object.entries(item.micros || {}).forEach(([key, micro]) => {
+    scaledMicros[key] = micro.value !== null
+      ? { value: micro.value * scaleFactor, unit: micro.unit }
+      : null;
+  });
+
+  // Scale each sub-ingredient's own macros by the same factor —
+  // previously only the item's aggregate macros/micros were rescaled,
+  // leaving the ingredient breakdown frozen at the pre-edit quantity (e.g.
+  // doubling "2 rotis" to "4 rotis" would double the item's calories but
+  // its ingredient list would still show the 2-roti flour/oil amounts).
+  const scaledIngredients = (item.ingredients || []).map((ing) => ({
+    ...ing,
+    calories: typeof ing.calories === 'number' ? ing.calories * scaleFactor : ing.calories,
+    protein: typeof ing.protein === 'number' ? ing.protein * scaleFactor : ing.protein,
+    carbs: typeof ing.carbs === 'number' ? ing.carbs * scaleFactor : ing.carbs,
+    fat: typeof ing.fat === 'number' ? ing.fat * scaleFactor : ing.fat,
+    fiber: typeof ing.fiber === 'number' ? ing.fiber * scaleFactor : ing.fiber,
+    sugar: typeof ing.sugar === 'number' ? ing.sugar * scaleFactor : ing.sugar,
+  }));
+
+  return {
+    ...item,
+    portion: {
+      amount: newAmount,
+      unit: newUnit,
+      gramsEquivalent: newGrams,
+      servingText: `${newAmount} ${newUnit}`,
+      isEstimated: false,
+    },
+    macros: scaledMacros,
+    micros: scaledMicros,
+    ingredients: scaledIngredients,
+    editedPortion: { amount: newAmount, unit: newUnit },
+  };
 }
 
 function looksLikeNutritionLabel(text) {
@@ -589,7 +754,7 @@ function mapBackendProductToItem(product, inputText) {
  * @param {Array<AnalysisItem>} items - Food items
  * @returns {{macros: Macros, micros: Object.<string, Micro>}} Aggregated totals
  */
-function calculateTotals(items) {
+export function calculateTotals(items) {
   if (!items || items.length === 0) {
     return {
       macros: {
@@ -618,10 +783,27 @@ function calculateTotals(items) {
     micros: {},
   };
 
+  // fiber_g/sugar_g/sodium_mg are optional per item — unlike
+  // calories/protein/carbs/fat, which the backend always validates as
+  // numeric, an item can genuinely never have reported one. If ANY item
+  // here is missing one, the running sum below is an undercount, not a
+  // real total, so it gets nulled out afterward instead of shown as a
+  // confident-looking number. This is the function that actually produces
+  // the persisted analysisResult.totals after every quantity/removal edit
+  // (updateItemQuantity, removeItem, removeIngredient all call it) — same
+  // fix already applied to aggregateNutrition.js's display-side totals,
+  // extended here to the totals that actually get saved.
+  const OPTIONAL_FIELDS = ['fiber_g', 'sugar_g', 'sodium_mg'];
+  const incomplete = { fiber_g: false, sugar_g: false, sodium_mg: false };
+
   items.forEach(item => {
     // Sum macros
     Object.keys(totals.macros).forEach(key => {
-      totals.macros[key] += item.macros?.[key] ?? 0;
+      const value = item.macros?.[key];
+      if (OPTIONAL_FIELDS.includes(key) && value == null) {
+        incomplete[key] = true;
+      }
+      totals.macros[key] += value ?? 0;
     });
 
     // Sum micros
@@ -635,6 +817,10 @@ function calculateTotals(items) {
         }
       });
     }
+  });
+
+  OPTIONAL_FIELDS.forEach((key) => {
+    if (incomplete[key]) totals.macros[key] = null;
   });
 
   return totals;
@@ -786,6 +972,7 @@ async function compressImage(uri, skipManipulation = false) {
  *   isAnalyzing: boolean,
  *   progress: number,
  *   error: string|null,
+ *   needsConsent: boolean,
  *   clearError: () => void
  * }}
  */
@@ -800,6 +987,10 @@ export function useFoodAnalysis() {
   const isAnalyzingRef = useRef(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  // True when the last photo analysis was blocked on the OpenAI consent gate
+  // (403 + code 'openai_consent_required') rather than a genuine failure —
+  // callers use this to offer an "Enable AI" action instead of a dead-end retry.
+  const [needsConsent, setNeedsConsent] = useState(false);
 
   // Multi-item analysis state (initialize from cache only if valid)
   const [analysisResult, setAnalysisResultState] = useState(() => {
@@ -1406,7 +1597,10 @@ export function useFoodAnalysis() {
           fat_g: foodLog.fat ?? null,
           fiber_g: foodLog.fiber ?? null,
           sugar_g: foodLog.sugar ?? null,
-          sodium_mg: foodLog.micros?.sodium?.value || 0,
+          // Was `|| 0` — the one field here that didn't match its
+          // siblings' `?? null`, silently reporting "0mg sodium" (a
+          // confirmed value) whenever it was genuinely unknown.
+          sodium_mg: foodLog.micros?.sodium?.value ?? null,
         },
         micros: foodLog.micros || {},
         netCarbs: foodLog.netCarbs,
@@ -1459,6 +1653,7 @@ export function useFoodAnalysis() {
 
     setIsAnalyzing(true);
     setError(null);
+    setNeedsConsent(false);
     setProgress(10);
 
     try {
@@ -1619,6 +1814,16 @@ export function useFoodAnalysis() {
         const rawError = json?.error || json?.message || '';
         console.error(`[useFoodAnalysis] Image API error: ${res.status} - ${rawError}`);
 
+        // Blocked by the OpenAI consent gate, not a real failure — the photo is
+        // fine, the user just hasn't opted into AI processing yet. Surfaced
+        // separately so the caller can offer "Enable AI" instead of a Retry
+        // that would just 403 again.
+        if (res.status === 403 && json?.code === 'openai_consent_required') {
+          setNeedsConsent(true);
+          setError(rawError || 'AI processing requires your consent to analyze this photo.');
+          return;
+        }
+
         // Provide user-friendly error messages based on status and error type
         let userMessage;
         if (res.status === 504 || res.status === 524) {
@@ -1653,6 +1858,25 @@ export function useFoodAnalysis() {
         source: 'photo',
         raw: rawAIData,
       });
+
+      // Nothing recognizable in the photo. The backend doesn't error in this
+      // case — the vision model returns an empty items array, which food.js
+      // turns into a zero-item response (e.g. title "Unknown Meal (0 items)")
+      // rather than an HTTP error — so it has to be caught here, or a blurry
+      // or non-food photo would sail through as a real, loggable meal.
+      // `rawAIData.items` (the actual identified-item array from the unified
+      // response) is the authoritative signal — checked instead of matching
+      // any particular placeholder name/text, which is backend-copy-dependent
+      // and, for the multi-item path most photos now take, isn't even what
+      // gets used (verified against a live zero-item response: it was
+      // "Unknown Meal (0 items)", not "Unknown Food"). A genuinely
+      // zero-calorie food (e.g. water) still has one real identified item,
+      // so this doesn't misfire on it the way a calories-only check would.
+      const identifiedItems = rawAIData.items;
+      if (!Array.isArray(identifiedItems) || identifiedItems.length === 0) {
+        setError("Couldn't identify any food in this photo. Try a clearer, well-lit shot.");
+        return;
+      }
 
       foodLog.imageUrl = uri;
       // These are computed by this analysis call but previously never made it onto
@@ -1691,7 +1915,7 @@ export function useFoodAnalysis() {
           fat_g: foodLog.fat ?? null,
           fiber_g: foodLog.fiber ?? null,
           sugar_g: foodLog.sugar ?? null,
-          sodium_mg: foodLog.micros?.sodium?.value || 0,
+          sodium_mg: foodLog.micros?.sodium?.value ?? null,
         },
         micros: foodLog.micros || {},
         netCarbs: foodLog.netCarbs,
@@ -1724,6 +1948,14 @@ export function useFoodAnalysis() {
         setError(errorMsg);
         return;
       }
+      // A dropped connection throws here as a bare TypeError from fetch itself
+      // ("Network request failed") — no response, no status, nothing for the
+      // res.ok branch above to have already turned into a specific message.
+      if (err instanceof TypeError || /network request failed/i.test(err?.message || '')) {
+        const errorMsg = "You're offline. Check your connection and try again.";
+        setError(errorMsg);
+        return;
+      }
       const errorMsg = typeof err?.message === 'string'
         ? err.message
         : 'Photo analysis failed. Please try again.';
@@ -1749,59 +1981,75 @@ export function useFoodAnalysis() {
   const updateItemQuantity = useCallback((itemId, newAmount, newUnit) => {
     setAnalysisResult(prev => {
       if (!prev) return null;
-
-      const updatedItems = prev.items.map(item => {
-        if (item.itemId === itemId) {
-          const originalGrams = item.portion?.gramsEquivalent;
-
-          if (!originalGrams) {
-            console.warn(`[useFoodAnalysis] Cannot update quantity for ${itemId}: missing gramsEquivalent`);
-            return item;
-          }
-
-          const newGrams = convertToGrams(newAmount, newUnit);
-          if (!newGrams) {
-            console.warn(`[useFoodAnalysis] Cannot convert ${newAmount} ${newUnit} to grams`);
-            return item;
-          }
-
-          const scaleFactor = newGrams / originalGrams;
-
-          // Scale macros
-          const scaledMacros = {};
-          Object.entries(item.macros || {}).forEach(([key, value]) => {
-            scaledMacros[key] = value !== null ? value * scaleFactor : null;
-          });
-
-          // Scale micros
-          const scaledMicros = {};
-          Object.entries(item.micros || {}).forEach(([key, micro]) => {
-            scaledMicros[key] = micro.value !== null
-              ? { value: micro.value * scaleFactor, unit: micro.unit }
-              : null;
-          });
-
-          return {
-            ...item,
-            portion: {
-              amount: newAmount,
-              unit: newUnit,
-              gramsEquivalent: newGrams,
-              servingText: `${newAmount} ${newUnit}`,
-            },
-            macros: scaledMacros,
-            micros: scaledMicros,
-            editedPortion: { amount: newAmount, unit: newUnit },
-          };
-        }
-        return item;
-      });
-
+      const updatedItems = prev.items.map(item =>
+        item.itemId === itemId ? rescaleItemToQuantity(item, newAmount, newUnit) : item
+      );
       return {
         ...prev,
         items: updatedItems,
         totals: calculateTotals(updatedItems),
       };
+    });
+  }, [setAnalysisResult]);
+
+  /**
+   * Overwrite an item's final macros/micros with already-computed values —
+   * for editors (like EditableIngredientsSection's ingredient include/
+   * exclude flow) that compute their own final nutrition rather than a
+   * scale factor. Same shared-state pattern as updateItemQuantity: without
+   * this, an ingredient edit only ever reached a screen's own local display
+   * state, never the analysisResult save actually reads at "Confirm Log"
+   * time — the identical silent-save-loss bug already fixed for quantity
+   * edits, confirmed to also apply here.
+   * @param {string} itemId
+   * @param {object} macros - Canonical {calories_kcal, protein_g, ...}
+   * @param {object} [micros]
+   */
+  const updateItemMacros = useCallback((itemId, macros, micros) => {
+    setAnalysisResult(prev => {
+      if (!prev) return null;
+      const updatedItems = prev.items.map(item =>
+        item.itemId === itemId
+          ? { ...item, macros: { ...item.macros, ...macros }, ...(micros ? { micros } : {}) }
+          : item
+      );
+      return {
+        ...prev,
+        items: updatedItems,
+        totals: calculateTotals(updatedItems),
+      };
+    });
+  }, [setAnalysisResult]);
+
+  /**
+   * Dismiss a "Did you mean?" spelling suggestion, keeping the user's
+   * original ingredient/food name as-is instead of the backend's fuzzy-
+   * matched correction. Without this, an item flagged by the backend's
+   * spell-checker (utils/fuzzyMatch.js, a fixed known-foods word list —
+   * any real term missing from that list gets flagged as a "misspelling"
+   * of whatever it's closest to) had exactly one way out: accept the
+   * suggested rename and re-analyze. There was no way to say "no, my
+   * original term is correct" — excluding the ingredient from totals
+   * (a separate, unrelated mechanism) never touched this item's
+   * requiresUserConfirmation/flags, so "Log Meal" stayed permanently
+   * blocked. This clears the block without discarding or re-analyzing
+   * the item.
+   * @param {string} itemId
+   */
+  const confirmItemSpelling = useCallback((itemId) => {
+    setAnalysisResult(prev => {
+      if (!prev) return null;
+      const updatedItems = prev.items.map(item =>
+        item.itemId === itemId
+          ? {
+              ...item,
+              requiresUserConfirmation: false,
+              suggestions: [],
+              flags: (item.flags || []).filter(flag => flag !== 'spelling_confirmation_required'),
+            }
+          : item
+      );
+      return { ...prev, items: updatedItems };
     });
   }, [setAnalysisResult]);
 
@@ -1838,51 +2086,7 @@ export function useFoodAnalysis() {
 
       const updatedItems = prev.items.map(item => {
         if (item.itemId !== itemId) return item;
-
-        // Get current ingredients array
-        const ingredients = item.ingredients || item.components || [];
-        if (ingredientIndex < 0 || ingredientIndex >= ingredients.length) {
-          console.warn(`[useFoodAnalysis] Invalid ingredient index: ${ingredientIndex}`);
-          return item;
-        }
-
-        // Get the ingredient being removed
-        const removedIngredient = ingredients[ingredientIndex];
-
-        // Calculate the macros to subtract
-        const removedMacros = {
-          calories_kcal: removedIngredient.calories || removedIngredient.calories_kcal || removedIngredient.macros?.calories_kcal || 0,
-          protein_g: removedIngredient.protein || removedIngredient.protein_g || removedIngredient.macros?.protein_g || 0,
-          carbs_g: removedIngredient.carbs || removedIngredient.carbs_g || removedIngredient.macros?.carbs_g || 0,
-          fat_g: removedIngredient.fat || removedIngredient.fat_g || removedIngredient.macros?.fat_g || 0,
-          fiber_g: removedIngredient.fiber || removedIngredient.fiber_g || removedIngredient.macros?.fiber_g || 0,
-          sugar_g: removedIngredient.sugar || removedIngredient.sugar_g || removedIngredient.macros?.sugar_g || 0,
-          sodium_mg: removedIngredient.sodium || removedIngredient.sodium_mg || removedIngredient.macros?.sodium_mg || 0,
-        };
-
-        // Create new ingredients array without the removed item
-        const newIngredients = [...ingredients];
-        newIngredients.splice(ingredientIndex, 1);
-
-        // Update the item's macros by subtracting the removed ingredient
-        const updatedMacros = {
-          calories_kcal: Math.max(0, (item.macros?.calories_kcal || 0) - removedMacros.calories_kcal),
-          protein_g: Math.max(0, (item.macros?.protein_g || 0) - removedMacros.protein_g),
-          carbs_g: Math.max(0, (item.macros?.carbs_g || 0) - removedMacros.carbs_g),
-          fat_g: Math.max(0, (item.macros?.fat_g || 0) - removedMacros.fat_g),
-          fiber_g: Math.max(0, (item.macros?.fiber_g || 0) - removedMacros.fiber_g),
-          sugar_g: Math.max(0, (item.macros?.sugar_g || 0) - removedMacros.sugar_g),
-          sodium_mg: Math.max(0, (item.macros?.sodium_mg || 0) - removedMacros.sodium_mg),
-        };
-
-        console.log(`[useFoodAnalysis] Removed ingredient "${removedIngredient.name || 'Unknown'}" from "${item.name}"`);
-
-        return {
-          ...item,
-          ingredients: item.ingredients ? newIngredients : undefined,
-          components: item.components ? newIngredients : undefined,
-          macros: updatedMacros,
-        };
+        return subtractIngredientFromItem(item, ingredientIndex);
       });
 
       return {
@@ -1971,10 +2175,32 @@ export function useFoodAnalysis() {
   }, [inputText, analyzeTextUniversal, getToken]);
 
   /**
+   * Re-run analysis after the user confirms a spelling correction.
+   * This recalculates nutrition from the corrected ingredient rather than
+   * renaming a result that still contains the old zero-value fallback.
+   */
+  const analyzeCorrectedText = useCallback(async (correctedText) => {
+    const text = correctedText?.trim();
+    if (!text) {
+      throw new Error('Corrected meal description is required');
+    }
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    suppressAutoAnalysisUntilRef.current = Date.now() + AUTO_ANALYSIS_DEBOUNCE_MS + 300;
+    setDebouncedText('');
+    setInputText(text);
+    await analyzeTextUniversal(text, { source: 'text_correction' });
+  }, [analyzeTextUniversal, setInputText]);
+
+  /**
    * Clear error state
    */
   const clearError = useCallback(() => {
     setError(null);
+    setNeedsConsent(false);
   }, []);
 
   // ============================================================================
@@ -2091,15 +2317,19 @@ export function useFoodAnalysis() {
 
     // Multi-item methods
     updateItemQuantity,
+    updateItemMacros,
+    confirmItemSpelling,
     removeItem,
     removeIngredient,
     runAnalysis,
+    analyzeCorrectedText,
     cancelAnalysis,
 
     // Shared state
     isAnalyzing,
     progress,
     error,
+    needsConsent,
     clearError,
   };
 }

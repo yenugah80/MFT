@@ -1,8 +1,20 @@
-# MFT : My Flow Tracker - Project Guide for Claude
+# MFT : My Flourish Tracker - Project Guide for Claude
+
+> **Active handoff (2026-08-27):** Before changing the current dirty worktree, read
+> [`docs/architecture/claude-handoff-2026-08-27.md`](docs/architecture/claude-handoff-2026-08-27.md).
+> It records the user's full wellness redesign scope, verified work, live database
+> changes, remaining QA, and exact commands. Preserve all existing changes.
+
+> **Approved planning source:** For unified wellness history, personal baselines,
+> change detection, context markers, daily timelines, explainable patterns,
+> weekly reviews, export, privacy, accessibility, and emotional safety, follow
+> [`docs/proposals/WELLNESS_HISTORY_PRODUCTION_PLAN.md`](docs/proposals/WELLNESS_HISTORY_PRODUCTION_PLAN.md).
+> Extend the existing Insight Engine and domain log tables. Do not create a
+> third recommendation engine or a duplicate master log store.
 
 ## Project Overview
 
-MFT (My Flow Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.
+MFT (My Flourish Tracker) is a comprehensive nutrition and wellness tracking mobile application built with React Native/Expo for the frontend and Node.js/Express for the backend. The app uses AI-powered food analysis to help users track meals, hydration, activity, mood, and overall health metrics.
 
 ## Tech Stack
 
@@ -17,7 +29,21 @@ MFT (My Flow Tracker) is a comprehensive nutrition and wellness tracking mobile 
 ### Backend (`/backend`)
 - **Runtime**: Node.js with ES Modules
 - **Framework**: Express 5
-- **Database**: PostgreSQL via Neon (@neondatabase/serverless)
+- **Database**: PostgreSQL hosted on Neon, over `postgres-js` on a TCP pool
+  (`backend/src/config/db.js`). NOT `@neondatabase/serverless` — the Neon HTTP
+  driver was deliberately dropped because it has no real transactions and opens
+  a new HTTP request per query. This matters when writing queries: raw
+  ``sql`...` `` templates bypass Drizzle's column type mapping, so a JS `Date`
+  interpolated into one reaches the driver unserialized and throws. Use the
+  `gte`/`lte`/`eq` operators for typed columns. Separately: `postgres-js`
+  parses `timestamp` (no timezone) columns back into JS `Date` objects using
+  the Node **process's** local timezone, not the DB's — Postgres/Neon here is
+  GMT, but an unset `TZ` env var makes Node fall back to the host's system
+  zone. `db.js` pins `process.env.TZ = "UTC"` before the client is created,
+  and Railway also has `TZ=UTC` set; don't remove either without re-checking
+  this, since it silently shifts every timestamp read by the DST offset and
+  previously reset a real streak (37→1) by making a same-day log look like a
+  2-day gap. `date` (no time) columns are unaffected — this is timestamp-only.
 - **ORM**: Drizzle ORM
 - **AI**: OpenAI API for food analysis and recommendations
 - **Authentication**: Clerk middleware (@clerk/express)

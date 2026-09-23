@@ -15,6 +15,7 @@
 
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { parseTimezoneOffsetMinutes } from '../utils/timezone.js';
 import {
   assessDataAvailability,
   getTimeframeAnalytics,
@@ -373,8 +374,9 @@ router.get('/recommendations', requireAuth(), async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const period = req.query.period || 'week'; // today, week, month, all
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
-    const recommendations = await getAnalyticsRecommendations(userId, period);
+    const recommendations = await getAnalyticsRecommendations(userId, period, offsetMinutes);
 
     res.json(recommendations);
   } catch (error) {

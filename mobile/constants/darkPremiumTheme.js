@@ -11,6 +11,7 @@
  *
  * Updated: 2025-12-26
  */
+import { SPACING_SCALE } from './spacingScale.js';
 
 // ============================================================================
 // DARK BACKGROUNDS - Animated Mesh Gradients
@@ -348,21 +349,7 @@ export const ANIMATION = {
 // SPACING, RADIUS, TYPOGRAPHY (Same as before)
 // ============================================================================
 
-export const SPACING = {
-  0: 0,
-  1: 4,
-  2: 8,
-  3: 12,
-  4: 16,
-  5: 20,
-  6: 24,
-  7: 28,
-  8: 32,
-  10: 40,
-  12: 48,
-  16: 64,
-  20: 80,
-};
+export const SPACING = { ...SPACING_SCALE };
 
 export const RADIUS = {
   sm: 8,

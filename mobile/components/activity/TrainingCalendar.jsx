@@ -31,11 +31,12 @@ import {
   RADIUS,
   SHADOWS,
   SEMANTIC,
-  BRAND,
+  VIBRANT_WELLNESS,
 } from '../../constants/premiumTheme';
 
+const ACTIVITY_COLOR = VIBRANT_WELLNESS.activity.solid;
 const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const RING = 30;
+const RING = 32;
 const STROKE = 3;
 const R = (RING - STROKE) / 2;
 const CIRC = 2 * Math.PI * R;
@@ -52,17 +53,22 @@ const typeLabel = (type) =>
 function DayRing({ cell, selected, onPress }) {
   const dim = !cell.inMonth || cell.isFuture;
 
+  if (!cell.inMonth) {
+    return <View style={styles.cell} accessibilityElementsHidden />;
+  }
+
   return (
     <TouchableOpacity
-      style={styles.cell}
+      style={[styles.cell, selected && styles.cellSelected]}
       onPress={() => onPress(cell)}
       disabled={cell.isFuture || !cell.inMonth}
       activeOpacity={0.7}
       accessibilityRole="button"
+      accessibilityState={{ selected, disabled: cell.isFuture }}
       accessibilityLabel={
         cell.trained
-          ? `${cell.date.toDateString()}, ${cell.minutes} minutes`
-          : `${cell.date.toDateString()}, no training`
+          ? `${cell.date.toDateString()}, ${cell.minutes} minutes, ${cell.sessions.length} workout${cell.sessions.length === 1 ? '' : 's'}`
+          : `${cell.date.toDateString()}, ${cell.isFuture ? 'upcoming' : 'rest day'}`
       }
     >
       <Svg width={RING} height={RING}>
@@ -70,16 +76,16 @@ function DayRing({ cell, selected, onPress }) {
           cx={RING / 2}
           cy={RING / 2}
           r={R}
-          stroke={selected ? BRAND.primary : `${BRAND.primary}1A`}
-          strokeWidth={selected ? 2 : STROKE}
-          fill={cell.isToday ? `${BRAND.primary}12` : 'transparent'}
+          stroke={cell.isFuture ? '#EAE6E2' : '#E1DDD8'}
+          strokeWidth={STROKE}
+          fill="transparent"
         />
         {cell.progress > 0 && (
           <Circle
             cx={RING / 2}
             cy={RING / 2}
             r={R}
-            stroke={cell.progress >= 1 ? SEMANTIC.success.base : BRAND.primary}
+            stroke={ACTIVITY_COLOR}
             strokeWidth={STROKE}
             fill="none"
             strokeLinecap="round"
@@ -98,6 +104,7 @@ function DayRing({ cell, selected, onPress }) {
       >
         {cell.dayOfMonth}
       </Text>
+      {cell.isToday && <View style={styles.todayDot} />}
     </TouchableOpacity>
   );
 }
@@ -131,7 +138,9 @@ export default function TrainingCalendar({
   const selectDay = useCallback((cell) => {
     Haptics.selectionAsync();
     setSelectedKey(cell.dayKey);
-  }, []);
+    // Month is an overview; tapping a specific date is an intentional drill-in.
+    if (scope === 'month') setScope('day');
+  }, [scope]);
 
   const chooseScope = useCallback((next) => {
     Haptics.selectionAsync();
@@ -152,6 +161,9 @@ export default function TrainingCalendar({
     () => (selected ? buildStats({ scope, anchor: selected.date }) : null),
     [buildStats, scope, selected]
   );
+  const monthCells = cells.filter((cell) => cell.inMonth && !cell.isFuture);
+  const monthActiveDays = monthCells.filter((cell) => cell.trained).length;
+  const monthSessions = monthCells.reduce((sum, cell) => sum + cell.sessions.length, 0);
 
   const panelTitle = useMemo(() => {
     if (!selected) return '';
@@ -169,10 +181,23 @@ export default function TrainingCalendar({
     return month.monthLabel.toUpperCase();
   }, [scope, selected, stats, month.monthLabel]);
 
+  const comparisonPeriod = scope === 'day'
+    ? 'prior day'
+    : scope === 'week'
+      ? stats?.isComplete ? 'prior week' : 'prior week to date'
+      : stats?.isComplete ? 'prior month' : 'prior month to date';
+  const showsWeeklyTarget = scope === 'week';
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => step(1)} hitSlop={10} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={() => step(1)}
+          hitSlop={10}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Show previous month"
+        >
           <Ionicons name="chevron-back" size={18} color={TEXT.secondary} />
         </TouchableOpacity>
         <Text style={styles.month}>{month.monthLabel}</Text>
@@ -181,6 +206,9 @@ export default function TrainingCalendar({
           hitSlop={10}
           activeOpacity={0.7}
           disabled={!month.canGoForward}
+          accessibilityRole="button"
+          accessibilityLabel="Show next month"
+          accessibilityState={{ disabled: !month.canGoForward }}
         >
           <Ionicons
             name="chevron-forward"
@@ -188,6 +216,33 @@ export default function TrainingCalendar({
             color={month.canGoForward ? TEXT.secondary : TEXT.muted}
           />
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.monthFacts} accessible accessibilityLabel={`${monthSessions} workouts logged on ${monthActiveDays} calendar days in ${month.monthLabel}`}>
+        <View style={styles.monthFact}><Ionicons name="checkmark-circle" size={13} color={ACTIVITY_COLOR} /><Text style={styles.monthFactText}>{monthActiveDays} workout days</Text></View>
+        <View style={styles.monthFact}><Ionicons name="fitness-outline" size={13} color={TEXT.tertiary} /><Text style={styles.monthFactText}>{monthSessions} workouts</Text></View>
+      </View>
+
+      <Text style={styles.scopeLabel}>SUMMARY RANGE</Text>
+      <View style={styles.scopeRow}>
+        {SCOPES.map((option) => {
+          const active = scope === option.key;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              onPress={() => chooseScope(option.key)}
+              activeOpacity={0.8}
+              style={[styles.scopeButton, active && styles.scopeButtonActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${option.label} summary`}
+            >
+              <Text style={[styles.scopeText, active && styles.scopeTextActive]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View style={styles.weekHeader}>
@@ -221,24 +276,10 @@ export default function TrainingCalendar({
         </View>
       ))}
 
-      <View style={styles.scopeRow}>
-        {SCOPES.map((option) => {
-          const active = scope === option.key;
-          return (
-            <TouchableOpacity
-              key={option.key}
-              onPress={() => chooseScope(option.key)}
-              activeOpacity={0.8}
-              style={[styles.scopeButton, active && styles.scopeButtonActive]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-            >
-              <Text style={[styles.scopeText, active && styles.scopeTextActive]}>
-                {option.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      <View style={styles.legend}>
+        <View style={styles.legendItem}><View style={styles.legendRing} /><Text style={styles.legendText}>Full ring ≈ {month.dailyTarget} min</Text></View>
+        <View style={styles.legendItem}><View style={styles.legendRest} /><Text style={styles.legendText}>Rest / upcoming</Text></View>
+        <View style={styles.legendItem}><View style={styles.legendSelection} /><Text style={styles.legendText}>Selected {scope}</Text></View>
       </View>
 
       {!!stats && (
@@ -247,38 +288,11 @@ export default function TrainingCalendar({
 
           <View style={styles.headline}>
             <Text style={styles.headlineValue}>{stats.minutes}</Text>
-            <Text style={styles.headlineUnit}>of {stats.target} min</Text>
-            {Number.isFinite(stats.changePercent) && (
-              <Text
-                style={[
-                  styles.delta,
-                  {
-                    color:
-                      stats.changePercent > 0
-                        ? SEMANTIC.success.base
-                        : stats.changePercent < 0
-                        ? SEMANTIC.danger.base
-                        : TEXT.tertiary,
-                  },
-                ]}
-              >
-                {stats.changePercent > 0 ? '▲' : stats.changePercent < 0 ? '▼' : '—'}
-                {Math.abs(stats.changePercent)}%
-              </Text>
-            )}
+            <Text style={styles.headlineUnit}>{showsWeeklyTarget ? `of ${stats.target} min` : 'total minutes'}</Text>
           </View>
 
-          <View style={styles.track}>
-            <View
-              style={[
-                styles.fill,
-                {
-                  width: `${stats.percentage}%`,
-                  backgroundColor:
-                    stats.percentage >= 100 ? SEMANTIC.success.base : BRAND.primary,
-                },
-              ]}
-            />
+          {showsWeeklyTarget && <View style={styles.track}>
+            <View style={[styles.fill, { width: `${stats.percentage}%` }]} />
             {/* Where the period should stand by now — without it "35 of 150"
                 reads the same on a Monday as on a Saturday */}
             {!stats.isComplete && stats.expectedByNow > 0 && stats.percentage < 100 && (
@@ -289,9 +303,9 @@ export default function TrainingCalendar({
                 ]}
               />
             )}
-          </View>
+          </View>}
 
-          {!stats.isComplete && stats.percentage < 100 && (
+          {showsWeeklyTarget && !stats.isComplete && stats.percentage < 100 && (
             <Text
               style={[
                 styles.pace,
@@ -305,9 +319,16 @@ export default function TrainingCalendar({
           )}
 
           <Text style={styles.factLine}>
-            {stats.sessions} session{stats.sessions === 1 ? '' : 's'} · {stats.calories} kcal ·{' '}
-            {stats.activeDays} of {stats.elapsedDays} day{stats.elapsedDays === 1 ? '' : 's'}
+            {stats.sessions} workout{stats.sessions === 1 ? '' : 's'} · {stats.calories} kcal ·{' '}
+            {stats.activeDays} of {stats.elapsedDays} day{stats.elapsedDays === 1 ? '' : 's'} with workouts
           </Text>
+          {Number.isFinite(stats.changePercent) && (
+            <Text style={styles.comparison}>
+              {stats.changePercent === 0
+                ? `No change from ${comparisonPeriod}`
+                : `${Math.abs(stats.changePercent)}% ${stats.changePercent > 0 ? 'more' : 'less'} than ${comparisonPeriod}`}
+            </Text>
+          )}
 
           {stats.intensity?.hasData && (
             <View style={styles.intensityRow}>
@@ -450,6 +471,7 @@ const styles = StyleSheet.create({
   weekHeader: {
     flexDirection: 'row',
     marginBottom: SPACING[1],
+    marginTop: SPACING[3],
   },
   weekHeaderText: {
     flex: 1,
@@ -466,7 +488,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: RING + 4,
+    height: 44,
+    borderRadius: 14,
+  },
+  cellSelected: {
+    backgroundColor: `${ACTIVITY_COLOR}10`,
   },
   dayNumber: {
     position: 'absolute',
@@ -479,8 +505,31 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   dayNumberToday: {
-    color: BRAND.primary,
+    color: ACTIVITY_COLOR,
     fontFamily: TYPOGRAPHY.family.bold,
+  },
+  todayDot: {
+    position: 'absolute',
+    bottom: 2,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: ACTIVITY_COLOR,
+  },
+  monthFacts: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: SPACING[3],
+    marginTop: -SPACING[1],
+    marginBottom: SPACING[3],
+  },
+  monthFact: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  monthFactText: { fontSize: 10, fontFamily: TYPOGRAPHY.family.semibold, color: TEXT.tertiary },
+  scopeLabel: {
+    fontSize: 9,
+    letterSpacing: 0.8,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.tertiary,
   },
   scopeRow: {
     flexDirection: 'row',
@@ -488,7 +537,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.04)',
     borderRadius: RADIUS.md,
     padding: 3,
-    marginTop: SPACING[3],
+    marginTop: SPACING[1],
   },
   scopeButton: {
     flex: 1,
@@ -497,8 +546,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scopeButtonActive: {
-    backgroundColor: SURFACES.card.primary,
-    ...SHADOWS.sm,
+    backgroundColor: `${ACTIVITY_COLOR}12`,
   },
   scopeText: {
     fontSize: TYPOGRAPHY.size.xs,
@@ -506,8 +554,20 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
   },
   scopeTextActive: {
-    color: TEXT.primary,
+    color: ACTIVITY_COLOR,
   },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: SPACING[3],
+    marginTop: SPACING[2],
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendRing: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: ACTIVITY_COLOR },
+  legendRest: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#D8D3CE' },
+  legendSelection: { width: 13, height: 13, borderRadius: 4, backgroundColor: `${ACTIVITY_COLOR}16` },
+  legendText: { fontSize: 9, fontFamily: TYPOGRAPHY.family.regular, color: TEXT.tertiary },
 
   panel: {
     marginTop: SPACING[3],
@@ -538,9 +598,11 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
-  delta: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.bold,
+  comparison: {
+    marginTop: 4,
+    fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
   },
   track: {
     height: 7,
@@ -552,6 +614,7 @@ const styles = StyleSheet.create({
   fill: {
     height: '100%',
     borderRadius: 4,
+    backgroundColor: ACTIVITY_COLOR,
   },
   paceMarker: {
     position: 'absolute',
@@ -633,13 +696,13 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: `${BRAND.primary}18`,
+    backgroundColor: `${ACTIVITY_COLOR}18`,
     overflow: 'hidden',
   },
   balanceFill: {
     height: '100%',
     borderRadius: 3,
-    backgroundColor: BRAND.primary,
+    backgroundColor: ACTIVITY_COLOR,
   },
   balanceValue: {
     width: 32,

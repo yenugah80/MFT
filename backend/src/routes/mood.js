@@ -11,6 +11,7 @@ import { updateStreak, calculateLogXP, awardXP } from "../services/gamificationR
 import { clearPatternCache } from "../services/patternMiningService.js";
 import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
+import { buildMoodDistribution, getMoodTrendStartDate } from "../utils/moodTrends.js";
 
 const router = express.Router();
 
@@ -384,10 +385,9 @@ router.get("/trends", async (req, res) => {
     const days = VALID_PERIODS[period] || 7;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     // Compute start of period in the user's local timezone, not server UTC
-    const nowLocal = new Date(Date.now() - offsetMinutes * 60 * 1000);
-    nowLocal.setUTCDate(nowLocal.getUTCDate() - days);
-    nowLocal.setUTCHours(0, 0, 0, 0);
-    const startDate = new Date(nowLocal.getTime() + offsetMinutes * 60 * 1000);
+    // Inclusive trailing windows: Day = today, Week = today + previous 6
+    // local dates, Month = today + previous 29.
+    const startDate = getMoodTrendStartDate({ days, offsetMinutes });
 
     const moods = await db
       .select()
@@ -457,6 +457,10 @@ router.get("/trends", async (req, res) => {
         intensity: Math.round(avgIntensity * 10) / 10,
         energy: Math.round(avgEnergy * 10) / 10,
         count: dayData.moods.length,
+        // Keep the daily chart compact while preserving the raw mood mix.
+        // Older clients ignore this field; newer Progress views use it as a
+        // rolling-deploy fallback when the top-level distribution is absent.
+        moodCounts,
       });
     });
 
@@ -470,6 +474,8 @@ router.get("/trends", async (req, res) => {
       ? allEnergy.reduce((sum, val) => sum + val, 0) / allEnergy.length
       : 5;
 
+    const distribution = buildMoodDistribution(moods);
+
     res.json({
       period,
       data: aggregated,
@@ -478,6 +484,8 @@ router.get("/trends", async (req, res) => {
         energy: Math.round(avgEnergy * 10) / 10,
       },
       totalEntries: moods.length,
+      trackedDays: aggregated.length,
+      distribution,
     });
   } catch (error) {
     console.error("[MoodTrends] Error:", error);

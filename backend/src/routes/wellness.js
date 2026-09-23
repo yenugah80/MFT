@@ -8,6 +8,7 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { getUnifiedIntelligence, formatIntelligenceForPrompt } from '../services/unifiedIntelligenceService.js';
+import { parseTimezoneOffsetMinutes } from '../utils/timezone.js';
 
 const router = express.Router();
 
@@ -24,7 +25,8 @@ router.get('/intelligence', requireAuth(), async (req, res) => {
     const { lookbackDays = 7 } = req.query;
 
     const intelligence = await getUnifiedIntelligence(userId, {
-      lookbackDays: parseInt(lookbackDays)
+      lookbackDays: parseInt(lookbackDays),
+      offsetMinutes: parseTimezoneOffsetMinutes(req) ?? 0
     });
 
     // Generate personalized narrative based on intelligence
@@ -55,7 +57,10 @@ router.get('/summary', requireAuth(), async (req, res) => {
   try {
     const { userId } = typeof req.auth === 'function' ? req.auth() : req.auth;
 
-    const intelligence = await getUnifiedIntelligence(userId, { lookbackDays: 7 });
+    const intelligence = await getUnifiedIntelligence(userId, {
+      lookbackDays: 7,
+      offsetMinutes: parseTimezoneOffsetMinutes(req) ?? 0
+    });
 
     // Extract only essential summary data
     const summary = {
@@ -96,7 +101,8 @@ router.get('/narrative', requireAuth(), async (req, res) => {
     const { type = 'daily' } = req.query; // daily, weekly, insight
 
     const intelligence = await getUnifiedIntelligence(userId, {
-      lookbackDays: type === 'weekly' ? 14 : 7
+      lookbackDays: type === 'weekly' ? 14 : 7,
+      offsetMinutes: parseTimezoneOffsetMinutes(req) ?? 0
     });
 
     const narrative = generateDetailedNarrative(intelligence, type);

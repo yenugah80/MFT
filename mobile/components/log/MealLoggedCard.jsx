@@ -33,10 +33,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { BRAND, TEXT, SEMANTIC, TYPOGRAPHY, SPACING, RADIUS, ICON_SIZES, SURFACES, SEMANTIC_ACTIONS, CARD_SYSTEM } from '../../constants/premiumTheme';
 import { MODERN_MACROS, BOLD_GRADIENTS } from '../../constants/modernColorPalette';
+import { getDailyValueFor } from '../../utils/micronutrients';
 import { NutriScoreTag, HealthScoreBadge } from '../NutriScoreBadge';
 import { SuccessCheckmark } from '../analytics/CelebrationAnimation';
 
@@ -110,6 +112,11 @@ const getSourceLabel = (source) => {
     default: return 'Text Input';
   }
 };
+
+// %DV lookup for a micronutrient name — see utils/micronutrients.js.
+// Nothing (backend or client) ever attaches a .dv field to a micros entry,
+// so reading it directly (the previous approach) always evaluated to
+// undefined and the %DV badge below never rendered.
 
 // ============================================================================
 // MACRO BAR COMPONENT - Tufte Small Multiple
@@ -354,7 +361,7 @@ const MicroRow = ({ name, value, unit, dv }) => {
 // for a white-on-gradient hero context instead of a colored-ring-on-white-card
 // ============================================================================
 
-const CalorieProgressRing = ({ consumed, goal }) => {
+export const CalorieProgressRing = ({ consumed, goal }) => {
   const size = 168;
   const strokeWidth = 14;
   const radius = (size - strokeWidth) / 2;
@@ -365,43 +372,51 @@ const CalorieProgressRing = ({ consumed, goal }) => {
   const percent = goal > 0 ? Math.round((consumed / goal) * 100) : 0;
 
   return (
-    <View style={styles.ringWrapper}>
-      <Svg width={size} height={size}>
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="rgba(255,255,255,0.25)"
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#FFFFFF"
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          fill="none"
-          style={{
-            transformOrigin: `${size / 2}px ${size / 2}px`,
-            transform: [{ rotate: '-90deg' }],
-          }}
-        />
-      </Svg>
-      <View style={styles.ringCenter} pointerEvents="none">
-        <Text style={styles.caloriesLabel}>Calories</Text>
-        <Text style={styles.caloriesValue}>{formatCalories(consumed)}</Text>
-        <Text style={styles.caloriesUnit}>kcal</Text>
+    <>
+      {/* Label lives above the ring, not inside it — at a 168px diameter, a
+          three-line stack (label + 64px value + unit) is taller than the
+          circle stays wide enough for: at the label's vertical offset the
+          ring has already narrowed to ~80px, so "CALORIES" (with letter-
+          spacing) collided with the stroke instead of sitting inside it.
+          Two lines (value + unit) comfortably clear that same narrowing. */}
+      <Text style={styles.caloriesLabel}>Calories</Text>
+      <View style={styles.ringWrapper}>
+        <Svg width={size} height={size}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="rgba(255,255,255,0.25)"
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#FFFFFF"
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+            style={{
+              transformOrigin: `${size / 2}px ${size / 2}px`,
+              transform: [{ rotate: '-90deg' }],
+            }}
+          />
+        </Svg>
+        <View style={styles.ringCenter} pointerEvents="none">
+          <Text style={styles.caloriesValue}>{formatCalories(consumed)}</Text>
+          <Text style={styles.caloriesUnit}>kcal</Text>
+        </View>
+        <View style={styles.ringBadge}>
+          <Text style={styles.ringBadgeText}>
+            {isOverGoal ? `${percent}% of goal` : `${percent}% of daily goal`}
+          </Text>
+        </View>
       </View>
-      <View style={styles.ringBadge}>
-        <Text style={styles.ringBadgeText}>
-          {isOverGoal ? `${percent}% of goal` : `${percent}% of daily goal`}
-        </Text>
-      </View>
-    </View>
+    </>
   );
 };
 
@@ -420,6 +435,7 @@ export default function MealLoggedCard({
   onViewHistory,
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [scaleAnim] = useState(new Animated.Value(0.9));
   const [fadeAnim] = useState(new Animated.Value(0));
   // Defer animated child components to prevent bridge overflow
@@ -507,8 +523,9 @@ export default function MealLoggedCard({
       // Normalize to {name, value, unit} format
       const isObject = typeof val === 'object' && val !== null;
       const value = isObject ? (val.value ?? 0) : (typeof val === 'number' ? val : 0);
-      const unit = isObject ? (val.unit || 'mg') : 'mg';
-      return [name, { value, unit, dv: isObject ? val.dv : undefined }];
+      const dailyValue = getDailyValueFor(name);
+      const unit = (isObject && val.unit) || dailyValue?.unit || 'mg';
+      return [name, { value, unit, dv: dailyValue?.value }];
     })
     .filter(([, data]) => data.value > 0);
 
@@ -524,6 +541,13 @@ export default function MealLoggedCard({
       style={[
         styles.container,
         {
+          // This screen is presented in a plain, non-pageSheet full-screen
+          // Modal (see log.js), which renders content edge-to-edge with no
+          // OS-provided inset — unlike MealSummaryScreen's pageSheet Modal.
+          // Without this, the close button (positioned at the very top of
+          // the header) sits under the status bar / Dynamic Island, where
+          // touches aren't reliably delivered.
+          paddingTop: insets.top,
           opacity: fadeAnim,
           transform: [{ scale: scaleAnim }],
         },
@@ -645,15 +669,17 @@ export default function MealLoggedCard({
                   icon="nutrition"
                   delay={50}
                 />
-                <MacroTile
-                  label="Fat"
-                  value={meal.fat}
-                  unit="g"
-                  color={MODERN_MACROS.fat.base}
-                  goal={dailyGoals?.fatG}
-                  icon="flame"
-                  delay={100}
-                />
+                {meal.fats !== null && meal.fats !== undefined && (
+                  <MacroTile
+                    label="Fat"
+                    value={meal.fats}
+                    unit="g"
+                    color={MODERN_MACROS.fat.base}
+                    goal={dailyGoals?.fatG}
+                    icon="flame"
+                    delay={100}
+                  />
+                )}
                 {meal.fiber !== null && meal.fiber !== undefined && (
                   <MacroTile
                     label="Fiber"
@@ -684,14 +710,16 @@ export default function MealLoggedCard({
                   goal={dailyGoals?.carbsG}
                   icon="nutrition"
                 />
-                <StaticMacroTile
-                  label="Fat"
-                  value={meal.fat}
-                  unit="g"
-                  color={MODERN_MACROS.fat.base}
-                  goal={dailyGoals?.fatG}
-                  icon="flame"
-                />
+                {meal.fats !== null && meal.fats !== undefined && (
+                  <StaticMacroTile
+                    label="Fat"
+                    value={meal.fats}
+                    unit="g"
+                    color={MODERN_MACROS.fat.base}
+                    goal={dailyGoals?.fatG}
+                    icon="flame"
+                  />
+                )}
                 {meal.fiber !== null && meal.fiber !== undefined && (
                   <StaticMacroTile
                     label="Fiber"
@@ -716,15 +744,21 @@ export default function MealLoggedCard({
               calories_kcal: meal.calories,
               protein_g: meal.protein,
               carbs_g: meal.carbs,
-              fat_g: meal.fat,
+              fat_g: meal.fats,
               fiber_g: meal.fiber,
               sugar_g: meal.sugar,
               sodium_mg: meal.sodium,
             },
             name: meal.foodName || meal.name,
+            // Dropped previously — useMealPairings.js reads meal?.mealType
+            // and falls back to 'lunch' when it's missing, so every pairing
+            // request from this screen was silently mislabeled regardless
+            // of when the meal was actually logged.
+            mealType: meal.mealType,
             healthScore: meal.healthScore,
             nutriScore: meal.nutriScore,
             micros: meal.micros,
+            loggedAt: meal.loggedAt,
           }}
           userGoals={dailyGoals}
           historicalData={historicalData}
@@ -747,7 +781,7 @@ export default function MealLoggedCard({
               calories_kcal: meal.calories,
               protein_g: meal.protein,
               carbs_g: meal.carbs,
-              fat_g: meal.fat,
+              fat_g: meal.fats,
               fiber_g: meal.fiber,
             },
           }}
@@ -817,8 +851,8 @@ export default function MealLoggedCard({
                   />
                   <ComparisonBar
                     label="Fat"
-                    mealValue={meal.fat}
-                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fat || 0)}
+                    mealValue={meal.fats}
+                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fats || 0)}
                     goal={dailyGoals.fatG}
                     unit="g"
                     color={MODERN_MACROS.fat.base}
@@ -857,8 +891,8 @@ export default function MealLoggedCard({
                   />
                   <StaticComparisonBar
                     label="Fat"
-                    mealValue={meal.fat}
-                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fat || 0)}
+                    mealValue={meal.fats}
+                    dailyTotal={(dailyTotals.totalFats || 0) - (meal.fats || 0)}
                     goal={dailyGoals.fatG}
                     unit="g"
                     color={MODERN_MACROS.fat.base}

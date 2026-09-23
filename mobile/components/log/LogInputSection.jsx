@@ -34,9 +34,15 @@ export default function LogInputSection({
     if (foodAnalysis.error) {
       foodAnalysis.clearError?.();
     }
+    // Claim provenance here, at the point the text analysis actually starts.
+    // `analysisSource` describes where the CURRENT RESULT came from — it feeds
+    // the saved log's `source` column, retry routing and which result UI shows.
+    // The mode tabs used to set it, which meant merely looking at another tab
+    // relabelled an existing result.
+    setAnalysisSource('text');
     // Trigger the analysis
     foodAnalysis.runAnalysis();
-  }, [foodAnalysis]);
+  }, [foodAnalysis, setAnalysisSource]);
 
   return (
     <>
@@ -48,7 +54,6 @@ export default function LogInputSection({
           ]}
           onPress={() => {
             setInputMode('text');
-            setAnalysisSource('text');
           }}
           activeOpacity={0.7}
           accessibilityLabel="Text input mode"
@@ -78,7 +83,6 @@ export default function LogInputSection({
           ]}
           onPress={() => {
             setInputMode('photo');
-            setAnalysisSource('photo');
           }}
           activeOpacity={0.7}
           accessibilityLabel="Photo input mode"
@@ -108,7 +112,6 @@ export default function LogInputSection({
           ]}
           onPress={() => {
             setInputMode('voice');
-            setAnalysisSource('voice');
           }}
           activeOpacity={0.7}
           accessibilityLabel="Voice input mode"
@@ -263,7 +266,6 @@ export default function LogInputSection({
                 onPress={() => {
                   setSelectedImage(null);
                   setAnalyzedFood(null);
-                  setAnalysisSource('text');
                 }}
                 accessibilityLabel="Remove selected photo"
               >
@@ -364,7 +366,7 @@ export default function LogInputSection({
               <View style={styles.photoSecondaryStack}>
                 <TouchableOpacity
                   style={styles.photoSecondaryCard}
-                  onPress={() => { setInputMode('text'); setAnalysisSource('text'); }}
+                  onPress={() => setInputMode('text')}
                   activeOpacity={0.85}
                   accessibilityLabel="Switch to text logging"
                 >
@@ -377,7 +379,7 @@ export default function LogInputSection({
 
                 <TouchableOpacity
                   style={styles.photoSecondaryCard}
-                  onPress={() => { setInputMode('photo'); setAnalysisSource('photo'); }}
+                  onPress={() => setInputMode('photo')}
                   activeOpacity={0.85}
                   accessibilityLabel="Switch to photo logging"
                 >

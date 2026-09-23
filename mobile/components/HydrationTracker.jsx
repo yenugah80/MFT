@@ -33,6 +33,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
   Defs,
   LinearGradient as SvgGradient,
@@ -51,6 +52,7 @@ import {
   SURFACES,
   BRAND,
 } from '../constants/premiumTheme';
+import { BEVERAGE_TYPES as CANONICAL_BEVERAGE_TYPES } from '../constants/beverageConstants';
 import { announceWaterLogged, announceHydrationGoalReached } from '../services/audioFeedback';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -59,50 +61,13 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 // CONSTANTS & CONFIG
 // ============================================================================
 
-const BEVERAGE_TYPES = {
-  water: {
-    hydrationFactor: 1.0,
-    icon: 'water',
-    color: '#3B82F6',
-    label: 'Water',
-    description: '100% hydration credit',
-  },
-  coffee: {
-    hydrationFactor: 0.5,
-    icon: 'cafe',
-    color: '#78350F',
-    label: 'Coffee',
-    description: 'Partial hydration credit',
-  },
-  tea: {
-    hydrationFactor: 0.9,
-    icon: 'leaf',
-    color: '#059669',
-    label: 'Tea',
-    description: 'Lightly hydrating',
-  },
-  juice: {
-    hydrationFactor: 0.8,
-    icon: 'wine',
-    color: '#F59E0B',
-    label: 'Juice',
-    description: 'Hydrating with sugars',
-  },
-  milk: {
-    hydrationFactor: 0.9,
-    icon: 'nutrition',
-    color: '#FBBF24',
-    label: 'Milk',
-    description: 'Hydrating with protein',
-  },
-  electrolyte: {
-    hydrationFactor: 1.1,
-    icon: 'flash',
-    color: '#0EA5E9',
-    label: 'Electrolyte',
-    description: 'Hydration boost',
-  },
-};
+// Keep the compact selector, calculations, cache update, and backend on the
+// same hydration factors. This component previously carried an older local
+// table, so a juice tap could preview 80% credit while persistence used 139%.
+const TRACKER_BEVERAGE_KEYS = ['water', 'coffee', 'tea', 'juice', 'milk', 'electrolyte'];
+const BEVERAGE_TYPES = Object.fromEntries(
+  TRACKER_BEVERAGE_KEYS.map((key) => [key, CANONICAL_BEVERAGE_TYPES[key]])
+);
 
 // Clear, intuitive quick-add sizes
 const QUICK_ADD_SIZES = [
@@ -500,7 +465,7 @@ const ProgressRing = ({ percentage, size = 200, strokeWidth = 14, reduceMotion =
 // SWIPEABLE TIMELINE ENTRY - Swipe to delete
 // ============================================================================
 
-const SwipeableEntry = ({ entry, onDelete, bevType }) => {
+export const SwipeableEntry = ({ entry, onDelete, bevType }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const deleteOpacity = useRef(new Animated.Value(0)).current;
   const deleteScale = useRef(new Animated.Value(0.8)).current;
@@ -634,212 +599,78 @@ const SwipeableEntry = ({ entry, onDelete, bevType }) => {
   );
 };
 
-// ============================================================================
-// UNDO TOAST WITH HAPTIC FEEDBACK
-// ============================================================================
+// Compact transaction confirmation. It is intentionally calm and deterministic:
+// hydration logging is frequent, so the UI confirms the persisted write without
+// covering the tracker or competing with milestone feedback.
 
-// ============================================================================
-// PREMIUM HYDRATION SUCCESS TOAST - Celebration-style water logging feedback
-// ============================================================================
-
-const CELEBRATION_MESSAGES = {
-  morning: [
-    { icon: 'sunny', text: 'Great morning start!' },
-    { icon: 'sunny-outline', text: 'Rise & hydrate!' },
-    { icon: 'partly-sunny', text: 'Morning fuel added!' },
-  ],
-  afternoon: [
-    { icon: 'fitness', text: 'Staying strong!' },
-    { icon: 'flash', text: 'Energy boost!' },
-    { icon: 'checkmark-circle', text: 'On track!' },
-  ],
-  evening: [
-    { icon: 'moon', text: 'Evening sip logged!' },
-    { icon: 'sparkles', text: 'Winding down right!' },
-    { icon: 'star', text: 'Day well done!' },
-  ],
-  streak: [
-    { icon: 'flame', text: 'Streak on fire!' },
-    { icon: 'trophy', text: 'Champion hydrator!' },
-    { icon: 'diamond', text: 'Consistency pays!' },
-  ],
-  beverage: {
-    coffee: { icon: 'cafe', text: 'Coffee break!' },
-    tea: { icon: 'leaf', text: 'Tea time!' },
-    juice: { icon: 'wine', text: 'Fresh & fruity!' },
-    milk: { icon: 'water', text: 'Calcium boost!' },
-    electrolyte: { icon: 'flash', text: 'Electrolytes loaded!' },
-    water: { icon: 'water', text: 'Pure hydration!' },
-  },
-};
-
-const WaterRipple = ({ delay = 0 }) => {
-  const scale = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(0.8)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.parallel([
-        Animated.timing(scale, { toValue: 2.5, duration: 1200, delay, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0, duration: 1200, delay, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
-
-  return (
-    <Animated.View
-      style={[
-        styles.waterRipple,
-        {
-          transform: [{ scale }],
-          opacity,
-        },
-      ]}
-    />
-  );
-};
-
-const UndoToast = ({ visible, message, onUndo, onDismiss, amount, beverageType, streak }) => {
+export const UndoToast = ({
+  visible,
+  message,
+  onUndo,
+  onDismiss,
+  reduceMotion = false,
+  pending = false,
+}) => {
+  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(100)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
-  // Get dynamic celebration message
-  const getCelebrationMessage = useCallback(() => {
-    const hour = new Date().getHours();
-    let timeOfDay = 'afternoon';
-    if (hour < 12) timeOfDay = 'morning';
-    else if (hour >= 18) timeOfDay = 'evening';
-
-    // Prioritize streak messages for streaks > 3
-    if (streak && streak > 3) {
-      const streakMsgs = CELEBRATION_MESSAGES.streak;
-      return streakMsgs[Math.floor(Math.random() * streakMsgs.length)];
-    }
-
-    // Beverage-specific message 40% of the time
-    if (beverageType && beverageType !== 'water' && Math.random() < 0.4) {
-      return CELEBRATION_MESSAGES.beverage[beverageType] || CELEBRATION_MESSAGES.beverage.water;
-    }
-
-    // Time-based message
-    const timeMsgs = CELEBRATION_MESSAGES[timeOfDay];
-    return timeMsgs[Math.floor(Math.random() * timeMsgs.length)];
-  }, [beverageType, streak]);
-
-  const celebration = useMemo(() => getCelebrationMessage(), [visible]);
-
-  useEffect(() => {
-    if (visible) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Reset animations
-      slideAnim.setValue(100);
-      opacityAnim.setValue(0);
-      scaleAnim.setValue(0.9);
-
-      // Entry animation
-      Animated.parallel([
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 65,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 80,
-          friction: 6,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Subtle pulse animation
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.02,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-
-      // Shimmer effect
-      Animated.loop(
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        })
-      ).start();
-
-      const timer = setTimeout(() => {
-        dismissToast();
-      }, 4500);
-
-      return () => {
-        clearTimeout(timer);
-        pulseAnim.stopAnimation();
-        shimmerAnim.stopAnimation();
-      };
-    } else {
-      dismissToast();
-    }
-  }, [visible]);
-
-  const dismissToast = () => {
+  const dismissToast = useCallback(() => {
     Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: 100,
-        duration: 250,
+        duration: reduceMotion ? 0 : 180,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: 0,
-        duration: 200,
+        duration: reduceMotion ? 0 : 150,
         useNativeDriver: true,
       }),
-      Animated.timing(scaleAnim, {
-        toValue: 0.9,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      if (onDismiss) onDismiss();
-    });
-  };
+    ]).start(() => onDismiss?.());
+  }, [onDismiss, opacityAnim, reduceMotion, slideAnim]);
+
+  useEffect(() => {
+    if (visible) {
+      slideAnim.setValue(100);
+      opacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: reduceMotion ? 0 : 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: reduceMotion ? 0 : 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      if (!pending) {
+        const timer = setTimeout(dismissToast, 5000);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      slideAnim.setValue(100);
+      opacityAnim.setValue(0);
+    }
+  }, [dismissToast, opacityAnim, pending, reduceMotion, slideAnim, visible]);
 
   if (!visible) return null;
 
-  const shimmerTranslate = shimmerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-200, 400],
-  });
-
   return (
     <Animated.View
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={pending ? `${message}. Saving.` : `${message}. Undo available.`}
       style={[
         styles.successToastContainer,
         {
-          transform: [
-            { translateY: slideAnim },
-            { scale: Animated.multiply(scaleAnim, pulseAnim) },
-          ],
+          // This tracker lives inside the Log tab. Clear both the device safe
+          // area and the tab bar so the visible Undo control receives taps.
+          bottom: Math.max(insets.bottom, SPACING[2]) + 64,
+          transform: [{ translateY: slideAnim }],
           opacity: opacityAnim,
         },
       ]}
@@ -850,56 +681,41 @@ const UndoToast = ({ visible, message, onUndo, onDismiss, amount, beverageType, 
         end={{ x: 1, y: 1 }}
         style={styles.successToastGradient}
       >
-        {/* Animated shimmer overlay */}
-        <Animated.View
-          style={[
-            styles.shimmerOverlay,
-            { transform: [{ translateX: shimmerTranslate }] },
-          ]}
-        />
-
-        {/* Water ripple effect background */}
-        <View style={styles.rippleContainer}>
-          <WaterRipple delay={0} />
-          <WaterRipple delay={400} />
-          <WaterRipple delay={800} />
-        </View>
-
         <View style={styles.successToastContent}>
-          {/* Left: Water drop icon with amount */}
-          <View style={styles.successIconSection}>
-            <View style={styles.waterDropContainer}>
-              <Ionicons name="water" size={28} color="#FFF" />
+          <View style={styles.waterDropContainer}>
+            <Ionicons name="water" size={20} color="#FFF" />
+          </View>
+          <View style={styles.successMessageSection}>
+            <Text style={styles.successTitle}>
+              {pending ? 'Adding hydration' : 'Hydration updated'}
+            </Text>
+            <Text style={styles.successMessage} numberOfLines={1}>{message}</Text>
+          </View>
+          {pending ? (
+            <View
+              style={styles.successUndoButton}
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel="Saving hydration"
+            >
+              <ActivityIndicator size="small" color="#FFF" />
+              <Text style={styles.successUndoText}>Saving</Text>
             </View>
-            <Text style={styles.amountText}>+{amount || 250}ml</Text>
-          </View>
-
-          {/* Center: Celebration message */}
-          <View style={styles.celebrationSection}>
-            {celebration?.icon ? (
-              <Ionicons name={celebration.icon} size={24} color="#FFF" style={styles.celebrationIcon} />
-            ) : null}
-            <Text style={styles.celebrationText}>{celebration?.text || 'Logged!'}</Text>
-            {streak > 1 ? (
-              <View style={styles.streakBadge}>
-                <Ionicons name="flame" size={12} color="#FFF" />
-                <Text style={styles.streakText}>{streak} day streak</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Right: Undo button */}
-          <TouchableOpacity
-            style={styles.successUndoButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              dismissToast();
-              if (onUndo) onUndo();
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-undo" size={16} color="rgba(255,255,255,0.9)" />
-          </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.successUndoButton}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                await onUndo?.();
+              }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Undo hydration log"
+            >
+              <Ionicons name="arrow-undo" size={16} color="#FFF" />
+              <Text style={styles.successUndoText}>Undo</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </LinearGradient>
     </Animated.View>
@@ -1017,7 +833,7 @@ const SMART_RECOMMENDATIONS = [
   { icon: 'sparkles', message: 'A glass now helps tomorrow\'s energy', time: 'evening' },
 ];
 
-const EmptyState = ({ streak = 0, dailyGoal = 2000 }) => {
+export const EmptyState = ({ streak = 0, dailyGoal = 2000 }) => {
   const isReturningUser = streak > 0;
   const hour = new Date().getHours();
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -1173,7 +989,7 @@ const BeverageChip = ({ bevKey, bev, selected, onSelect }) => {
 // STATS CARD
 // ============================================================================
 
-const StatsCard = ({ beverageHistory, dailyGoal }) => {
+export const StatsCard = ({ beverageHistory, dailyGoal }) => {
   const stats = useMemo(() => {
     const today = beverageHistory || [];
     const totalToday = today.reduce((sum, entry) => {
@@ -1251,7 +1067,7 @@ const StatsCard = ({ beverageHistory, dailyGoal }) => {
 // TIMELINE WITH SWIPE-TO-DELETE
 // ============================================================================
 
-const Timeline = ({ beverageHistory, onDelete, onViewHistory }) => {
+export const Timeline = ({ beverageHistory, onDelete, onViewHistory }) => {
   const timelineData = useMemo(() => {
     const sortedHistory = [...(beverageHistory || [])].sort(
       (a, b) => b.timestamp - a.timestamp
@@ -1534,8 +1350,8 @@ export default function HydrationTracker({
     setLoadingButton(ml); // Show loading state for this button
 
     try {
-      // Haptic feedback
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // Feedback must not sit behind the native haptic promise.
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
       const bevType = BEVERAGE_TYPES[selectedBeverage];
       const effectiveMl = ml * bevType.hydrationFactor;
@@ -1552,33 +1368,34 @@ export default function HydrationTracker({
         effectiveAmount: effectiveMl,
         timestamp,
         clientEventId,
+        pending: true,
       };
 
       setLastEntry(entry);
       setShowUndoToast(true);
 
-      // Increment log count for tip tracking
+      if (!onLogWater) throw new Error('Hydration logging is unavailable');
+      const response = await onLogWater(entry);
+      const persistedEntry = response?.entry ?? response?.data?.entry;
+      if (!persistedEntry?.id) throw new Error('Hydration log response is missing an entry ID');
+
+      setLastEntry({ ...entry, ...persistedEntry, pending: false });
       setLogCount(prev => prev + 1);
 
-      // Show "Great Start" only on first log of the day
+      // Show "Great Start" only after the first entry is safely persisted.
       if (beverageHistory.length === 0 && !shownFirstLogToast) {
         setMilestoneMessage('Great start!');
         setIsTipMessage(false);
         setShowMilestone('firstLog');
         setShownFirstLogToast(true);
-
         setTimeout(() => {
           setMilestoneMessage(null);
           setShowMilestone(null);
         }, 3500);
       }
 
-      if (onLogWater) {
-        await onLogWater(entry);
-      }
-
       // Success haptic
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
       // Audio confirmation for accessibility
       const newIntake = currentIntake + (effectiveMl / 1000);
@@ -1590,13 +1407,12 @@ export default function HydrationTracker({
       }
     } catch (error) {
       console.error('[HydrationTracker] Error logging water:', error);
+      setShowUndoToast(false);
+      setLastEntry(null);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoadingButton(null);
-      // Release lock after a short delay to prevent rapid clicks
-      setTimeout(() => {
-        syncInFlightRef.current = false;
-      }, 500);
+      syncInFlightRef.current = false;
     }
   }, [selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater, currentIntake, dailyGoal, percentage]);
 
@@ -1614,7 +1430,7 @@ export default function HydrationTracker({
     Keyboard.dismiss();
 
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
       const bevType = BEVERAGE_TYPES[selectedBeverage];
       const effectiveMl = ml * bevType.hydrationFactor;
@@ -1630,10 +1446,18 @@ export default function HydrationTracker({
         effectiveAmount: effectiveMl,
         timestamp,
         clientEventId,
+        pending: true,
       };
 
       setLastEntry(entry);
       setShowUndoToast(true);
+
+      if (!onLogWater) throw new Error('Hydration logging is unavailable');
+      const response = await onLogWater(entry);
+      const persistedEntry = response?.entry ?? response?.data?.entry;
+      if (!persistedEntry?.id) throw new Error('Hydration log response is missing an entry ID');
+
+      setLastEntry({ ...entry, ...persistedEntry, pending: false });
       setLogCount(prev => prev + 1);
       setCustomAmount('');
       setShowCustomInput(false);
@@ -1649,11 +1473,7 @@ export default function HydrationTracker({
         }, 3500);
       }
 
-      if (onLogWater) {
-        await onLogWater(entry);
-      }
-
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
       // Audio confirmation for accessibility
       const newIntake = currentIntake + (effectiveMl / 1000);
@@ -1665,12 +1485,12 @@ export default function HydrationTracker({
       }
     } catch (error) {
       console.error('[HydrationTracker] Error logging custom water:', error);
+      setShowUndoToast(false);
+      setLastEntry(null);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsCustomLoading(false);
-      setTimeout(() => {
-        syncInFlightRef.current = false;
-      }, 500);
+      syncInFlightRef.current = false;
     }
   }, [customAmount, selectedBeverage, beverageHistory.length, shownFirstLogToast, onLogWater, currentIntake, dailyGoal, percentage]);
 
@@ -1681,43 +1501,28 @@ export default function HydrationTracker({
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
-      if (lastEntry && onRemoveWater && beverageHistory.length > 0) {
-        const lastLoggedEntry = beverageHistory[0];
-        if (Number.isFinite(lastLoggedEntry?.id)) {
-          await onRemoveWater(
-            lastLoggedEntry.id,
-            lastLoggedEntry.amountLiters,
-            lastLoggedEntry.hydrationLiters
-          );
-        }
+      const persistedId = Number(lastEntry?.id);
+      if (!lastEntry || !onRemoveWater || !Number.isFinite(persistedId)) {
+        throw new Error('The saved hydration entry is not available to undo');
       }
+      await onRemoveWater(
+        persistedId,
+        Number(lastEntry.amountLiters),
+        Number(lastEntry.hydrationLiters)
+      );
       setShowUndoToast(false);
+      setLastEntry(null);
+    } catch (error) {
+      console.error('[HydrationTracker] Error undoing hydration log:', error);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
-      setTimeout(() => {
-        syncInFlightRef.current = false;
-      }, 500);
+      syncInFlightRef.current = false;
     }
-  }, [lastEntry, onRemoveWater, beverageHistory]);
+  }, [lastEntry, onRemoveWater]);
 
-  const handleSwipeDelete = useCallback(async (entry) => {
-    if (syncInFlightRef.current) return;
-    syncInFlightRef.current = true;
-
-    try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (onRemoveWater) {
-        if (Number.isFinite(entry?.id)) {
-          await onRemoveWater(entry.id, entry.amountLiters, entry.hydrationLiters);
-        }
-      }
-    } finally {
-      setTimeout(() => {
-        syncInFlightRef.current = false;
-      }, 500);
-    }
-  }, [onRemoveWater]);
-
-  const isEmpty = beverageHistory.length === 0;
+  const handleUndoToastDismiss = useCallback(() => {
+    setShowUndoToast(false);
+  }, []);
 
   return (
     <View style={styles.mainContainer}>
@@ -1725,31 +1530,6 @@ export default function HydrationTracker({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <LinearGradient
-          colors={SURFACES.gradient.blue}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerCard}
-        >
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <View style={styles.headerIconContainer}>
-                <Ionicons name="water" size={ICON_SIZES.xl} color={TEXT.white} />
-              </View>
-              <View>
-                <Text style={styles.headerTitle}>Hydration HQ</Text>
-                <Text style={styles.headerSubtitle}>Where champions refuel 💧</Text>
-              </View>
-            </View>
-            {goalReached && (
-              <View style={styles.goalBadge}>
-                <Ionicons name="trophy" size={20} color={SEMANTIC.warning.base} />
-              </View>
-            )}
-          </View>
-        </LinearGradient>
-
         {/* Main Visualization */}
         <View style={styles.visualizationCard}>
           <View style={styles.progressContainer}>
@@ -1958,26 +1738,39 @@ export default function HydrationTracker({
           )}
         </View>
 
-        {/* Stats */}
-        {!isEmpty && <StatsCard beverageHistory={beverageHistory} dailyGoal={dailyGoal} />}
-
-        {/* Empty State or Timeline */}
-        {isEmpty ? (
-          <EmptyState streak={streak} dailyGoal={Math.round(dailyGoal * 1000)} />
-        ) : (
-          <Timeline beverageHistory={beverageHistory} onDelete={handleSwipeDelete} onViewHistory={onViewHistory} />
+        {onViewHistory && (
+          <TouchableOpacity
+            style={styles.historyShortcut}
+            onPress={() => {
+              Haptics.selectionAsync();
+              onViewHistory();
+            }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="View hydration history"
+            accessibilityHint="Opens hydration trends, entries, and editing"
+          >
+            <View style={styles.historyShortcutIcon}>
+              <Ionicons name="analytics-outline" size={22} color={SEMANTIC.info.base} />
+            </View>
+            <View style={styles.historyShortcutCopy}>
+              <Text style={styles.historyShortcutTitle}>View hydration history</Text>
+              <Text style={styles.historyShortcutSubtitle}>Trends, entries, patterns, and editing</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={TEXT.tertiary} />
+          </TouchableOpacity>
         )}
       </ScrollView>
 
       {/* Premium Success Toast */}
       <UndoToast
+        key={lastEntry?.clientEventId || lastEntry?.id || 'hydration-confirmation'}
         visible={showUndoToast}
-        message={`Added ${lastEntry?.amount}ml ${BEVERAGE_TYPES[lastEntry?.type]?.label || 'Water'}`}
+        message={`${lastEntry?.amount || 0} ml ${BEVERAGE_TYPES[lastEntry?.type]?.label || 'Water'} ${lastEntry?.pending ? 'selected' : 'added'}`}
         onUndo={handleUndo}
-        onDismiss={() => setShowUndoToast(false)}
-        amount={lastEntry?.amount}
-        beverageType={lastEntry?.type}
-        streak={streak}
+        onDismiss={handleUndoToastDismiss}
+        reduceMotion={reduceMotion}
+        pending={lastEntry?.pending === true}
       />
 
       {/* Milestone Toast */}
@@ -2009,63 +1802,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SPACING[4],
-    paddingBottom: SPACING[8],
-  },
-
-  // Header
-  headerCard: {
-    borderRadius: RADIUS.xl,
-    padding: SPACING[5],
-    marginBottom: SPACING[4],
-    ...SHADOWS.info,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  headerIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.md,
-  },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.size['2xl'],
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.white,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: SPACING[1],
-  },
-  goalBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: RADIUS.full,
-    backgroundColor: SEMANTIC.warning.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.warning,
+    padding: SPACING[3],
+    paddingBottom: SPACING[16],
   },
 
   // Visualization
   visualizationCard: {
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.xl,
-    padding: SPACING[6],
+    padding: SPACING[4],
     marginBottom: SPACING[4],
     alignItems: 'center',
     ...SHADOWS.lg,
@@ -2074,9 +1819,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING[6],
-    width: 220,
-    height: 220,
+    marginBottom: SPACING[4],
+    width: 208,
+    height: 208,
   },
   ringWrapper: {
     position: 'absolute',
@@ -2390,6 +2135,43 @@ const styles = StyleSheet.create({
     color: TEXT.white,
   },
 
+  historyShortcut: {
+    minHeight: 76,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.xl,
+    paddingVertical: SPACING[3],
+    paddingHorizontal: SPACING[4],
+    marginBottom: SPACING[4],
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.16)',
+    ...SHADOWS.sm,
+  },
+  historyShortcutIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.10)',
+  },
+  historyShortcutCopy: {
+    flex: 1,
+  },
+  historyShortcutTitle: {
+    fontSize: TYPOGRAPHY.size.md,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  historyShortcutSubtitle: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+  },
+
   // Stats Card
   statsCard: {
     backgroundColor: SURFACES.card.primary,
@@ -2644,106 +2426,63 @@ const styles = StyleSheet.create({
   // Premium Success Toast
   successToastContainer: {
     position: 'absolute',
-    bottom: SPACING[6],
-    left: SPACING[4],
-    right: SPACING[4],
-    borderRadius: RADIUS.xl,
+    left: SPACING[3],
+    right: SPACING[3],
+    borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    ...SHADOWS.xl,
+    zIndex: 100,
+    elevation: 12,
+    ...SHADOWS.lg,
   },
   successToastGradient: {
-    paddingVertical: SPACING[4],
-    paddingHorizontal: SPACING[4],
-    overflow: 'hidden',
+    minHeight: 64,
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[3],
+    justifyContent: 'center',
   },
   successToastContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 10,
-  },
-  successIconSection: {
-    alignItems: 'center',
-    gap: SPACING[1],
+    gap: SPACING[2],
   },
   waterDropContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  amountText: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
-    letterSpacing: -0.5,
-  },
-  celebrationSection: {
+  successMessageSection: {
     flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: SPACING[2],
+    minWidth: 0,
   },
-  celebrationIcon: {
-    marginBottom: SPACING[1],
-  },
-  celebrationText: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.bold,
-    color: TEXT.white,
-    textAlign: 'center',
-  },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: SPACING[2],
-    paddingVertical: 2,
-    borderRadius: RADIUS.full,
-    marginTop: SPACING[1],
-  },
-  streakText: {
-    fontSize: TYPOGRAPHY.size.xs,
+  successTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
     fontWeight: TYPOGRAPHY.weight.semibold,
     color: TEXT.white,
   },
+  successMessage: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: 'rgba(255,255,255,0.82)',
+    marginTop: 1,
+  },
   successUndoButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    minWidth: 72,
+    minHeight: 44,
+    borderRadius: RADIUS.full,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: SPACING[2],
+    flexDirection: 'row',
+    gap: SPACING[1],
     justifyContent: 'center',
     alignItems: 'center',
   },
-  shimmerOverlay: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    transform: [{ skewX: '-20deg' }],
+  successUndoText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    color: TEXT.white,
   },
-  rippleContainer: {
-    position: 'absolute',
-    left: 20,
-    top: '50%',
-    marginTop: -20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  waterRipple: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-  },
-
   // Milestone Toast
   milestoneToast: {
     position: 'absolute',

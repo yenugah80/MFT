@@ -13,29 +13,32 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
+import { TYPOGRAPHY, SPACING, MACRO_COLORS } from '../../../constants/premiumTheme';
 import { useTheme } from '../../../providers/ThemeProvider';
 
 /**
- * Macro configuration with colors
+ * Macro configuration with colors — sourced from premiumTheme.js's
+ * MACRO_COLORS (the app-wide macro color language) rather than a locally
+ * hardcoded palette, so this card matches every other macro visualization
+ * in the app instead of inventing its own blue/green/amber set.
  */
 const MACRO_CONFIG = {
   protein: {
     label: 'Protein',
-    color: '#3B82F6', // Blue
-    bgColor: 'rgba(59, 130, 246, 0.15)',
+    color: MACRO_COLORS.protein.base,
+    bgColor: `${MACRO_COLORS.protein.light}40`,
     unit: 'g',
   },
   carbs: {
     label: 'Carbs',
-    color: '#10B981', // Green
-    bgColor: 'rgba(16, 185, 129, 0.15)',
+    color: MACRO_COLORS.carbs.base,
+    bgColor: `${MACRO_COLORS.carbs.light}40`,
     unit: 'g',
   },
   fat: {
     label: 'Fat',
-    color: '#F59E0B', // Amber
-    bgColor: 'rgba(245, 158, 11, 0.15)',
+    color: MACRO_COLORS.fat.base,
+    bgColor: `${MACRO_COLORS.fat.light}40`,
     unit: 'g',
   },
 };
@@ -93,9 +96,11 @@ function MacroBar({ type, current, mealRatioPercent }) {
 
 /**
  * Calories display (large number) - meal focused
- * Shows absolute calories without confusing daily goal context
+ * Shows absolute calories without confusing daily goal context.
+ * Exported: also used standalone by MealSummaryScreen's merged hero card
+ * (score + calories + feeling-prediction in one card, not three).
  */
-function CaloriesDisplay({ calories }) {
+export function CaloriesDisplay({ calories }) {
   const { colors } = useTheme();
   const textPrimary = colors.text.primary;
   const textSecondary = colors.text.secondary;
@@ -120,7 +125,6 @@ export default function MacroProgressSection({ macros }) {
   const textPrimary = colors.text.primary;
 
   // Extract values with fallbacks
-  const calories = macros?.calories_kcal || 0;
   const protein = macros?.protein_g || 0;
   const carbs = macros?.carbs_g || 0;
   const fat = macros?.fat_g || 0;
@@ -145,16 +149,9 @@ export default function MacroProgressSection({ macros }) {
     >
       <Text style={[styles.sectionTitle, { color: textPrimary }]}>Meal Nutrition</Text>
 
-      {/* Calories */}
-      <CaloriesDisplay calories={calories} />
-
-      {/* Divider */}
-      <View
-        style={[
-          styles.divider,
-          { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' },
-        ]}
-      />
+      {/* Calories now live in MealSummaryScreen's merged hero card
+          (score + calories + feeling-prediction), not duplicated here —
+          this card is macro composition only. */}
 
       {/* Macro bars - showing meal composition, not daily goals */}
       <View style={styles.macrosContainer}>
@@ -163,22 +160,30 @@ export default function MacroProgressSection({ macros }) {
         <MacroBar type="fat" current={fat} mealRatioPercent={fatRatio} />
       </View>
 
-      {/* Macro breakdown summary */}
+      {/* Macro breakdown summary. Unlike calories/protein/carbs/fat above
+          (required fields the backend always validates as numeric), fiber/
+          sugar/sodium are genuinely optional — a null here means "unknown,"
+          not "confirmed zero." Was `|| 0`, which rendered both identically
+          as "0g"/"0mg", telling the user something false: that the meal was
+          confirmed to have none, rather than that it just wasn't reported. */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'Fiber', value: macros?.fiber_g || 0, unit: 'g' },
-          { label: 'Sugar', value: macros?.sugar_g || 0, unit: 'g' },
-          { label: 'Sodium', value: macros?.sodium_mg || 0, unit: 'mg' },
-        ].map((item) => (
-          <View key={item.label} style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: textPrimary }]}>
-              {Math.round(item.value)}{item.unit}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: colors.text.tertiary }]}>
-              {item.label}
-            </Text>
-          </View>
-        ))}
+          { label: 'Fiber', value: macros?.fiber_g, unit: 'g' },
+          { label: 'Sugar', value: macros?.sugar_g, unit: 'g' },
+          { label: 'Sodium', value: macros?.sodium_mg, unit: 'mg' },
+        ].map((item) => {
+          const isKnown = typeof item.value === 'number';
+          return (
+            <View key={item.label} style={styles.summaryItem}>
+              <Text style={[styles.summaryValue, { color: isKnown ? textPrimary : colors.text.tertiary }]}>
+                {isKnown ? `${Math.round(item.value)}${item.unit}` : '—'}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: colors.text.tertiary }]}>
+                {item.label}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -224,10 +229,6 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  divider: {
-    height: 1,
-    marginVertical: SPACING[3],
   },
   macrosContainer: {
     gap: SPACING[4],

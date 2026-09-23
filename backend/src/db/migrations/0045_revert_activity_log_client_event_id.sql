@@ -1,0 +1,33 @@
+-- Revert activity_log.client_event_id to nullable, no default.
+--
+-- Migration 0044 added NOT NULL + a gen_random_uuid() default to
+-- client_event_id on five tables, on the reasoning that the column is an
+-- idempotency key and every insert path already guarantees a value. That
+-- reasoning holds for food_log, water_log, mood_log and weight_history: their
+-- routes either 400 when clientEventId is missing (food/water/mood) or
+-- synthesize a deterministic fallback id (weight). It does not hold for
+-- activity_log.
+--
+-- POST /api/activity/log validates the field only when present
+-- (`if (clientEventId && !UUID_RE.test(...))`) and inserts
+-- `clientEventId || null` otherwise — this is the one route that intends to
+-- accept a missing key. `hooks/useActivityLog.js` always generates one today,
+-- but its own comment records that this was a recent fix ("the old ... format
+-- always failed that check, so every activity log request 400'd"), meaning any
+-- client build older than that fix can still send no clientEventId at all.
+--
+-- An explicit `NULL` in an INSERT's column list is not the same as omitting
+-- the column, so the DEFAULT added in 0044 never applied to it — the NOT NULL
+-- constraint rejected every such insert outright with a 500 from the moment
+-- 0044 was applied. Verified against production: an insert with an explicit
+-- NULL client_event_id failed with sqlstate 23502 before this migration.
+--
+-- The already-backfilled rows (previously-NULL rows given a UUID by 0044) are
+-- left as they are — that backfill was harmless and reverting it would only
+-- reintroduce the exact ambiguity the trigger-based total_meals_logged fix
+-- exists to avoid elsewhere. Only the constraint that blocks new inserts is
+-- reverted here. The UNIQUE constraint stays: Postgres treats every NULL as
+-- distinct, so rows with no key never collide with each other or with a real
+-- key, and idempotency for clients that do send one is unaffected.
+ALTER TABLE "activity_log" ALTER COLUMN "client_event_id" DROP NOT NULL;
+ALTER TABLE "activity_log" ALTER COLUMN "client_event_id" DROP DEFAULT;

@@ -7,7 +7,7 @@
  * a day that has not happened, and what "the previous period" means.
  */
 
-import { getMonthGrid, getPeriodStats } from '../utils/activityAnalytics';
+import { calculateActivityStreak, getMonthGrid, getPeriodStats } from '../utils/activityAnalytics';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -70,6 +70,17 @@ describe('getMonthGrid', () => {
 
     expect(today.minutes).toBe(45);
     expect(today.sessions).toHaveLength(2);
+  });
+
+  it('uses the API dayKey for calendar grouping when the timestamp crosses a timezone boundary', () => {
+    const now = new Date();
+    const dayKey = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+    const shiftedTimestamp = new Date(now.getTime() - 10 * DAY_MS).toISOString();
+    const activity = { dayKey, timestamp: shiftedTimestamp, duration: 25, calories: 100 };
+
+    const today = flat(getMonthGrid([activity])).find((cell) => cell.isToday);
+    expect(today.minutes).toBe(25);
+    expect(calculateActivityStreak([activity]).current).toBe(1);
   });
 
   it('cannot navigate past the current month', () => {

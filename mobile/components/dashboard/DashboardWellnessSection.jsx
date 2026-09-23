@@ -13,6 +13,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CollapsibleSection from './CollapsibleSection';
+import { DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 import HydrationHeartPath from './HydrationHeartPath';
 // PersonalizedHydrationInsights REMOVED - was duplicating pace/status info shown in HydrationWellnessDashboard
 import ActivitySummaryCard from './ActivitySummaryCard';
@@ -54,7 +55,7 @@ export default function DashboardWellnessSection({
         {/* Hydration Tracker - Heart Path Journey design */}
         <HydrationHeartPath
           currentIntake={today?.waterIntakeLiters || 0}
-          dailyGoal={goals?.waterLiters || 2.0}
+          dailyGoal={goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS}
           onOpenFullTracker={onOpenHydrationTracker}
           onViewHistory={onViewHydrationHistory}
         />

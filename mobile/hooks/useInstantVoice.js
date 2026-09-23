@@ -93,6 +93,22 @@ export const useInstantVoice = (options = {}) => {
   }, []);
 
   const startRecording = useCallback(async () => {
+    // Re-entrancy guard — without it, a fast double-tap (or any other double
+    // invocation) before React re-renders the UI out of its idle state calls
+    // Voice.start() a second time while the first call is still mid-setup.
+    // The native module (@react-native-voice/voice) has no guard of its own:
+    // two concurrent setupAndStartRecognizing: calls race on the same
+    // AVAudioEngine — one thread attaching a node while another is
+    // deallocating it — a confirmed EXC_BAD_ACCESS crash caught on a real
+    // run, not theoretical. The ref check must be the very first thing this
+    // function does, synchronously, before any await gives a second call a
+    // window to race in underneath the first.
+    if (isRecordingRef.current) {
+      console.warn('[useInstantVoice] startRecording called while already recording — ignoring');
+      return;
+    }
+    isRecordingRef.current = true;
+
     try {
       setNativeError(null);
       setNativeTranscript('');
@@ -101,8 +117,7 @@ export const useInstantVoice = (options = {}) => {
       setLiveItems([]);
       setIsFallbackMode(false);
       manualOverridesRef.current = {}; // Reset overrides on new recording
-      isRecordingRef.current = true;
-      
+
       // Try starting native voice with configured language
       await Voice.start(speechLocale);
       console.log(`[useInstantVoice] Started voice recognition with locale: ${speechLocale}`);
@@ -112,10 +127,12 @@ export const useInstantVoice = (options = {}) => {
       // Fallback to backend voice
       setIsFallbackMode(true);
       try {
-        isRecordingRef.current = true;
         await backendVoice.startRecording();
       } catch (backendErr) {
         console.error('Fallback also failed:', backendErr);
+        // Both modes failed — nothing is actually recording, so the guard
+        // must release or every future tap silently no-ops forever.
+        isRecordingRef.current = false;
         setNativeError('Could not start recording (both modes failed)');
       }
     }

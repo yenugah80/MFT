@@ -8,8 +8,17 @@ import { aiEstimatedFoodsTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { imageLimiter } from "../middleware/rateLimiter.js";
 import { validate, imageAnalysisSchema } from "../middleware/validation.js";
-import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { checkNutritionPlausibility, checkMacroConsistency, SKIPPED_PLAUSIBILITY_RESULT } from "../services/nutritionPlausibilityChecker.js";
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import { aggregateCanonicalTotals, normalizeMicros, attachConfidenceTiers } from "../utils/canonicalNutrition.js";
+
+// Normalizes every item's micros into canonical {value, unit} form — see
+// canonicalNutrition.js's header comment. A single-item meal reads
+// item.micros directly (not the meal-level totals.micros), so this needs to
+// run at the item level too, not just when totals are aggregated.
+function normalizeItemMicros(items) {
+  return (items || []).map((item) => ({ ...item, micros: normalizeMicros(item.micros) }));
+}
 
 // Macro/calorie self-consistency (Atwater), reconciled in place BEFORE totals are
 // built from it — same rule as the text-estimation and DB write-boundary paths (see
@@ -81,23 +90,42 @@ router.get("/barcode/:code", async (req, res) => {
     // Use consistent "No product found" message that frontend expects
     if (!product) return res.status(404).json({ error: "No product found for this barcode" });
 
-    // Transform to unified response format
+    // OFF/USDA report macros per 100g — scale to the product's real serving
+    // size when OFF's serving_size text parses to a gram value, otherwise
+    // report honestly as-is per 100g (gramsEquivalent below matches whichever
+    // basis was actually used, so density-based scoring never mismatches
+    // what the macros represent). Previously used a fixed 100g regardless of
+    // the product's real size, and never read fiber/sugar/sodium at all
+    // (every barcode-scanned product showed 0g/0g/0mg for these three
+    // regardless of what the label said).
+    const servingGrams = product.servingGrams; // null when unparseable
+    const scale = (v) => FoodService.scaleFromPer100g(v, servingGrams);
+
     const rawItems = [{
       name: product.title || 'Unknown Product',
       quantity: 1,
       unit: 'serving',
       canonical: {
         nutrition: {
-          calories: product.calories || 0,
-          protein: product.protein || 0,
-          carbs: product.carbs || 0,
-          fats: product.fats || product.fat || 0,
-          fiber: product.fiber || 0,
-          sugar: product.sugar || 0,
-          sodium: product.sodium || 0,
+          calories: scale(product.caloriesPer100g) ?? 0,
+          protein: scale(product.proteinPer100g) ?? 0,
+          carbs: scale(product.carbsPer100g) ?? 0,
+          fats: scale(product.fatPer100g) ?? 0,
+          fiber: scale(product.fiberPer100g) ?? 0,
+          sugar: scale(product.sugarPer100g) ?? 0,
+          sodium: scale(product.sodiumMgPer100g) ?? 0,
           micros: product.micros || {}
         },
-        portion: { amount: 1, unit: product.servingSize || 'serving' },
+        portion: {
+          amount: 1,
+          unit: servingGrams ? 'serving' : '100g',
+          gramsEquivalent: servingGrams || 100,
+          // A default "1 serving" is still a guess about how much the user
+          // actually ate, not a confirmed amount — barcode products never
+          // set this before, unlike text mode which already distinguishes
+          // stated-vs-defaulted quantity.
+          isEstimated: true,
+        },
         healthScore: null,
         nutriScore: product.nutriscore || null,
         ingredients: product.ingredients || []
@@ -114,6 +142,17 @@ router.get("/barcode/:code", async (req, res) => {
       mealType: mealType,
       rawItems: rawItems
     });
+
+    // Replace buildUnifiedResponse's flat, unsuffixed totals (totals.calories,
+    // no .macros wrapper) with the same canonical shape resolve.js's text-mode
+    // endpoint sends — the two were structurally incompatible, so a barcode-
+    // logged meal reached Detailed Analysis/MealScoreDial/MicrosGrid in a
+    // shape those components don't read correctly. unifiedResponse.items
+    // already carries the right per-item .macros field names (buildFoodItem
+    // adds it for exactly this reason); only the meal-level totals differed.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
 
     console.log(`[FoodBarcode] Unified response: ${unifiedResponse.items.length} items, healthScore=${unifiedResponse.healthScore}`);
     res.json({ success: true, data: unifiedResponse });
@@ -141,7 +180,7 @@ router.get("/barcode/:code", async (req, res) => {
  *
  * Returns: UNIFIED RESPONSE STRUCTURE (same as voice/text/barcode)
  */
-router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
+router.post("/analyze-image", imageLimiter, requireOpenAIConsent({ purpose: 'analyze your meal photo' }), validate(imageAnalysisSchema), async (req, res) => {
   try {
     const { image, highAccuracy = false, includeIngredients = false, mealType = 'snack' } = req.body;
     if (!image) return res.status(400).json({ error: "Image required" });
@@ -192,6 +231,46 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
       }
     }
 
+    // Multi-item counterpart of the single-item correction above — same retry
+    // mechanism, checked per item instead of once against the meal total.
+    // Confirmed live that a real multi-item photo can get flagged "severe"
+    // implausible (a whole-bowl total compared as if it were a single 100g
+    // serving) with nothing acting on that signal, since the block above only
+    // ever ran for !result.isMultiItem.
+    if (process.env.ENABLE_PLAUSIBILITY_CORRECTION !== 'false' && result.isMultiItem && Array.isArray(result.items) && result.items.length > 0) {
+      const checkItem = (item) => checkNutritionPlausibility({
+        foodName: item.name,
+        macros: { calories_kcal: item.calories || 0 },
+        servingGrams: item.portion?.estimatedGrams,
+      });
+      const flagged = result.items
+        .map((item) => ({ item, check: checkItem(item) }))
+        .filter(({ check }) => !check.plausible && check.expectedRange);
+
+      if (flagged.length > 0) {
+        const hint =
+          `IMPORTANT — RE-ANALYZE: ${flagged.map(({ item, check }) => {
+            const dir = check.kcalPer100g < check.expectedRange.min ? 'low' : 'high';
+            return `"${item.name}" at ~${check.kcalPer100g} kcal/100g is implausibly ${dir} (typical ${check.expectedRange.min}-${check.expectedRange.max} kcal/100g)`;
+          }).join('; ')}. Re-examine the image and give REALISTIC per-item estimates, keeping macros internally consistent.`;
+        try {
+          const retry = await FoodService.analyzeImage(image, {
+            highAccuracy: true,
+            includeIngredients,
+            customInstructions: hint,
+          });
+          if (retry && retry.isMultiItem && Array.isArray(retry.items)) {
+            const retryFlaggedCount = retry.items.filter((item) => !checkItem(item).plausible).length;
+            console.log(`[FoodAnalyzeImage][correction] multi-item: ${flagged.length} implausible item(s) → retry has ${retryFlaggedCount} (${retryFlaggedCount < flagged.length ? '✅ improved' : '⚠️ not improved, keeping original'})`);
+            // Accept the retry only if it's strictly better than the first pass.
+            if (retryFlaggedCount < flagged.length) result = retry;
+          }
+        } catch (correctionErr) {
+          console.warn(`[FoodAnalyzeImage][correction] multi-item retry failed: ${correctionErr.message}`);
+        }
+      }
+    }
+
     // Macro-consistency reconciliation, mutated in place before totals are built from
     // it. Any item reconciled → surfaced as one top-level flag (mirrors how
     // nutritionPlausible/plausibilityCheck are also blended-totals, top-level signals
@@ -211,6 +290,14 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
           name: item.name || 'Unknown Food',
           quantity: item.portion?.amount || 1,
           unit: item.portion?.unit || 'serving',
+          // The vision prompt asks the AI to "scale values to VISIBLE
+          // portion size" — item.calories etc. are already the total for
+          // this item's stated portion, not a per-unit value.
+          // unifiedResponseBuilder.js's buildFoodItem defaults to treating
+          // nutrition as per-unit and multiplying by quantity again, which
+          // silently inflated (e.g. "3oz" → 3x) or deflated (e.g. "0.5 cup"
+          // → half) every item whose portion.amount wasn't exactly 1.
+          nutritionIsPerUnit: false,
           canonical: {
             nutrition: {
               calories: item.calories || 0,
@@ -222,9 +309,22 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
               sodium: item.sodium || 0,
               micros: item.micros || {}
             },
-            portion: item.portion || { amount: 1, unit: 'serving' },
-            healthScore: result.healthScore || null,
-            nutriScore: result.nutriscore || null,
+            // Photo/multimodal has no mechanism for a user to state an
+            // exact quantity — always a visual estimate, so isEstimated is
+            // unconditionally true here (matching resolvePhotoMode in
+            // resolve.js), not derived from any "did they say an amount"
+            // signal the way text mode's flag is.
+            portion: { ...(item.portion || { amount: 1, unit: 'serving' }), isEstimated: true },
+            // Was result.healthScore/nutriscore (the MEAL-level aggregate),
+            // stamping the identical score onto every item regardless of
+            // its own composition, and suppressing buildFoodItem's own
+            // correct per-item fallback computation (which only runs when
+            // this is null). The AI schema doesn't produce a per-item score
+            // in multi-item mode, so item.healthScore is always undefined
+            // today — meaning this now correctly falls through to that
+            // per-item computation instead of the meal-level number.
+            healthScore: item.healthScore || null,
+            nutriScore: item.nutriScore || null,
             cookingMethod: item.cookingMethod || null,
             cuisine: item.cuisine || null,
             ingredients: item.ingredients || []
@@ -251,7 +351,7 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
               sodium: result.sodium || 0,
               micros: result.micros || {}
             },
-            portion: { amount: 1, unit: result.servingSize || 'serving' },
+            portion: { amount: 1, unit: result.servingSize || 'serving', isEstimated: true },
             healthScore: result.healthScore || null,
             nutriScore: result.nutriscore || null,
             cookingMethod: result.cookingMethod || null,
@@ -275,6 +375,13 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
       rawItems: rawItems
     });
 
+    // Same canonical totals every input mode sends — see the barcode
+    // endpoint above for why buildUnifiedResponse's own totals shape can't
+    // be used directly.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
+
     // CRITICAL FIX: Add top-level foodName for backwards compatibility
     // The frontend's buildFoodLog expects raw.foodName, but unifiedResponse has items[0].name
     const foodName = rawItems[0]?.name || result.title || result.foodName || 'Unknown Food';
@@ -292,15 +399,26 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
 
     // Absolute calorie-density plausibility check (same one used in the text path,
     // smartNutritionResolver.js) — confidence alone doesn't catch a result that's
-    // internally consistent but wrong by roughly a constant factor.
-    const portionAmount = rawItems[0]?.canonical?.portion?.amount;
-    const portionUnit = rawItems[0]?.canonical?.portion?.unit;
-    const servingGrams = portionUnit === 'g' && typeof portionAmount === 'number' ? portionAmount : undefined;
-    const plausibilityCheck = checkNutritionPlausibility({
-      foodName,
-      macros: { calories_kcal: unifiedResponse.totals?.calories || 0 },
-      servingGrams,
-    });
+    // internally consistent but wrong by roughly a constant factor. Skipped for
+    // multi-item meals: comparing the WHOLE meal's total against a single dish's
+    // per-100g density band (using only the dominant item's name/category) isn't
+    // meaningful — confirmed live that a correct 6-item, 6-food bowl still got
+    // flagged "severe" this way. The per-item retry above (which checks each
+    // item against its own name/calories/portion) is the real signal for
+    // multi-item meals; this top-level field just mirrors "skipped" for them.
+    let plausibilityCheck;
+    if (result.isMultiItem) {
+      plausibilityCheck = SKIPPED_PLAUSIBILITY_RESULT;
+    } else {
+      const portionAmount = rawItems[0]?.canonical?.portion?.amount;
+      const portionUnit = rawItems[0]?.canonical?.portion?.unit;
+      const servingGrams = portionUnit === 'g' && typeof portionAmount === 'number' ? portionAmount : undefined;
+      plausibilityCheck = checkNutritionPlausibility({
+        foodName,
+        macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
+        servingGrams,
+      });
+    }
 
     console.log(`[FoodAnalyzeImage] Unified response: ${unifiedResponse.items.length} items, foodName="${foodName}", healthScore=${unifiedResponse.healthScore}`);
 
@@ -313,19 +431,24 @@ router.post("/analyze-image", imageLimiter, validate(imageAnalysisSchema), async
         foodName,
         title: foodName,
         name: foodName,
-        calories: unifiedResponse.totals?.calories || 0,
-        protein: unifiedResponse.totals?.protein || 0,
-        carbs: unifiedResponse.totals?.carbs || 0,
-        fat: unifiedResponse.totals?.fat || 0,
-        fiber: unifiedResponse.totals?.fiber || 0,
-        sugar: unifiedResponse.totals?.sugar || 0,
-        sodium: unifiedResponse.totals?.sodium || 0,
+        calories: unifiedResponse.totals?.macros?.calories_kcal || 0,
+        protein: unifiedResponse.totals?.macros?.protein_g || 0,
+        carbs: unifiedResponse.totals?.macros?.carbs_g || 0,
+        fat: unifiedResponse.totals?.macros?.fat_g || 0,
+        fiber: unifiedResponse.totals?.macros?.fiber_g || 0,
+        sugar: unifiedResponse.totals?.macros?.sugar_g || 0,
+        sodium: unifiedResponse.totals?.macros?.sodium_mg || 0,
         servingSize: rawItems[0]?.canonical?.portion?.unit || 'serving',
-        micros: rawItems[0]?.canonical?.nutrition?.micros || {},
+        // Full-meal micronutrient aggregate, not just the first item — a
+        // multi-item photo meal (isMultiItem/itemCount above confirms these
+        // exist) previously reported only rawItems[0]'s micros here.
+        micros: unifiedResponse.totals?.micros || {},
         ingredients: rawItems[0]?.ingredients || [],
         // Enhanced analysis fields
         isMultiItem: result.isMultiItem || false,
-        itemCount: result.itemCount || 1,
+        // `|| 1` previously coerced a genuine 0 (nothing identified) up to 1,
+        // masking the exact case rawItems.length below exists to catch.
+        itemCount: rawItems.length,
         cookingMethod: result.cookingMethod || rawItems[0]?.cookingMethod || null,
         cuisine: result.cuisine || rawItems[0]?.cuisine || null,
         healthScore: result.healthScore || null,
@@ -507,7 +630,7 @@ router.post("/analyze-voice", requireOpenAIConsent({ purpose: 'transcribe and an
  *
  * Returns: UNIFIED RESPONSE STRUCTURE with multimodal metadata
  */
-router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), async (req, res) => {
+router.post("/analyze-multimodal", imageLimiter, requireOpenAIConsent({ purpose: 'analyze your photo with voice notes' }), validate(imageAnalysisSchema), async (req, res) => {
   try {
     const {
       image,
@@ -579,6 +702,10 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
           name: item.name || 'Unknown Food',
           quantity: item.portion?.amount || 1,
           unit: item.portion?.unit || 'serving',
+          // See the identical fix + comment in /analyze-image above — the
+          // vision AI already scales macros to the described portion, so
+          // this must not be re-multiplied by quantity.
+          nutritionIsPerUnit: false,
           canonical: {
             nutrition: {
               calories: item.calories || 0,
@@ -590,9 +717,17 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
               sodium: item.sodium || 0,
               micros: item.micros || {}
             },
-            portion: item.portion || { amount: 1, unit: 'serving' },
-            healthScore: result.healthScore || null,
-            nutriScore: result.nutriscore || null,
+            // Photo/multimodal has no mechanism for a user to state an
+            // exact quantity — always a visual estimate, so isEstimated is
+            // unconditionally true here (matching resolvePhotoMode in
+            // resolve.js), not derived from any "did they say an amount"
+            // signal the way text mode's flag is.
+            portion: { ...(item.portion || { amount: 1, unit: 'serving' }), isEstimated: true },
+            // See /analyze-image above — was the meal-level aggregate,
+            // stamped onto every item and suppressing buildFoodItem's
+            // per-item fallback computation.
+            healthScore: item.healthScore || null,
+            nutriScore: item.nutriScore || null,
             cookingMethod: cookingMethod || item.cookingMethod || null,
             cuisine: cuisinePreference || item.cuisine || null,
             ingredients: item.ingredients || []
@@ -619,7 +754,7 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
               sodium: result.sodium || 0,
               micros: result.micros || {}
             },
-            portion: { amount: 1, unit: result.servingSize || 'serving' },
+            portion: { amount: 1, unit: result.servingSize || 'serving', isEstimated: true },
             healthScore: result.healthScore || null,
             nutriScore: result.nutriscore || null,
             cookingMethod: cookingMethod || result.cookingMethod || null,
@@ -643,6 +778,11 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
       rawItems: rawItems
     });
 
+    // Same canonical totals every input mode sends — see /barcode above.
+    unifiedResponse.items = normalizeItemMicros(unifiedResponse.items);
+    unifiedResponse.totals = aggregateCanonicalTotals(unifiedResponse.items);
+    unifiedResponse.items = attachConfidenceTiers(unifiedResponse.items, unifiedResponse.totals.meta);
+
     // Add multimodal and enhanced analysis metadata
     unifiedResponse.multimodal = {
       hasVoice: !!voiceTranscript,
@@ -662,18 +802,21 @@ router.post("/analyze-multimodal", imageLimiter, validate(imageAnalysisSchema), 
 
     // Same absolute calorie-density plausibility check as /analyze-image and the
     // text path (smartNutritionResolver.js) — catches internally-consistent-but-
-    // wrong-magnitude estimates that confidence scores alone don't.
-    const multimodalPlausibilityCheck = checkNutritionPlausibility({
-      foodName: rawItems[0]?.name || result.title || result.foodName || 'Unknown Food',
-      macros: { calories_kcal: unifiedResponse.totals?.calories || 0 },
-    });
+    // wrong-magnitude estimates that confidence scores alone don't. Skipped for
+    // multi-item meals — see the identical fix + comment in /analyze-image.
+    const multimodalPlausibilityCheck = result.isMultiItem
+      ? SKIPPED_PLAUSIBILITY_RESULT
+      : checkNutritionPlausibility({
+          foodName: rawItems[0]?.name || result.title || result.foodName || 'Unknown Food',
+          macros: { calories_kcal: unifiedResponse.totals?.macros?.calories_kcal || 0 },
+        });
     unifiedResponse.nutritionPlausible = multimodalPlausibilityCheck.plausible;
     unifiedResponse.plausibilityCheck = multimodalPlausibilityCheck;
     unifiedResponse.macroReconciled = macroReconciled;
 
     console.log(`[FoodMultimodal] Enhanced response:`, {
       items: unifiedResponse.items?.length || 1,
-      calories: unifiedResponse.totals?.calories,
+      calories: unifiedResponse.totals?.macros?.calories_kcal,
       cuisine: unifiedResponse.cuisine,
       hasVoice: !!voiceTranscript,
       confidence: rawItems[0]?.confidence

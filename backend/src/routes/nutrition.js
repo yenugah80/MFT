@@ -12,13 +12,20 @@ import fs from "fs";
 import path from "path";
 import { OpenAI } from "openai";
 import { calculateMealXP, awardXP, updateStreak, getTotalMealsLogged, getLastLogDate, initializeGamification, backfillXPFromHistory } from "../services/gamificationRewardService.js";
+import { countDistinctMeals, getMealGroupKey } from "../utils/mealGrouping.js";
 import { calculateLevel } from "../utils/levelCalculator.js";
 import { checkAchievements } from "../services/achievementService.js";
 import { errors, ErrorCodes } from "../utils/errorResponse.js";
 import { invalidateUserSignals } from "../services/userSignalCacheService.js";
 import { triggerBackgroundAnalysis } from "../services/laggedCorrelationService.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { computeConfidenceTier } from "../utils/canonicalNutrition.js";
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+  selectCreateProjection,
+} from '../services/streakReconciliationService.js';
 
 // Configure Multer for temporary file storage
 const upload = multer({ dest: "uploads/" });
@@ -120,12 +127,41 @@ router.post("/log", async (req, res) => {
         `source=${sourceMeta?.inputMode || sourceMeta?.source || 'unknown'} aiModel=${aiModel || 'n/a'}`
       );
     }
+    // Stage 3+7: a server-computed confidence tier, same rule as analysis
+    // time (computeConfidenceTier), using whatever signal actually exists
+    // at THIS boundary. This endpoint receives one flattened meal, not the
+    // per-item array analysis produced — if the client forwarded its own
+    // per-item confidenceTier/source/portionIsEstimated in sourceMeta, use
+    // that; otherwise this is a real, independently-computed fallback, not
+    // a placeholder, using the same plausibility/reconciliation signals
+    // already computed a few lines above.
+    const confidenceTier = computeConfidenceTier({
+      source: sourceMeta?.source || sourceMeta?.resolutionSource,
+      portionIsEstimated: sourceMeta?.portionIsEstimated ?? true,
+      plausibilitySeverity: plausibility.severity,
+      hasFieldIssues: false,
+      validated: macroConsistency.consistent || macroReconciled,
+    });
+
     const auditedSourceMeta = {
       ...(sourceMeta || {}),
       plausibility,
       macroReconciled,
+      confidenceTier,
       ...(macroReconciled ? { originalCaloriesKcal } : {}),
     };
+
+    // foodLogTable's macro columns are all `integer` (schema.js) — Postgres
+    // does NOT silently round a decimal on insert, it hard-rejects it
+    // ("invalid input syntax for type integer"), confirmed live: a
+    // completely realistic value (banana protein 1.3g) 500'd the whole
+    // request. Round here, once, right before persistence — matches the
+    // Stage 3c rounding policy (round once, at the point that determines
+    // what's saved) and is the ONE place in the entire pipeline every
+    // input mode's macro values converge before hitting this column type.
+    // null stays null (missing, not a confirmed zero) — Math.round(null)
+    // would silently coerce to 0 and destroy that distinction.
+    const roundOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
 
     // 3. Idempotent Insert: Use ON CONFLICT DO NOTHING
     // If (userId, clientEventId) already exists → returns empty array
@@ -133,13 +169,13 @@ router.post("/log", async (req, res) => {
       .values({
         userId,
         foodName,
-        calories: effectiveCalories,
-        protein,
-        carbs,
-        fats,
-        fiber: fiber ?? null,
-        sugar: sugar ?? null,
-        sodium: sodium ?? null,
+        calories: roundOrNull(effectiveCalories),
+        protein: roundOrNull(protein),
+        carbs: roundOrNull(carbs),
+        fats: roundOrNull(fats),
+        fiber: roundOrNull(fiber),
+        sugar: roundOrNull(sugar),
+        sodium: roundOrNull(sodium),
         servingSize,
         mealType,
         micros: micros || {},
@@ -181,22 +217,32 @@ router.post("/log", async (req, res) => {
     if (isNewEntry) {
       // First entry of the day → INSERT
       // Subsequent entries → UPDATE with additive increment
+      // Same integer-column constraint as foodLogTable above (this table's
+      // columns are integer too) — confirmed live this second insert crashes
+      // the same way on a realistic decimal macro value. This table's own
+      // 0-default semantics (a fresh day's running total) are unrelated to
+      // per-meal missing-vs-zero, so `|| 0` stays as the existing fallback;
+      // only the rounding is new.
+      const dailyCalories = Math.round(effectiveCalories || 0);
+      const dailyProtein = Math.round(protein || 0);
+      const dailyCarbs = Math.round(carbs || 0);
+      const dailyFats = Math.round(fats || 0);
       await db.insert(dailyNutritionSummaryTable)
         .values({
           userId,
           date: toDateStr(today),
-          totalCalories: effectiveCalories || 0,
-          totalProtein: protein || 0,
-          totalCarbs: carbs || 0,
-          totalFats: fats || 0,
+          totalCalories: dailyCalories,
+          totalProtein: dailyProtein,
+          totalCarbs: dailyCarbs,
+          totalFats: dailyFats,
         })
         .onConflictDoUpdate({
           target: [dailyNutritionSummaryTable.userId, dailyNutritionSummaryTable.date],
           set: {
-            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${effectiveCalories || 0}`,
-            totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${protein || 0}`,
-            totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbs || 0}`,
-            totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fats || 0}`,
+            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${dailyCalories}`,
+            totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${dailyProtein}`,
+            totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${dailyCarbs}`,
+            totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${dailyFats}`,
             updatedAt: new Date(),
           },
         });
@@ -211,7 +257,10 @@ router.post("/log", async (req, res) => {
     if (isNewEntry) {
       try {
         // 1. Calculate and award XP
-        const { xp, mealNumber, dailyTotal } = await calculateMealXP(userId, safeLoggedDate, db);
+        // offsetMinutes so meal numbering uses the same local day as the daily
+        // summary above — without it XP counts a UTC day and resets mid-evening
+        // for anyone west of UTC.
+        const { xp, mealNumber, dailyTotal } = await calculateMealXP(userId, safeLoggedDate, db, offsetMinutes);
         const { newXP, newLevel, leveledUp, currentLevelXP, nextLevelXP, progressPercent } = await awardXP(userId, xp, 'meal_log', db);
 
         // 2. Update streak
@@ -464,65 +513,87 @@ router.delete("/log/:id", async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const logId = parseInt(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
     if (isNaN(logId)) {
       return errors.invalidValue(res, 'id', 'must be a valid number');
     }
 
-    // 1. Fetch the existing entry before deletion
-    const [existingEntry] = await db.select()
-      .from(foodLogTable)
-      .where(
-        and(
-          eq(foodLogTable.id, logId),
-          eq(foodLogTable.userId, userId) // Security: ensure user owns this log
+    // Delete + daily-summary subtraction + streak reconciliation run as one
+    // transaction: if reconciliation throws, the delete rolls back too,
+    // instead of leaving the entry gone with an un-reconciled streak.
+    const txResult = await db.transaction(async (tx) => {
+      // 1. Fetch the existing entry before deletion
+      const [existingEntry] = await tx.select()
+        .from(foodLogTable)
+        .where(
+          and(
+            eq(foodLogTable.id, logId),
+            eq(foodLogTable.userId, userId) // Security: ensure user owns this log
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!existingEntry) {
+      if (!existingEntry) {
+        return { found: false };
+      }
+
+      const beforeStreak = await getTrackedDaySnapshot(userId, tx, offsetMinutes);
+
+      // 2. Delete the entry
+      await tx.delete(foodLogTable)
+        .where(eq(foodLogTable.id, logId));
+
+      // 3. Subtract from daily summary
+      const logDate = new Date(existingEntry.loggedDate);
+      logDate.setHours(0, 0, 0, 0);
+      const logDateStr = toDateStr(logDate);
+
+      await tx.update(dailyNutritionSummaryTable)
+        .set({
+          totalCalories: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCalories} - ${existingEntry.calories || 0})`,
+          totalProtein: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalProtein} - ${existingEntry.protein || 0})`,
+          totalCarbs: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCarbs} - ${existingEntry.carbs || 0})`,
+          totalFats: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalFats} - ${existingEntry.fats || 0})`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(dailyNutritionSummaryTable.userId, userId),
+            eq(dailyNutritionSummaryTable.date, logDateStr)
+          )
+        );
+
+      // 4. Fetch updated daily total for frontend reconciliation
+      const [dailyTotal] = await tx.select()
+        .from(dailyNutritionSummaryTable)
+        .where(
+          and(
+            eq(dailyNutritionSummaryTable.userId, userId),
+            eq(dailyNutritionSummaryTable.date, logDateStr)
+          )
+        )
+        .limit(1);
+
+      const streakReconciliation = await reconcileStreakAfterDeletion({
+        userId,
+        beforeSnapshot: beforeStreak,
+        dbConn: tx,
+        timezoneOffset: offsetMinutes,
+      });
+
+      return { found: true, existingEntry, dailyTotal, streakReconciliation };
+    });
+
+    if (!txResult.found) {
       return errors.notFound(res, 'Food log entry');
     }
 
-    // 2. Delete the entry
-    await db.delete(foodLogTable)
-      .where(eq(foodLogTable.id, logId));
-
-    // 3. Subtract from daily summary
-    const logDate = new Date(existingEntry.loggedDate);
-    logDate.setHours(0, 0, 0, 0);
-    const logDateStr = toDateStr(logDate);
-
-    await db.update(dailyNutritionSummaryTable)
-      .set({
-        totalCalories: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCalories} - ${existingEntry.calories || 0})`,
-        totalProtein: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalProtein} - ${existingEntry.protein || 0})`,
-        totalCarbs: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalCarbs} - ${existingEntry.carbs || 0})`,
-        totalFats: sql`GREATEST(0, ${dailyNutritionSummaryTable.totalFats} - ${existingEntry.fats || 0})`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, logDateStr)
-        )
-      );
-
-    // 4. Fetch updated daily total for frontend reconciliation
-    const [dailyTotal] = await db.select()
-      .from(dailyNutritionSummaryTable)
-      .where(
-        and(
-          eq(dailyNutritionSummaryTable.userId, userId),
-          eq(dailyNutritionSummaryTable.date, logDateStr)
-        )
-      )
-      .limit(1);
-
     res.json({
       success: true,
-      deletedEntry: existingEntry,
-      currentDailyTotal: dailyTotal || {
+      deletedEntry: txResult.existingEntry,
+      streak: txResult.streakReconciliation.streak,
+      currentDailyTotal: txResult.dailyTotal || {
         totalCalories: 0,
         totalProtein: 0,
         totalCarbs: 0,
@@ -724,7 +795,50 @@ router.get("/summary", async (req, res) => {
       .orderBy(desc(dailyNutritionSummaryTable.date))
       .limit(Number(limit));
 
-    res.json(summaries);
+    // daily_nutrition_summary has no meal-count column, so derive it from
+    // food_log directly and merge it in — the mobile calendar (30D/60D/90D
+    // views) reads summary.mealCount and silently showed "0 meals logged"
+    // for every period without this.
+    let mealCountWhere = eq(foodLogTable.userId, userId);
+    if (date) {
+      const targetDate = new Date(date);
+      targetDate.setUTCHours(0, 0, 0, 0);
+      const nextDate = new Date(targetDate);
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+      mealCountWhere = and(mealCountWhere, gte(foodLogTable.loggedDate, targetDate), lte(foodLogTable.loggedDate, nextDate));
+    } else if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setUTCHours(23, 59, 59, 999);
+      mealCountWhere = and(mealCountWhere, gte(foodLogTable.loggedDate, start), lte(foodLogTable.loggedDate, end));
+    }
+
+    // Row-per-day fetch, not a SQL COUNT(*) — a raw per-row count double-counts
+    // a multi-item meal (one meal, three food_log rows) as three "meals
+    // logged". Grouped in JS with the same clientEventId-prefix scheme the
+    // dashboard endpoint uses (see utils/mealGrouping.js) — row volume here
+    // is one user's logs over at most a 90-day window, not a concern.
+    const mealCountRows = await db.select({
+      day: sql`DATE(${foodLogTable.loggedDate})`,
+      clientEventId: foodLogTable.clientEventId,
+    })
+      .from(foodLogTable)
+      .where(mealCountWhere);
+
+    const mealGroupsByDay = new Map();
+    for (const row of mealCountRows) {
+      const dayKey = toDateStr(new Date(row.day));
+      if (!mealGroupsByDay.has(dayKey)) mealGroupsByDay.set(dayKey, new Set());
+      mealGroupsByDay.get(dayKey).add(getMealGroupKey(row.clientEventId));
+    }
+    const mealCountByDay = new Map([...mealGroupsByDay.entries()].map(([day, groups]) => [day, groups.size]));
+    const summariesWithMealCount = summaries.map((s) => ({
+      ...s,
+      mealCount: mealCountByDay.get(toDateStr(new Date(s.date))) || 0,
+    }));
+
+    res.json(summariesWithMealCount);
   } catch (error) {
     console.error("[NutritionSummary] Error:", error);
     errors.internal(res, 'Failed to fetch nutrition summary');
@@ -877,14 +991,19 @@ router.get("/dashboard", async (req, res) => {
     const yesterday = addDaysUTC(today, -1);
     const { start: yesterdayStart, end: yesterdayEnd } = getLocalDayRange(offsetMinutes, yesterday);
 
-    // Get last 7 days date range
-    const sevenDaysAgo = addDaysUTC(today, -7);
+    // Optional — defaults to 7 (unchanged prior behavior). Lets the Your
+    // Progress Day/Week/Month toggle actually change weekSummaries/
+    // weeklyAverages below instead of them always covering a fixed 7 days.
+    const trendDays = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 90);
+    // Inclusive of today: trendDays=1 must mean "today only," not "today +
+    // yesterday." addDaysUTC(today, -trendDays) was off by one — for
+    // days=1 it anchored the window at yesterday, so a summary row from
+    // yesterday (with today still empty) silently populated "Today's Macro
+    // Averages" with yesterday's numbers under a mislabeled title.
+    const periodDaysAgo = addDaysUTC(today, -(trendDays - 1));
 
     // Get last 30 days date range
     const thirtyDaysAgo = addDaysUTC(today, -30);
-
-    // Get last 365 days date range for streaks
-    const streakWindowStart = addDaysUTC(today, -365);
 
     // Fetch all data in parallel for performance
     const [
@@ -894,9 +1013,6 @@ router.get("/dashboard", async (req, res) => {
       todayWaterLogs,
       recentWeightEntries,
       todayMoodLogs,
-      streakFoodLogs,
-      streakWaterLogs,
-      streakMoodLogs,
       goals,
       gamification,
       todayActivityLogsResult,
@@ -905,6 +1021,7 @@ router.get("/dashboard", async (req, res) => {
       yesterdayFoodLogs,
       yesterdayWaterLogs,
       yesterdayMoodLogs,
+      lifetimeMealCountResult,
     ] = await Promise.all([
       // Today's nutrition summary
       db.select()
@@ -917,13 +1034,13 @@ router.get("/dashboard", async (req, res) => {
         )
         .limit(1),
 
-      // Last 7 days summaries for trends
+      // Last `trendDays` summaries for trends/weeklyAverages (defaults to 7)
       db.select()
         .from(dailyNutritionSummaryTable)
         .where(
           and(
             eq(dailyNutritionSummaryTable.userId, userId),
-            gte(dailyNutritionSummaryTable.date, toDateStr(sevenDaysAgo))
+            gte(dailyNutritionSummaryTable.date, toDateStr(periodDaysAgo))
           )
         )
         .orderBy(desc(dailyNutritionSummaryTable.date)),
@@ -972,36 +1089,6 @@ router.get("/dashboard", async (req, res) => {
         )
         .orderBy(desc(moodLogTable.loggedDate)),
 
-      // Streak window food logs (all activity days)
-      db.select({ loggedDate: foodLogTable.loggedDate })
-        .from(foodLogTable)
-        .where(
-          and(
-            eq(foodLogTable.userId, userId),
-            gte(foodLogTable.loggedDate, streakWindowStart)
-          )
-        ),
-
-      // Streak window water logs
-      db.select({ loggedDate: waterLogTable.loggedDate })
-        .from(waterLogTable)
-        .where(
-          and(
-            eq(waterLogTable.userId, userId),
-            gte(waterLogTable.loggedDate, streakWindowStart)
-          )
-        ),
-
-      // Streak window mood logs
-      db.select({ loggedDate: moodLogTable.loggedDate, timezoneOffset: moodLogTable.timezoneOffset })
-        .from(moodLogTable)
-        .where(
-          and(
-            eq(moodLogTable.userId, userId),
-            gte(moodLogTable.loggedDate, streakWindowStart)
-          )
-        ),
-
       // User's nutrition goals
       db.select()
         .from(nutritionGoalsTable)
@@ -1032,7 +1119,14 @@ router.get("/dashboard", async (req, res) => {
           `);
         } catch (err) {
           console.warn('[Dashboard] activity_log query failed (table may not exist):', err.message);
-          return { rows: [] };
+          // Empty array, matching the success path's shape — db.execute()
+          // returns the row array directly on this project's postgres-js
+          // driver (see config/db.js), not { rows: [] }. That old neon-http
+          // shape here masked the real bug below: even a SUCCESSFUL query
+          // read `.rows` off a plain array (undefined) and silently fell
+          // back to [] every time, so today's activity never showed up on
+          // the dashboard regardless of whether the query worked.
+          return [];
         }
       })(),
 
@@ -1081,10 +1175,24 @@ router.get("/dashboard", async (req, res) => {
           )
         )
         .orderBy(desc(moodLogTable.loggedDate)),
+
+      // Lifetime meal count. The gamification.total_meals_logged column is
+      // written once at signup (0) and never incremented by any code path, so
+      // reading it reported "0 meals" for every user forever — which is what
+      // kept the profile screen's "Log your first meal" prompt up permanently.
+      // Count the food_log rows instead; client_event_id is UNIQUE, so there
+      // are no duplicates to dedupe here.
+      db.select({ count: sql`count(*)::int` })
+        .from(foodLogTable)
+        .where(eq(foodLogTable.userId, userId)),
     ]);
 
-    // Extract today's activity logs from raw SQL result
-    const todayActivityLogs = todayActivityLogsResult?.rows || [];
+    const lifetimeMealsLogged = lifetimeMealCountResult?.[0]?.count || 0;
+
+    // Extract today's activity logs from raw SQL result. db.execute()
+    // returns the array directly (see comment above) — was reading .rows,
+    // which silently evaluated to [] on every call, success or failure.
+    const todayActivityLogs = todayActivityLogsResult || [];
 
     // Calculate today's water total
     const todayWaterTotal = todayWaterLogs.reduce((sum, log) => {
@@ -1114,8 +1222,93 @@ router.get("/dashboard", async (req, res) => {
     const yesterdayHasFood = yesterdayFoodLogs.length > 0;
     const yesterdayHasData = yesterdayHasNutrition || yesterdayHasWater || yesterdayHasMood || yesterdayHasFood;
 
-    // Show yesterday's data only when today is completely empty AND yesterday has data
-    const showYesterdayFallback = todayIsEmpty && yesterdayHasData;
+    // Fallback day to display when today is empty. Yesterday is checked
+    // first using the data already fetched above (zero extra cost on the
+    // common paths — today has data, or today's empty and yesterday
+    // covers it). Only when BOTH today and yesterday are empty do we walk
+    // further back, sequentially and bounded to 7 days, so an account
+    // that hasn't been logged in for a couple of days still shows its
+    // last real day instead of a bare zeroed dashboard with no
+    // explanation. See docs/architecture — this replaced a single-day-only
+    // fallback that left a multi-day-stale account with no banner at all.
+    let fallbackDay = yesterdayHasData
+      ? {
+          date: yesterday,
+          daysAgo: 1,
+          summary: yesterdaySummary[0],
+          foodLogs: yesterdayFoodLogs,
+          waterLogs: yesterdayWaterLogs,
+          waterTotal: yesterdayWaterTotal,
+          moodLogs: yesterdayMoodLogs,
+        }
+      : null;
+
+    if (todayIsEmpty && !fallbackDay) {
+      for (let daysAgo = 2; daysAgo <= 7; daysAgo++) {
+        const candidateDate = addDaysUTC(today, -daysAgo);
+        const { start: cStart, end: cEnd } = getLocalDayRange(offsetMinutes, candidateDate);
+
+        const [cSummary, cFoodLogs, cWaterLogs, cMoodLogs] = await Promise.all([
+          db.select()
+            .from(dailyNutritionSummaryTable)
+            .where(and(
+              eq(dailyNutritionSummaryTable.userId, userId),
+              eq(dailyNutritionSummaryTable.date, toDateStr(candidateDate))
+            ))
+            .limit(1),
+          db.selectDistinctOn([foodLogTable.clientEventId])
+            .from(foodLogTable)
+            .where(and(
+              eq(foodLogTable.userId, userId),
+              gte(foodLogTable.loggedDate, cStart),
+              lte(foodLogTable.loggedDate, cEnd)
+            ))
+            .orderBy(foodLogTable.clientEventId, desc(foodLogTable.loggedDate)),
+          db.select()
+            .from(waterLogTable)
+            .where(and(
+              eq(waterLogTable.userId, userId),
+              gte(waterLogTable.loggedDate, cStart),
+              lte(waterLogTable.loggedDate, cEnd)
+            )),
+          db.select()
+            .from(moodLogTable)
+            .where(and(
+              eq(moodLogTable.userId, userId),
+              gte(moodLogTable.loggedDate, cStart),
+              lte(moodLogTable.loggedDate, cEnd)
+            ))
+            .orderBy(desc(moodLogTable.loggedDate)),
+        ]);
+
+        const cWaterTotal = cWaterLogs.reduce((sum, log) => {
+          const hydrationValue = parseFloat(log.hydrationLiters || 0);
+          if (hydrationValue > 0) return sum + hydrationValue;
+          return sum + parseFloat(log.amountLiters || 0);
+        }, 0);
+        const cHasData = (cSummary[0]?.totalCalories || 0) > 0
+          || cWaterTotal > 0
+          || cMoodLogs.length > 0
+          || cFoodLogs.length > 0;
+
+        if (cHasData) {
+          fallbackDay = {
+            date: candidateDate,
+            daysAgo,
+            summary: cSummary[0],
+            foodLogs: cFoodLogs,
+            waterLogs: cWaterLogs,
+            waterTotal: cWaterTotal,
+            moodLogs: cMoodLogs,
+          };
+          break;
+        }
+      }
+    }
+
+    // Show the fallback day only when today is completely empty and a
+    // fallback day (yesterday or further back) was actually found.
+    const showYesterdayFallback = todayIsEmpty && !!fallbackDay;
 
     // Calculate weekly averages
     const weeklyAverages = weekSummaries.length > 0 ? {
@@ -1133,8 +1326,6 @@ router.get("/dashboard", async (req, res) => {
       ),
     } : null;
 
-    // Calculate streak (consecutive days with ANY activity)
-    const activityDays = new Set();
     // Use stored timezone from gamification if request header is missing
     // This ensures consistency with how updateStreak() calculates dates
     const storedTimezoneOffset = gamification[0]?.timezoneOffset;
@@ -1142,29 +1333,13 @@ router.get("/dashboard", async (req, res) => {
       ? offsetMinutes
       : (Number.isFinite(storedTimezoneOffset) ? storedTimezoneOffset : 0);
 
-    const addActivityDay = (loggedDate, tzOffset) => {
-      if (!loggedDate) return;
-      const offset = Number.isFinite(tzOffset) ? tzOffset : fallbackOffset;
-      const day = getLocalDateUTC(offset, loggedDate);
-      activityDays.add(day.getTime());
-    };
-
-    streakFoodLogs.forEach(log => addActivityDay(log.loggedDate, fallbackOffset));
-    streakWaterLogs.forEach(log => addActivityDay(log.loggedDate, fallbackOffset));
-    streakMoodLogs.forEach(log => addActivityDay(log.loggedDate, log.timezoneOffset));
-
-    let currentStreak = 0;
-    const hasTodayActivity = activityDays.has(today.getTime());
-    let checkDate = hasTodayActivity ? new Date(today) : addDaysUTC(today, -1);
-
-    for (let i = 0; i < 365; i++) {
-      if (activityDays.has(checkDate.getTime())) {
-        currentStreak++;
-        checkDate = addDaysUTC(checkDate, -1);
-      } else {
-        break;
-      }
-    }
+    const trackedDaySnapshot = await getTrackedDaySnapshot(
+      userId,
+      db,
+      fallbackOffset,
+      today
+    );
+    const currentStreak = trackedDaySnapshot.currentStreak;
 
     // Debug: Log when calculated streak differs from stored streak
     const storedStreak = gamification[0]?.streak ?? 0;
@@ -1187,14 +1362,13 @@ router.get("/dashboard", async (req, res) => {
     // Properly distinguishes brand new users from returning users who missed a day
     // Multi-billion dollar app approach: lifecycle = LIFETIME engagement, not TODAY
     // ============================================================================
-    const totalDaysWithLogs = activityDays.size;  // Already computed for streak!
-    const hasLoggedToday = activityDays.has(today.getTime());
+    const totalDaysWithLogs = trackedDaySnapshot.lifetimeTrackedDays;
+    const hasLoggedToday = trackedDaySnapshot.hasLoggedToday;
 
     // Calculate days since last activity
     let lastActivityDate = null;
-    if (activityDays.size > 0) {
-      const sortedDays = Array.from(activityDays).sort((a, b) => b - a);
-      lastActivityDate = new Date(sortedDays[0]);
+    if (trackedDaySnapshot.latestTrackedDay) {
+      lastActivityDate = new Date(`${trackedDaySnapshot.latestTrackedDay}T00:00:00.000Z`);
     }
     const daysSinceLastLog = lastActivityDate
       ? Math.floor((today.getTime() - lastActivityDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -1268,21 +1442,16 @@ router.get("/dashboard", async (req, res) => {
       canRestoreStreak = hoursSinceReset <= 24;
     }
 
-    // PRODUCTION FIX: Use calculated currentStreak as source of truth
-    // This ensures streak reflects actual logged activity, not stale DB value
-    // Sync DB in background if they differ (don't block response)
-    if (currentStreak !== storedStreak && gamificationRow?.id) {
-      // Async update - don't await to keep response fast
-      db.update(gamificationTable)
-        .set({ streak: currentStreak })
-        .where(eq(gamificationTable.userId, userId))
-        .then(() => console.log(`[Dashboard] Synced streak: ${storedStreak} → ${currentStreak}`))
-        .catch(err => console.error('[Dashboard] Failed to sync streak:', err));
-    }
-
+    // The response safely combines actual qualifying history with the stored
+    // projection. Actual history repairs an under-count. A larger stored value
+    // is retained because it may include a legitimate streak freeze.
     const gamificationWithLevel = {
       ...gamificationRow,
-      streak: currentStreak,            // CRITICAL: Use calculated streak, not stale DB value
+      totalMealsLogged: lifetimeMealsLogged,  // Real count; the DB column is never incremented
+      // The stored projection may be higher because a freeze protected a day.
+      // Actual history may be higher when an older bug under-counted it. Use
+      // the safe maximum on reads while mutation reconciliation repairs DB.
+      streak: selectCreateProjection(gamificationRow?.streak, currentStreak),
       level: levelInfo.level,           // Override DB level with calculated level
       levelName: levelInfo.levelName,
       rank: levelInfo.rank,
@@ -1298,9 +1467,10 @@ router.get("/dashboard", async (req, res) => {
       lastLogDate: gamificationRow?.lastLogDate || gamificationRow?.last_log_date || null,
     };
 
-    // Aggregate yesterday's micronutrients for fallback
-    const yesterdayMicros = {};
-    yesterdayFoodLogs.forEach(log => {
+    // Aggregate the fallback day's micronutrients (yesterday, or further
+    // back — whichever day showYesterdayFallback actually resolved to).
+    const fallbackMicros = {};
+    (fallbackDay?.foodLogs || []).forEach(log => {
       if (log.micros && typeof log.micros === 'object') {
         Object.entries(log.micros).forEach(([key, value]) => {
           let numValue;
@@ -1312,7 +1482,7 @@ router.get("/dashboard", async (req, res) => {
             numValue = parseFloat(value.replace(/[^0-9.]/g, ''));
           }
           if (!isNaN(numValue) && numValue > 0) {
-            yesterdayMicros[key] = (yesterdayMicros[key] || 0) + numValue;
+            fallbackMicros[key] = (fallbackMicros[key] || 0) + numValue;
           }
         });
       }
@@ -1333,29 +1503,36 @@ router.get("/dashboard", async (req, res) => {
         waterIntakeLiters: todayWaterTotal,
         waterLogs: todayWaterLogs,
         foodLogs: todayFoodLogs,
+        // Distinct meals, not food_log rows — a 3-item meal is one meal,
+        // not three. See utils/mealGrouping.js for how rows are grouped.
+        mealCount: countDistinctMeals(todayFoodLogs),
         moodLogs: todayMoodLogs,
         activityLogs: todayActivityLogs,
         activityMinutes: todayActivityLogs.reduce((sum, log) => sum + (parseInt(log.duration_minutes) || 0), 0),
         hydrationCelebratedAt: todaySummary[0]?.hydrationCelebratedAt || null,
       },
-      // Yesterday's data for fallback display when today is empty
+      // Fallback day's data for display when today is empty — usually
+      // yesterday (daysAgo: 1), but can be further back (up to 7 days) if
+      // yesterday was also empty. `date`/`daysAgo` reflect whichever day
+      // was actually found, not always literally "yesterday".
       yesterday: showYesterdayFallback ? {
-        date: yesterday,
+        date: fallbackDay.date,
+        daysAgo: fallbackDay.daysAgo,
         nutrition: {
-          ...(yesterdaySummary[0] || {
+          ...(fallbackDay.summary || {
             totalCalories: 0,
             totalProtein: 0,
             totalCarbs: 0,
             totalFats: 0,
           }),
-          micros: yesterdayMicros,
+          micros: fallbackMicros,
         },
-        waterIntakeLiters: yesterdayWaterTotal,
-        waterLogs: yesterdayWaterLogs,
-        foodLogs: yesterdayFoodLogs,
-        moodLogs: yesterdayMoodLogs,
+        waterIntakeLiters: fallbackDay.waterTotal,
+        waterLogs: fallbackDay.waterLogs,
+        foodLogs: fallbackDay.foodLogs,
+        moodLogs: fallbackDay.moodLogs,
       } : null,
-      // Flag to indicate frontend should show yesterday's data
+      // Flag to indicate frontend should show the fallback day's data
       showYesterdayFallback,
       goals: goals[0] || null,
       gamification: gamificationWithLevel,
@@ -1369,7 +1546,7 @@ router.get("/dashboard", async (req, res) => {
           totalFats: s.totalFats,
           mealCount: s.mealCount || 0,
         })),
-        currentStreak,
+        currentStreak: selectCreateProjection(gamificationRow?.streak, currentStreak),
       },
       recentWeight: recentWeightEntries,
       // USER LIFECYCLE - Single source of truth for user state detection
@@ -1379,8 +1556,8 @@ router.get("/dashboard", async (req, res) => {
         hasLoggedToday,                  // Any activity today
         daysSinceLastLog,                // Gap in days (null if brand new)
         totalDaysWithLogs,               // Distinct days with any activity (lifetime)
-        totalMealsLogged: gamificationRow?.totalMealsLogged || 0,
-        reachedFirstMilestone: (gamificationRow?.totalMealsLogged || 0) >= 3,
+        totalMealsLogged: lifetimeMealsLogged,
+        reachedFirstMilestone: lifetimeMealsLogged >= 3,
         hoursSinceLastMeal,              // Hours since last food log (for personalized nudges)
       },
     };
@@ -1430,8 +1607,10 @@ router.get("/history-stats", async (req, res) => {
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
     const today = getLocalDateUTC(offsetMinutes);
     const yesterday = addDaysUTC(today, -1);
-    const sevenDaysAgo = addDaysUTC(today, -7);
-    const thirtyDaysAgo = addDaysUTC(today, -30);
+    // Inclusive calendar ranges: today plus the previous 6/29 days.
+    // Using -7/-30 produced 8/31 dates and could claim “8 of the last 7 days”.
+    const sevenDaysAgo = addDaysUTC(today, -6);
+    const thirtyDaysAgo = addDaysUTC(today, -29);
 
     // Get today's date range for meals today count
     const { start: todayStart, end: todayEnd } = getLocalDayRange(offsetMinutes);

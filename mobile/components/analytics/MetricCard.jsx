@@ -12,8 +12,16 @@ export default function MetricCard({
   trend,
   trendUp,
 }) {
+  // Without this, VoiceOver/TalkBack reads value, label, subtitle, and
+  // trend as separate stops requiring multiple swipes per card — grouping
+  // into one accessible element with a combined label reads it as a
+  // single coherent stat ("180 Minutes this week, trending up 12%").
+  const a11yLabel = [value, label, subtitle, trend !== undefined ? `trending ${trendUp ? 'up' : 'down'} ${trend}` : null]
+    .filter(Boolean)
+    .join(', ');
+
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessible accessibilityLabel={a11yLabel}>
       {icon && (
         <View style={[styles.iconContainer, { backgroundColor: `${iconColor}15` }]}>
           <Ionicons name={icon} size={18} color={iconColor} />

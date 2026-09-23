@@ -58,6 +58,12 @@ function similarityScore(a, b) {
   return 1 - (distance / maxLength);
 }
 
+function containsWholeFoodName(container, candidate) {
+  if (!container || !candidate) return false;
+  const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\b)${escaped}(?:$|\\b)`, 'i').test(container);
+}
+
 /**
  * Common food names dictionary for fuzzy matching
  * Organized by category for faster lookups
@@ -88,17 +94,26 @@ const COMMON_FOODS = {
     'bell pepper', 'capsicum', 'mushroom', 'mushrooms',
     'corn', 'peas', 'green beans', 'beans',
     'cauliflower', 'asparagus', 'celery',
+    'parsley', 'beet', 'beets', 'beetroot',
   ],
   fruits: [
     'apple', 'banana', 'orange', 'mango', 'grapes',
     'strawberry', 'strawberries', 'blueberry', 'blueberries', 'raspberry',
+    'cranberry', 'cranberries',
     'watermelon', 'cantaloupe', 'honeydew', 'melon',
     'pineapple', 'papaya', 'kiwi', 'peach', 'pear',
     'cherry', 'cherries', 'plum', 'apricot',
     'coconut', 'avocado', 'pomegranate',
   ],
+  spicesAndHerbs: [
+    'cumin', 'turmeric', 'coriander', 'ginger', 'cardamom', 'cloves',
+    'cinnamon', 'nutmeg', 'paprika', 'chili powder', 'garam masala',
+    'cilantro', 'oregano', 'thyme', 'rosemary', 'mint', 'basil',
+    'bay leaf', 'black pepper', 'salt',
+  ],
   dairy: [
     'milk', 'whole milk', 'skim milk', 'almond milk', 'oat milk',
+    'coconut milk', 'light coconut milk', 'full-fat coconut milk', 'soy milk',
     'cheese', 'cheddar', 'mozzarella', 'parmesan', 'cottage cheese',
     'yogurt', 'greek yogurt', 'curd', 'buttermilk',
     'butter', 'ghee', 'cream', 'ice cream',
@@ -130,6 +145,13 @@ const COMMON_FOODS = {
     'water', 'coffee', 'tea', 'chai', 'green tea',
     'juice', 'orange juice', 'apple juice', 'smoothie',
     'soda', 'cola', 'lemonade', 'lassi', 'buttermilk',
+  ],
+  fatsOilsAndCondiments: [
+    'sesame oil', 'olive oil', 'extra virgin olive oil', 'vegetable oil',
+    'canola oil', 'coconut oil', 'avocado oil', 'sunflower oil',
+    'peanut oil', 'soybean oil', 'mustard oil', 'corn oil',
+    'butter', 'ghee', 'tahini', 'mayonnaise', 'soy sauce',
+    'hot sauce', 'tomato sauce', 'ketchup', 'mustard', 'vinegar',
   ],
 };
 
@@ -170,7 +192,10 @@ export function findSimilarFoods(query, options = {}) {
     const foodLower = item.name.toLowerCase();
 
     // Boost score if query is a substring
-    if (foodLower.includes(queryLower) || queryLower.includes(foodLower)) {
+    if (
+      containsWholeFoodName(foodLower, queryLower)
+      || containsWholeFoodName(queryLower, foodLower)
+    ) {
       item.score = Math.max(item.score, 0.8);
       item.partialMatch = true;
     }
@@ -225,12 +250,41 @@ export function analyzeSpelling(query) {
     };
   }
 
+  // Compound-term check: a multi-word query where every individual word
+  // is itself a recognized food term (e.g. "coconut milk" = "coconut" +
+  // "milk", both independently listed) is treated as valid without ever
+  // reaching the fuzzy-match step below. Without this, a real, common
+  // compound ingredient that simply isn't listed as its own phrase gets
+  // scored against the WHOLE word list by full-string edit distance —
+  // "coconut milk" scored 0.75+ similar to the unrelated "coconut oil"
+  // (both start with "coconut", both short second words) and got flagged
+  // as a likely misspelling of it, purely because the compound phrase
+  // itself wasn't in ALL_FOODS. Checking words independently instead of
+  // hand-listing every compound generalizes to any "known + known" term,
+  // not just the ones added to COMMON_FOODS by hand.
+  const queryWords = queryLower.split(/\s+/).filter(Boolean);
+  if (queryWords.length > 1 && queryWords.every(word =>
+    ALL_FOODS.some(food => food.toLowerCase() === word)
+  )) {
+    return {
+      isValid: true,
+      isExactMatch: true,
+      matchedFood: query,
+      suggestions: [],
+    };
+  }
+
   // Find similar foods
   const suggestions = findSimilarFoods(query, { threshold: 0.5, maxResults: 5 });
 
   // Determine if it's likely a spelling mistake
   const topMatch = suggestions[0];
-  const isLikelyMisspelling = topMatch && topMatch.score >= 0.7 && topMatch.score < 1;
+  const isLikelyMisspelling = Boolean(
+    topMatch
+    && !topMatch.partialMatch
+    && topMatch.score >= 0.7
+    && topMatch.score < 1
+  );
 
   return {
     isValid: true,
@@ -278,7 +332,7 @@ export function getSpellingSuggestions(query) {
   return {
     originalQuery: query,
     isRecognized: false,
-    needsCorrection: analysis.suggestions.length > 0,
+    needsCorrection: false,
     suggestions: analysis.suggestions.slice(0, 3),
     note: 'Could be a regional food or new item not in our database',
   };

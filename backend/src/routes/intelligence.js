@@ -13,6 +13,7 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { getUnifiedIntelligence } from '../services/unifiedIntelligenceService.js';
+import { parseTimezoneOffsetMinutes } from '../utils/timezone.js';
 import {
   trackRecommendationAction,
   recordRecommendationSatisfaction,
@@ -60,6 +61,7 @@ router.get('/unified', requireAuth(), async (req, res) => {
     const now = new Date();
     const intelligence = await getUnifiedIntelligence(userId, {
       period,
+      offsetMinutes: parseTimezoneOffsetMinutes(req) ?? 0,
       timeOfDay: now.getHours(),
       dayOfWeek: now.getDay(),
     });

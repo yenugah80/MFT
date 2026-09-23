@@ -448,7 +448,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
       if (selectedPeriod === 'day') {
         const dateStr = formatDate(dateKey);
         const story = dayData?.storyLine || generateStoryLine(dayData) || 'Fresh start';
-        message = `📅 ${dateStr}\n\n"${story}"\n\n🏆 Wellness: ${getScoreValue(dayData?.wellnessScore) || '-'}/100\n🍽️ ${dayData?.calories || 0} cal\n💧 ${Math.round(dayData?.hydrationPercent || 0)}%\n😊 Mood: ${dayData?.avgMood?.toFixed(1) || '-'}/5`;
+        message = `📅 ${dateStr}\n\n"${story}"\n\n🏆 Wellness: ${getScoreValue(dayData?.wellnessScore) || '-'}/100\n🍽️ ${dayData?.calories || 0} cal\n💧 ${Math.round(dayData?.hydrationPercent || 0)}%\n😊 Mood: ${dayData?.moodAvg?.toFixed(1) || '-'}/5`;
       } else {
         message = `📊 My ${periodDays}-Day Wellness Summary\n\n🏆 Avg Score: ${periodStats.avgWellnessScore}/100\n🍽️ Avg Calories: ${periodStats.avgCalories}\n💧 Avg Hydration: ${periodStats.avgHydration}%\n😊 Avg Mood: ${periodStats.avgMood}/5\n📈 ${periodStats.daysLogged}/${periodStats.totalDays} days logged`;
       }
@@ -513,7 +513,6 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
                       <View style={dayDetailStyles.periodSummary}>
                         <Text style={dayDetailStyles.periodSummaryText}>
                           <Text style={{ fontWeight: '700', color: colors.text }}>{periodStats.daysLogged}</Text> of {periodStats.totalDays} days logged
-                          fontFamily: TYPOGRAPHY.family.bold,
                         </Text>
                       </View>
                     )}
@@ -561,7 +560,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
                   <View style={dayDetailStyles.moodDisplay}>
                     <LottieView
                       source={selectedPeriod === 'day'
-                        ? getMoodLottie(dayData?.moodType, dayData?.avgMood)
+                        ? getMoodLottie(dayData?.moodType, dayData?.moodAvg)
                         : getMoodLottie(null, parseFloat(periodStats.avgMood))}
                       autoPlay
                       loop
@@ -569,7 +568,7 @@ function DayDetailModal({ visible, onClose, dayData, dateKey, allData = {}, curr
                     />
                     <Text style={dayDetailStyles.statCardValueLarge}>
                       {selectedPeriod === 'day'
-                        ? (dayData?.avgMood ? dayData.avgMood.toFixed(1) : '-')
+                        ? (dayData?.moodAvg ? dayData.moodAvg.toFixed(1) : '-')
                         : periodStats.avgMood}
                       <Text style={dayDetailStyles.statCardUnit}>/5</Text>
                     </Text>
@@ -862,6 +861,7 @@ const dayDetailStyles = StyleSheet.create({
   },
   periodSummaryText: {
     fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.secondary,
   },
 

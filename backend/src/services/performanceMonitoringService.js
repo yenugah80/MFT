@@ -395,6 +395,18 @@ export function getDashboardMetrics() {
  * Get historical metrics for a time range
  */
 export async function getHistoricalMetrics(startTime, endTime, endpoint = null) {
+  // NOTE: performance_metrics does not exist in the database at all (no
+  // migration ever created it) — every function in this file that touches
+  // it, including persistMetrics' INSERT, throws "relation does not exist"
+  // today. Not fixed here — that's a real schema decision (retention,
+  // indexing), not a rename. The .rows fix below is correct regardless of
+  // that, for whenever the table exists.
+  // Not called anywhere in the codebase today (verified), but a bare Date
+  // interpolated into raw sql`` bypasses Drizzle's column-type
+  // serialization and throws at the driver — fixed for whenever this and
+  // the missing performance_metrics table (see note above) both exist.
+  // new Date(x).toISOString() accepts either a Date or an ISO string from
+  // the caller, since there's no real call site to pin the exact type down.
   const result = await db.execute(sql`
     SELECT
       endpoint,
@@ -408,7 +420,7 @@ export async function getHistoricalMetrics(startTime, endTime, endpoint = null) 
       min_latency_ms,
       max_latency_ms
     FROM performance_metrics
-    WHERE hour_bucket BETWEEN ${startTime} AND ${endTime}
+    WHERE hour_bucket BETWEEN ${new Date(startTime).toISOString()} AND ${new Date(endTime).toISOString()}
       ${endpoint ? sql`AND endpoint = ${endpoint}` : sql``}
     ORDER BY hour_bucket DESC
   `);
@@ -417,7 +429,9 @@ export async function getHistoricalMetrics(startTime, endTime, endpoint = null) 
     startTime,
     endTime,
     endpoint,
-    metrics: result.rows,
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js.
+    metrics: result,
   };
 }
 
@@ -444,7 +458,7 @@ export async function getSLOComplianceReport(days = 30) {
   return {
     period_days: days,
     slo_targets: SLODefinitions,
-    compliance: result.rows.map(row => ({
+    compliance: result.map(row => ({
       endpoint: row.endpoint,
       total_hours: parseInt(row.total_hours),
       p50_compliance: (row.p50_compliant / row.total_hours * 100).toFixed(1) + '%',

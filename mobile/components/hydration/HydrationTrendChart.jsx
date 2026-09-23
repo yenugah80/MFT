@@ -13,6 +13,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { TEXT, SURFACES, SPACING, RADIUS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { groupHydrationSeriesByWeek } from '../../utils/hydrationHistory';
 
 const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -24,20 +25,33 @@ const HYDRATION = {
   today: '#0369A1',
 };
 
+function formatAxisDate(dateKey) {
+  if (!dateKey) return '';
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if (!year || !month || !day) return '';
+  return `${month}/${day}`;
+}
+
 export default function HydrationTrendChart({
   series = [],
   goalMl = 2000,
   height = 150,
   compact = false,
 }) {
-  // Scale to whichever is larger — the goal or the best day — plus headroom.
+  const isWeekly = series.length > 14;
+  const chartSeries = useMemo(
+    () => (isWeekly ? groupHydrationSeriesByWeek(series, goalMl) : series),
+    [goalMl, isWeekly, series],
+  );
+
+  // Scale to whichever is larger, the goal or the best day, plus headroom.
   // Without the headroom, a user who has never exceeded their goal gets
   // maxValue === goalMl, which puts the goal line at bottom:height, i.e.
   // entirely ABOVE the plot box, where its label collides with the card title.
   const maxValue = useMemo(() => {
-    const best = series.reduce((m, d) => Math.max(m, d.ml || 0), 0);
+    const best = chartSeries.reduce((m, d) => Math.max(m, d.ml || 0), 0);
     return Math.max(goalMl, best, 1) * 1.12;
-  }, [series, goalMl]);
+  }, [chartSeries, goalMl]);
 
   if (!series.length) {
     return (
@@ -48,8 +62,16 @@ export default function HydrationTrendChart({
   }
 
   const goalRatio = Math.min(goalMl / maxValue, 1);
-  // Show every other label on long ranges so the axis doesn't turn to mush
-  const labelStride = series.length > 14 ? Math.ceil(series.length / 10) : 1;
+  const condensedAxis = isWeekly;
+  const axisLabelCount = Math.min(chartSeries.length, chartSeries.length > 8 ? 5 : chartSeries.length);
+  const condensedAxisIndexes = condensedAxis
+    ? Array.from({ length: axisLabelCount }, (_, index) => (
+      axisLabelCount === 1
+        ? 0
+        : Math.round((index * (chartSeries.length - 1)) / (axisLabelCount - 1))
+    ))
+    : [];
+  const barGap = isWeekly ? SPACING[2] : SPACING[1];
 
   return (
     <View>
@@ -69,8 +91,8 @@ export default function HydrationTrendChart({
           <Text style={styles.goalLabel}>{(goalMl / 1000).toFixed(1)}L</Text>
         </View>
 
-        <View style={styles.bars}>
-          {series.map((day, index) => {
+        <View style={[styles.bars, { gap: barGap }]}>
+          {chartSeries.map((day, index) => {
             const ratio = Math.min((day.ml || 0) / maxValue, 1);
             const barHeight = Math.max(ratio * height, day.ml > 0 ? 4 : 3);
             const metGoal = (day.ml || 0) >= goalMl;
@@ -86,6 +108,7 @@ export default function HydrationTrendChart({
                     {
                       height: barHeight,
                       backgroundColor: color,
+                      borderRadius: RADIUS.sm,
                       borderWidth: day.isToday ? 2 : 0,
                       borderColor: HYDRATION.today,
                     },
@@ -98,21 +121,35 @@ export default function HydrationTrendChart({
       </View>
 
       {/* Day labels */}
-      <View style={styles.labels}>
-        {series.map((day, index) => {
-          const show = index % labelStride === 0 || day.isToday;
-          return (
+      {condensedAxis ? (
+        <View style={styles.condensedLabels}>
+          {condensedAxisIndexes.map((index) => {
+            const day = chartSeries[index];
+            return (
+              <Text
+                key={`label-${day?.date || index}`}
+                style={[styles.condensedLabel, day?.isToday && styles.labelToday]}
+                numberOfLines={1}
+              >
+                {formatAxisDate(day?.date)}
+              </Text>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={[styles.labels, { gap: barGap }]}>
+          {chartSeries.map((day, index) => (
             <View key={`label-${day.date || index}`} style={styles.barSlot}>
               <Text
                 style={[styles.label, day.isToday && styles.labelToday]}
                 numberOfLines={1}
               >
-                {show ? DAY_INITIALS[day.dayOfWeek] : ''}
+                {DAY_INITIALS[day.dayOfWeek]}
               </Text>
             </View>
-          );
-        })}
-      </View>
+          ))}
+        </View>
+      )}
 
       {!compact && (
         <View style={styles.legend}>
@@ -143,7 +180,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     height: '100%',
-    gap: SPACING[1],
   },
   barSlot: {
     flex: 1,
@@ -186,7 +222,17 @@ const styles = StyleSheet.create({
   labels: {
     flexDirection: 'row',
     marginTop: SPACING[2],
-    gap: SPACING[1],
+  },
+  condensedLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING[2],
+  },
+  condensedLabel: {
+    minWidth: 30,
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    textAlign: 'center',
   },
   label: {
     fontSize: TYPOGRAPHY.size.xs,

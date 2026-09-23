@@ -79,6 +79,10 @@ const MoodIcon3D = ({
   showLabel = true,
   autoPlay = true,
   loop = true,
+  interactive = true,
+  compact = false,
+  showSelectionIndicator = true,
+  resizeMode = 'cover',
 }) => {
   const animationRef = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -182,18 +186,11 @@ const MoodIcon3D = ({
     }
   };
 
-  return (
-    <TouchableOpacity
-      onPress={handlePress}
-      activeOpacity={0.8}
-      style={styles.container}
-      accessible={true}
-      accessibilityRole="button"
-      accessibilityLabel={`Select ${label} mood`}
-      accessibilityState={{ selected }}
-    >
+  const content = (
+    <>
       <Animated.View style={[
         styles.iconWrapper,
+        compact && styles.iconWrapperCompact,
         selected && styles.iconWrapperSelected,
         { transform: [{ scale: scaleAnim }] },
       ]}>
@@ -218,7 +215,7 @@ const MoodIcon3D = ({
               loop={loop}
               autoPlay={autoPlay}
               speed={1.2}
-              resizeMode="cover"
+              resizeMode={resizeMode}
               renderMode={renderMode}
               onAnimationFinish={() => {
                 animationFinishedRef.current = true;
@@ -240,7 +237,7 @@ const MoodIcon3D = ({
         </View>
 
         {/* Selection indicator */}
-        {selected && (
+        {selected && showSelectionIndicator && (
           <View style={[styles.selectionDot, { backgroundColor: moodColors.base }]} />
         )}
       </Animated.View>
@@ -257,6 +254,34 @@ const MoodIcon3D = ({
           {label}
         </Text>
       )}
+    </>
+  );
+
+  if (!interactive) {
+    return (
+      <View
+        style={[styles.container, compact && styles.containerCompact]}
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={handlePress}
+      activeOpacity={0.8}
+      style={[styles.container, compact && styles.containerCompact]}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel={`Select ${label} mood`}
+      accessibilityState={{ selected }}
+    >
+      {content}
     </TouchableOpacity>
   );
 };
@@ -266,11 +291,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: SPACING[2],
   },
+  containerCompact: {
+    marginHorizontal: 0,
+  },
   iconWrapper: {
     position: 'relative',
     padding: SPACING[2],
     borderRadius: RADIUS.xl,
     backgroundColor: 'transparent',
+  },
+  iconWrapperCompact: {
+    padding: 0,
   },
   iconWrapperSelected: {
     backgroundColor: SURFACES.card.primary,

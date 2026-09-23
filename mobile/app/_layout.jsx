@@ -3,6 +3,9 @@ import { Slot, useRouter } from "expo-router";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { Platform } from "react-native";
 import { setBackgroundMessageHandler } from "@/services/fcmService";
+import { applyRemoteDeliveryDedup } from "@/services/pushNotifications";
+import { getOrCreateDeviceId } from "@/services/deviceIdentity";
+import apiClient from "@/services/apiClient";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { LogBox, View } from "react-native";
@@ -26,10 +29,12 @@ import { ProfileProvider } from "@/providers/ProfileProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { ThemeProvider } from "@/providers/ThemeProvider";
+import { BiometricLockProvider } from "@/providers/BiometricLockProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ApiInitializer from "@/components/ApiInitializer";
 import DatabaseInitializer from "@/components/DatabaseInitializer";
 import SmartNotificationInitializer from "@/components/SmartNotificationInitializer";
+import ScheduledNotificationsDebugOverlay from "@/components/dev/ScheduledNotificationsDebugOverlay";
 import InitializationGuard from "@/components/InitializationGuard";
 import { cleanupAnalytics } from "@/services/analytics";
 import { runProductionStartup, getStartupReport } from "@/services/productionStartup";
@@ -42,8 +47,37 @@ import "@/i18n/config"; // Initialize i18n
 if (Platform.OS !== 'web') {
   setBackgroundMessageHandler(async (remoteMessage) => {
     // Background/killed-state FCM messages are displayed automatically by Firebase.
-    // Only add custom data processing here if needed.
     console.log("[App] FCM background message:", remoteMessage.notification?.title);
+
+    // This is the real fix for the scenario a foreground-only dedup check
+    // cannot address: device online, app fully closed, backend sends before
+    // the local trigger fires. Requires apns.payload.aps['content-available']
+    // (set server-side in fcmPushService.js) for iOS to actually invoke this
+    // handler while the app isn't running — without it, none of this runs
+    // and the local fallback fires unconditionally, duplicating the push
+    // that was just displayed automatically above.
+    //
+    // Both calls are fire-and-forget by design: a failed ack or dedup check
+    // just leaves the local reminder armed, which is the safe direction to
+    // fail in (a redundant notification, not a silent miss).
+    const deliveryId = remoteMessage.data?.deliveryId;
+    if (deliveryId) {
+      getOrCreateDeviceId().then((deviceId) => {
+        apiClient.post('/profile/notifications/ack', { deliveryId, deviceId }).catch(() => {});
+      }).catch(() => {});
+    }
+    applyRemoteDeliveryDedup(apiClient.get.bind(apiClient)).catch(() => {});
+
+    // Deliberately NOT done here yet: piggybacking rolling-window top-up on
+    // this same wake event (so local coverage for hydration/activity/mood/
+    // daily — currently a fixed 3-day floor — would extend indefinitely as
+    // long as ANY push periodically reaches the device, not just on app
+    // foreground). That needs the user's current notification preferences,
+    // which aren't available in this module-scope background context
+    // without an extra fetch, and this handler is already carrying new,
+    // untested-on-device logic — adding more before this round is verified
+    // seemed like the wrong tradeoff. Tracked as a real, reasoned follow-up,
+    // not a silent gap.
   });
 }
 
@@ -187,6 +221,9 @@ export default function RootLayout() {
           <QueryProvider>
             <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
               {/* NotificationProvider & ProfileProvider must be INSIDE ClerkProvider to access useAuth */}
+              {/* BiometricLockProvider sits directly under ClerkProvider so its lock
+                  overlay renders above every screen in the tree below it */}
+              <BiometricLockProvider>
               <SubscriptionProvider>
                 <NotificationProvider>
                   <ProfileProvider>
@@ -199,12 +236,14 @@ export default function RootLayout() {
                         <SafeScreen>
                           <Slot />
                         </SafeScreen>
+                        {__DEV__ && Platform.OS !== 'web' && <ScheduledNotificationsDebugOverlay />}
                       </SmartNotificationInitializer>
                     </InitializationGuard>
                   </ApiInitializer>
                 </ProfileProvider>
               </NotificationProvider>
               </SubscriptionProvider>
+              </BiometricLockProvider>
             </ClerkProvider>
           </QueryProvider>
         </DatabaseInitializer>

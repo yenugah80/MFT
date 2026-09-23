@@ -28,6 +28,7 @@ import {
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import WittyMessageEngine from './wittyMessageEngine.js';
 import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
+import { getLocalHour, getLocalDayRange, getLocalDateUTC } from '../utils/timezone.js';
 
 // ============================================================================
 // REMINDER TYPES & CONFIGURATION
@@ -122,6 +123,7 @@ function getHydrationMessage(timeSlot, context = {}) {
     streak,
     logCount,
     hoursSinceLastLog: context.hoursSinceLastLog,
+    hour: context.hour,
   });
 
   if (wittyMessage) {
@@ -154,6 +156,7 @@ function getFoodMessage(mealType, context = {}) {
     totalCalories,
     calorieGoal,
     streak,
+    hour: context.hour,
   });
 
   if (wittyMessage) {
@@ -179,7 +182,7 @@ function getFoodMessage(mealType, context = {}) {
  */
 function getMoodMessage(timeSlot, context = {}) {
   const wittyMessage = WittyMessageEngine.getMoodMessage({
-    hour: new Date().getHours(),
+    hour: context.hour,
     pattern: context.pattern,
   });
 
@@ -262,6 +265,7 @@ function getActivityMessage(type, context = {}) {
     justWorkedOut: type === 'post_workout',
     activityType,
     duration,
+    hour: context.hour,
   });
 
   if (wittyMessage) {
@@ -280,45 +284,6 @@ function getActivityMessage(type, context = {}) {
 
   return { ...fallbacks[type] || fallbacks.gentle_nudge, tone: TONE_STYLES.MOTIVATING };
 }
-
-// Legacy message objects for backward compatibility (now wrap the functions)
-const HYDRATION_MESSAGES = {
-  morning: [{ getMessage: (ctx) => getHydrationMessage('morning', ctx) }],
-  midday: [{ getMessage: (ctx) => getHydrationMessage('midday', ctx) }],
-  afternoon: [{ getMessage: (ctx) => getHydrationMessage('afternoon', ctx) }],
-  evening: [{ getMessage: (ctx) => getHydrationMessage('evening', ctx) }],
-  goal_reached: [{ getMessage: (ctx) => getHydrationMessage('goal_reached', ctx) }],
-};
-
-const FOOD_MESSAGES = {
-  breakfast: [{ getMessage: (ctx) => getFoodMessage('breakfast', ctx) }],
-  lunch: [{ getMessage: (ctx) => getFoodMessage('lunch', ctx) }],
-  dinner: [{ getMessage: (ctx) => getFoodMessage('dinner', ctx) }],
-  gentle_nudge: [{ getMessage: (ctx) => getFoodMessage('gentle_nudge', ctx) }],
-  streak: [{ getMessage: (ctx) => getFoodMessage('streak', ctx) }],
-};
-
-const MOOD_MESSAGES = {
-  morning: [{ getMessage: (ctx) => getMoodMessage('morning', ctx) }],
-  afternoon: [{ getMessage: (ctx) => getMoodMessage('afternoon', ctx) }],
-  evening: [{ getMessage: (ctx) => getMoodMessage('evening', ctx) }],
-  post_meal: [{ getMessage: (ctx) => getMoodMessage('post_meal', ctx) }],
-};
-
-const MOTIVATION_MESSAGES = {
-  streak_at_risk: [{ getMessage: (ctx) => getMotivationMessage('streak_at_risk', ctx) }],
-  comeback: [{ getMessage: (ctx) => getMotivationMessage('comeback', ctx) }],
-  achievement_close: [{ getMessage: (ctx) => getMotivationMessage('achievement_close', ctx) }],
-  weekly_summary: [{ getMessage: (ctx) => getMotivationMessage('weekly_summary', ctx) }],
-};
-
-const ACTIVITY_MESSAGES = {
-  movement: [{ getMessage: (ctx) => getActivityMessage('movement', ctx) }],
-  walk: [{ getMessage: (ctx) => getActivityMessage('walk', ctx) }],
-  post_workout: [{ getMessage: (ctx) => getActivityMessage('post_workout', ctx) }],
-  sedentary: [{ getMessage: (ctx) => getActivityMessage('sedentary', ctx) }],
-  gentle_nudge: [{ getMessage: (ctx) => getActivityMessage('gentle_nudge', ctx) }],
-};
 
 // ============================================================================
 // USER PATTERN LEARNING
@@ -447,33 +412,67 @@ function findTypicalMealTime(logs, startHour, endHour) {
 /**
  * Detect quiet hours from user patterns
  */
-function detectQuietHours(patterns) {
+export function detectQuietHours(patterns) {
   const combined = patterns.food.hourlyDistribution.map((count, hour) =>
     count + patterns.water.hourlyDistribution[hour] + patterns.mood.hourlyDistribution[hour]
   );
 
-  // Find the longest stretch of zero/low activity
+  // Default (no reliable signal): typical overnight sleep window.
   let longestQuietStart = 22;
   let longestQuietEnd = 7;
 
-  // Look for hours with very low activity
   const quietThreshold = Math.max(...combined) * 0.1;
-  const quietHoursSet = combined.map((count, hour) => count <= quietThreshold ? hour : -1).filter(h => h >= 0);
+  const isQuietHourFlag = combined.map((count) => count <= quietThreshold);
+  const quietHoursSet = isQuietHourFlag.reduce((acc, isQuiet, hour) => (isQuiet ? [...acc, hour] : acc), []);
 
   if (quietHoursSet.length >= 4) {
-    // Find contiguous quiet periods
-    quietHoursSet.sort((a, b) => a - b);
-    // Simple heuristic: use typical sleep hours if detected
-    if (quietHoursSet.includes(22) || quietHoursSet.includes(23) || quietHoursSet.includes(0)) {
-      longestQuietStart = Math.min(...quietHoursSet.filter(h => h >= 20 || h <= 8));
-      longestQuietEnd = Math.max(...quietHoursSet.filter(h => h >= 20 || h <= 8));
+    // Find the longest run of consecutive quiet hours, wrapping past midnight
+    // (23 -> 0) since a sleep window is almost always contiguous but usually
+    // spans the day boundary. The previous implementation took a plain
+    // Math.min/Math.max over hours matching `h >= 20 || h <= 8` — a
+    // non-contiguous set by construction (it always includes hours from both
+    // the early-morning tail AND the late-night tail), so min() landed on 0
+    // and max() landed on 23 for nearly any real usage pattern. That made
+    // isQuietHour()'s `hour >= start && hour < end` check true for 23 of 24
+    // hours, silently blocking almost all reminder generation for almost
+    // every user with any concentrated activity — a confirmed, live bug,
+    // not a hypothetical one (reproduced with a test account logging at a
+    // consistent 8am/12pm/6pm).
+    let bestRunStart = null;
+    let bestRunLength = 0;
+    let runStart = null;
+    let runLength = 0;
+
+    // Walk 48 hours (twice around the clock) so a run that wraps past
+    // midnight is detected as one contiguous run instead of two fragments.
+    for (let i = 0; i < 48; i++) {
+      const hour = i % 24;
+      if (isQuietHourFlag[hour]) {
+        if (runStart === null) runStart = i;
+        runLength++;
+        if (runLength > bestRunLength) {
+          bestRunLength = runLength;
+          bestRunStart = runStart;
+        }
+      } else {
+        runStart = null;
+        runLength = 0;
+      }
+    }
+
+    // A run of all 24 hours (every hour equally quiet — no real signal,
+    // e.g. a brand-new account) isn't a meaningful "quiet window"; keep the
+    // sleep-hours default instead of claiming the whole day is quiet.
+    if (bestRunStart !== null && bestRunLength > 0 && bestRunLength < 24) {
+      longestQuietStart = bestRunStart % 24;
+      longestQuietEnd = (bestRunStart + bestRunLength) % 24;
     }
   }
 
   return {
     start: longestQuietStart,
     end: longestQuietEnd,
-    detected: quietHoursSet.length >= 4,
+    detected: quietHoursSet.length >= 4 && quietHoursSet.length < 24,
   };
 }
 
@@ -513,18 +512,29 @@ function getDefaultPatterns(userId) {
  */
 export async function getSmartReminders(userId) {
   try {
-    // Get user data in parallel
-    const [patterns, profile, goals, gamification, todayStats] = await Promise.all([
+    // gamification is fetched first, on its own, because timezoneOffset
+    // lives on it and getTodayStats needs that offset to compute the
+    // user's actual local day boundary — see getTodayStats below for why
+    // that matters independently of the currentHour fix.
+    const gamification = await getGamificationData(userId);
+    const timezoneOffset = Number.isFinite(gamification?.timezoneOffset) ? gamification.timezoneOffset : null;
+
+    const [patterns, profile, goals, todayStats] = await Promise.all([
       learnUserPatterns(userId),
       getProfileData(userId),
       getGoalsData(userId),
-      getGamificationData(userId),
-      getTodayStats(userId),
+      getTodayStats(userId, timezoneOffset),
     ]);
 
     const reminders = [];
-    const now = new Date();
-    const currentHour = now.getHours();
+    // The server process's own hour (new Date().getHours(), pinned to UTC
+    // in production — see CLAUDE.md) used to be used directly here with no
+    // per-user adjustment at all. Every category generator below gates its
+    // messaging on "is it morning/midday/afternoon" in terms of this hour,
+    // so an EDT user got "It's past noon" content while their real local
+    // time was 9am — UTC late-morning (11am-1pm) lines up with EDT's own
+    // early morning (7-9am), not midday.
+    const currentHour = getLocalHour(timezoneOffset);
 
     // Check if we're in quiet hours
     if (isQuietHour(currentHour, patterns.quietHours)) {
@@ -551,34 +561,25 @@ export async function getSmartReminders(userId) {
       notificationPrefs,
     };
 
-    // Hydration reminders
-    if (notificationPrefs.hydration !== false) {
-      const hydrationReminders = generateHydrationReminders(context);
-      reminders.push(...hydrationReminders);
-    }
+    // Each category is isolated: a bug generating one type of reminder must
+    // not silently discard every other type for this user's run (this is
+    // exactly how a template-shape bug in hydration once suppressed food/
+    // mood/motivation/activity reminders too, with no error surfaced).
+    const categories = [
+      ['hydration', generateHydrationReminders],
+      ['food', generateFoodReminders],
+      ['mood', generateMoodReminders],
+      ['motivation', generateMotivationReminders],
+      ['activity', generateActivityReminders],
+    ];
 
-    // Food reminders
-    if (notificationPrefs.food !== false) {
-      const foodReminders = generateFoodReminders(context);
-      reminders.push(...foodReminders);
-    }
-
-    // Mood reminders
-    if (notificationPrefs.mood !== false) {
-      const moodReminders = generateMoodReminders(context);
-      reminders.push(...moodReminders);
-    }
-
-    // Motivation/engagement reminders
-    if (notificationPrefs.motivation !== false) {
-      const motivationReminders = generateMotivationReminders(context);
-      reminders.push(...motivationReminders);
-    }
-
-    // Activity reminders
-    if (notificationPrefs.activity !== false) {
-      const activityReminders = generateActivityReminders(context);
-      reminders.push(...activityReminders);
+    for (const [key, generate] of categories) {
+      if (notificationPrefs[key] === false) continue;
+      try {
+        reminders.push(...generate(context));
+      } catch (categoryError) {
+        console.error(`[SmartReminder] ${key} reminder generation failed for user ${userId}:`, categoryError);
+      }
     }
 
     // Sort by priority and limit total
@@ -606,8 +607,8 @@ function isQuietHour(hour, quietHours) {
 /**
  * Generate hydration reminders
  */
-function generateHydrationReminders(context) {
-  const { currentHour, todayStats, goals, userName } = context;
+export function generateHydrationReminders(context) {
+  const { currentHour, todayStats, goals, gamification } = context;
   const reminders = [];
 
   const waterGoal = parseFloat(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
@@ -615,18 +616,28 @@ function generateHydrationReminders(context) {
   const percentage = Math.round((waterLogged / waterGoal) * 100);
   const remaining = Math.max(0, waterGoal - waterLogged);
   const remainingMl = Math.round(remaining * 1000);
+  const streak = gamification?.streak || 0;
 
   // Already hit goal today
   if (waterLogged >= waterGoal) {
     return []; // Don't remind if goal is met
   }
 
+  const hydrationContext = {
+    current: Math.round(waterLogged * 1000),
+    goal: Math.round(waterGoal * 1000),
+    remaining: remainingMl,
+    percentage,
+    streak,
+    logCount: todayStats.water.totalLogs,
+    hour: currentHour,
+  };
+
   // Morning reminder (7-9 AM)
   if (currentHour >= 7 && currentHour <= 9 && todayStats.water.totalLogs === 0) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.morning);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_MORNING,
-      ...formatTemplate(template, { name: userName }),
+      ...getHydrationMessage('morning', hydrationContext),
       priority: 2,
       scheduledFor: null, // Now
     });
@@ -634,14 +645,9 @@ function generateHydrationReminders(context) {
 
   // Midday reminder (11 AM - 1 PM)
   if (currentHour >= 11 && currentHour <= 13 && percentage < 40) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.midday);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_MIDDAY,
-      ...formatTemplate(template, {
-        time: formatTime(currentHour),
-        current: Math.round(waterLogged * 1000),
-        percentage,
-      }),
+      ...getHydrationMessage('midday', hydrationContext),
       priority: 3,
       scheduledFor: null,
     });
@@ -649,10 +655,9 @@ function generateHydrationReminders(context) {
 
   // Afternoon reminder (3-5 PM)
   if (currentHour >= 15 && currentHour <= 17 && percentage < 70) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.afternoon);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_AFTERNOON,
-      ...formatTemplate(template, { remaining: remainingMl }),
+      ...getHydrationMessage('afternoon', hydrationContext),
       priority: 3,
       scheduledFor: null,
     });
@@ -660,10 +665,9 @@ function generateHydrationReminders(context) {
 
   // Evening reminder (7-9 PM)
   if (currentHour >= 19 && currentHour <= 21 && percentage < 90) {
-    const template = selectRandomTemplate(HYDRATION_MESSAGES.evening);
     reminders.push({
       type: REMINDER_TYPES.HYDRATION_EVENING,
-      ...formatTemplate(template, { percentage, remaining: remainingMl }),
+      ...getHydrationMessage('evening', hydrationContext),
       priority: 4,
       scheduledFor: null,
     });
@@ -675,22 +679,28 @@ function generateHydrationReminders(context) {
 /**
  * Generate food reminders
  */
-function generateFoodReminders(context) {
-  const { currentHour, todayStats, patterns, gamification, userName } = context;
+export function generateFoodReminders(context) {
+  const { currentHour, todayStats, patterns, gamification } = context;
   const reminders = [];
 
   const mealsLogged = todayStats.food.totalMeals;
   const streak = gamification?.streak || 0;
+  const foodContext = {
+    mealsLogged,
+    totalCalories: todayStats.food.totalCalories || 0,
+    calorieGoal: context.goals?.dailyCalories || 2000,
+    streak,
+    hour: currentHour,
+  };
 
   // Breakfast reminder (based on user's typical time)
   const breakfastTime = patterns.mealTimes.breakfast.hour;
   if (currentHour >= breakfastTime && currentHour <= breakfastTime + 2) {
     const hasBreakfast = todayStats.food.mealTypes?.breakfast > 0;
     if (!hasBreakfast) {
-      const template = selectRandomTemplate(FOOD_MESSAGES.breakfast);
       reminders.push({
         type: REMINDER_TYPES.FOOD_BREAKFAST,
-        ...formatTemplate(template, { name: userName }),
+        ...getFoodMessage('breakfast', foodContext),
         priority: 2,
         scheduledFor: null,
       });
@@ -702,10 +712,9 @@ function generateFoodReminders(context) {
   if (currentHour >= lunchTime && currentHour <= lunchTime + 2) {
     const hasLunch = todayStats.food.mealTypes?.lunch > 0;
     if (!hasLunch) {
-      const template = selectRandomTemplate(FOOD_MESSAGES.lunch);
       reminders.push({
         type: REMINDER_TYPES.FOOD_LUNCH,
-        ...formatTemplate(template, { name: userName }),
+        ...getFoodMessage('lunch', foodContext),
         priority: 3,
         scheduledFor: null,
       });
@@ -717,10 +726,9 @@ function generateFoodReminders(context) {
   if (currentHour >= dinnerTime && currentHour <= dinnerTime + 2) {
     const hasDinner = todayStats.food.mealTypes?.dinner > 0;
     if (!hasDinner) {
-      const template = selectRandomTemplate(FOOD_MESSAGES.dinner);
       reminders.push({
         type: REMINDER_TYPES.FOOD_DINNER,
-        ...formatTemplate(template, { name: userName }),
+        ...getFoodMessage('dinner', foodContext),
         priority: 3,
         scheduledFor: null,
       });
@@ -729,10 +737,9 @@ function generateFoodReminders(context) {
 
   // Streak protection reminder (evening if no logs today)
   if (currentHour >= 19 && currentHour <= 21 && mealsLogged === 0 && streak >= 3) {
-    const template = selectRandomTemplate(FOOD_MESSAGES.streak);
     reminders.push({
       type: REMINDER_TYPES.FOOD_STREAK,
-      ...formatTemplate(template, { streak }),
+      ...getFoodMessage('streak', foodContext),
       priority: 1, // High priority for streak protection
       scheduledFor: null,
     });
@@ -740,10 +747,9 @@ function generateFoodReminders(context) {
 
   // Gentle nudge if no logs by late afternoon
   if (currentHour >= 16 && currentHour <= 18 && mealsLogged === 0 && patterns.engagementLevel !== 'new') {
-    const template = selectRandomTemplate(FOOD_MESSAGES.gentle_nudge);
     reminders.push({
       type: REMINDER_TYPES.FOOD_LOG_REMINDER,
-      ...formatTemplate(template, {}),
+      ...getFoodMessage('gentle_nudge', foodContext),
       priority: 5,
       scheduledFor: null,
     });
@@ -755,11 +761,12 @@ function generateFoodReminders(context) {
 /**
  * Generate mood reminders
  */
-function generateMoodReminders(context) {
-  const { currentHour, todayStats, patterns, userName } = context;
+export function generateMoodReminders(context) {
+  const { currentHour, todayStats, patterns } = context;
   const reminders = [];
 
   const moodLogsToday = todayStats.mood.totalLogs;
+  const moodContext = { pattern: patterns?.patterns?.mood, hour: currentHour };
 
   // Only remind if engaged (not every user wants mood tracking)
   if (patterns.engagementLevel === 'new' && patterns.patterns.mood.peakHours.length === 0) {
@@ -768,10 +775,9 @@ function generateMoodReminders(context) {
 
   // Morning mood check (8-10 AM)
   if (currentHour >= 8 && currentHour <= 10 && moodLogsToday === 0) {
-    const template = selectRandomTemplate(MOOD_MESSAGES.morning);
     reminders.push({
       type: REMINDER_TYPES.MOOD_CHECKIN_MORNING,
-      ...formatTemplate(template, { name: userName }),
+      ...getMoodMessage('morning', moodContext),
       priority: 4,
       scheduledFor: null,
     });
@@ -779,10 +785,9 @@ function generateMoodReminders(context) {
 
   // Afternoon mood check (2-4 PM)
   if (currentHour >= 14 && currentHour <= 16 && moodLogsToday <= 1) {
-    const template = selectRandomTemplate(MOOD_MESSAGES.afternoon);
     reminders.push({
       type: REMINDER_TYPES.MOOD_CHECKIN_AFTERNOON,
-      ...formatTemplate(template, {}),
+      ...getMoodMessage('afternoon', moodContext),
       priority: 5,
       scheduledFor: null,
     });
@@ -790,10 +795,9 @@ function generateMoodReminders(context) {
 
   // Evening mood check (8-10 PM)
   if (currentHour >= 20 && currentHour <= 22 && moodLogsToday <= 2) {
-    const template = selectRandomTemplate(MOOD_MESSAGES.evening);
     reminders.push({
       type: REMINDER_TYPES.MOOD_CHECKIN_EVENING,
-      ...formatTemplate(template, {}),
+      ...getMoodMessage('evening', moodContext),
       priority: 5,
       scheduledFor: null,
     });
@@ -805,33 +809,50 @@ function generateMoodReminders(context) {
 /**
  * Generate motivation reminders
  */
-function generateMotivationReminders(context) {
+export function generateMotivationReminders(context) {
   const { currentHour, gamification, todayStats, patterns } = context;
   const reminders = [];
 
   const streak = gamification?.streak || 0;
-  const daysSinceLastLog = calculateDaysSinceLastLog(todayStats);
+  const daysSinceLastLog = calculateDaysSinceLastLog(todayStats, gamification);
 
-  // Streak at risk (evening, has streak, no logs today)
-  if (currentHour >= 20 && currentHour <= 22 && streak >= 3) {
+  // Streak at risk (evening, has streak, no logs today). Window is 19:00
+  // only (was 20-22) — narrowed to stay >60 minutes clear of mobile's
+  // fixed local streak-backup hour (STREAK_HOUR = 21, pushNotifications.js).
+  // streak_at_risk is now in OWNABLE_CATEGORIES, so a device that has
+  // registered local ownership never sees this candidate at all — this
+  // narrower window is defense-in-depth for the case ownership hasn't
+  // registered yet (fresh install mid-registration, legacy pre-ownership
+  // app build), not the primary mechanism.
+  if (currentHour === 19 && streak >= 3) {
     const totalLogsToday = todayStats.food.totalMeals + todayStats.water.totalLogs + todayStats.mood.totalLogs;
     if (totalLogsToday === 0) {
-      const template = selectRandomTemplate(MOTIVATION_MESSAGES.streak_at_risk);
       reminders.push({
         type: REMINDER_TYPES.STREAK_AT_RISK,
-        ...formatTemplate(template, { streak }),
+        ...getMotivationMessage('streak_at_risk', { streak }),
         priority: 1, // Highest priority
         scheduledFor: null,
       });
     }
   }
 
-  // Comeback reminder (if user hasn't logged in 2+ days)
-  if (daysSinceLastLog >= 2 && daysSinceLastLog <= 7 && currentHour >= 10 && currentHour <= 14) {
-    const template = selectRandomTemplate(MOTIVATION_MESSAGES.comeback);
+  // Comeback reminder (if user hasn't logged in 2+ days). Previously fired
+  // on every eligible day from 2 through 7 — up to 6 consecutive daily
+  // "come back!" messages to someone who, by definition, isn't responding.
+  // Backed off to specific days (2, 4, 7) instead of every day: still
+  // reaches the user at 3 meaningfully-spaced points during the window
+  // where re-engagement is most plausible, without repeating the identical
+  // automatic nudge daily regardless of a lack of response. This is
+  // specifically about COMEBACK — a system-generated automatic nudge the
+  // user never asked for by name — and does not touch the user-requested
+  // categories (hydration/food/mood/activity, opted into via Settings
+  // toggles), which are unaffected by inactivity by design: a user who
+  // explicitly asked for hydration reminders keeps getting them whether or
+  // not they're currently logging anything else.
+  if ([2, 4, 7].includes(daysSinceLastLog) && currentHour >= 10 && currentHour <= 14) {
     reminders.push({
       type: REMINDER_TYPES.COMEBACK,
-      ...formatTemplate(template, {}),
+      ...getMotivationMessage('comeback', { daysInactive: daysSinceLastLog, previousStreak: streak }),
       priority: 3,
       scheduledFor: null,
     });
@@ -843,8 +864,8 @@ function generateMotivationReminders(context) {
 /**
  * Generate activity reminders
  */
-function generateActivityReminders(context) {
-  const { currentHour, todayStats, patterns, userName } = context;
+export function generateActivityReminders(context) {
+  const { currentHour, todayStats, patterns } = context;
   const reminders = [];
 
   const activityLogsToday = todayStats.activity?.totalLogs || 0;
@@ -859,10 +880,9 @@ function generateActivityReminders(context) {
 
   // Morning movement prompt (9-10 AM)
   if (currentHour >= 9 && currentHour <= 10 && steps < stepGoal * 0.1) {
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.movement);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
-      ...formatTemplate(template, { name: userName, sedentaryHours }),
+      ...getActivityMessage('movement', { steps, stepGoal, sedentaryHours, hour: currentHour }),
       priority: 4,
       scheduledFor: null,
     });
@@ -870,10 +890,9 @@ function generateActivityReminders(context) {
 
   // Midday walk reminder (12-2 PM)
   if (currentHour >= 12 && currentHour <= 14 && steps < stepGoal * 0.4) {
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.walk);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_WALK,
-      ...formatTemplate(template, { steps, stepGoal, percentage: Math.round((steps / stepGoal) * 100) }),
+      ...getActivityMessage('walk', { steps, stepGoal, hour: currentHour }),
       priority: 4,
       scheduledFor: null,
     });
@@ -881,10 +900,9 @@ function generateActivityReminders(context) {
 
   // Afternoon sedentary alert (3-5 PM)
   if (currentHour >= 15 && currentHour <= 17 && sedentaryHours >= 3) {
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.sedentary);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_MOVEMENT,
-      ...formatTemplate(template, { sedentaryHours }),
+      ...getActivityMessage('sedentary', { steps, stepGoal, sedentaryHours, hour: currentHour }),
       priority: 3,
       scheduledFor: null,
     });
@@ -892,11 +910,9 @@ function generateActivityReminders(context) {
 
   // Evening step goal push (6-8 PM)
   if (currentHour >= 18 && currentHour <= 20 && steps >= stepGoal * 0.6 && steps < stepGoal) {
-    const remaining = stepGoal - steps;
-    const template = selectRandomTemplate(ACTIVITY_MESSAGES.gentle_nudge);
     reminders.push({
       type: REMINDER_TYPES.ACTIVITY_WALK,
-      ...formatTemplate(template, { steps, stepGoal, remaining }),
+      ...getActivityMessage('gentle_nudge', { steps, stepGoal, sedentaryHours, hour: currentHour }),
       priority: 5,
       scheduledFor: null,
     });
@@ -910,51 +926,32 @@ function generateActivityReminders(context) {
 // ============================================================================
 
 /**
- * Select a random template from array
+ * Calculate days since last log, using the account's real lastLogDate
+ * (gamificationTable.lastLogDate) compared against the user's own local
+ * calendar day. Previously a stub that only checked TODAY's stats and
+ * could only ever return 0 or 1 — meaning generateMotivationReminders'
+ * comeback branch (daysSinceLastLog >= 2) was structurally unreachable
+ * dead code: no inactive user could ever trigger it, regardless of how
+ * long they'd actually been gone. Fixed 2026-09 alongside the comeback
+ * backoff (days 2/4/7 instead of every day) — that backoff has no effect
+ * without a real day count feeding it.
  */
-function selectRandomTemplate(templates) {
-  return templates[Math.floor(Math.random() * templates.length)];
-}
-
-/**
- * Format template with variables
- */
-function formatTemplate(template, variables) {
-  let title = template.title;
-  let body = template.body;
-
-  for (const [key, value] of Object.entries(variables)) {
-    const placeholder = `{{${key}}}`;
-    title = title.replace(new RegExp(placeholder, 'g'), value);
-    body = body.replace(new RegExp(placeholder, 'g'), value);
-  }
-
-  return {
-    title,
-    body,
-    tone: template.tone,
-  };
-}
-
-/**
- * Format time for display
- */
-function formatTime(hour) {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour > 12 ? hour - 12 : hour;
-  return `${displayHour}:00 ${period}`;
-}
-
-/**
- * Calculate days since last log
- */
-function calculateDaysSinceLastLog(todayStats) {
-  // If there are logs today, return 0
+function calculateDaysSinceLastLog(todayStats, gamification) {
+  // If there are logs today, the account is active today — 0 regardless of
+  // what lastLogDate says (it may not have been updated yet this request).
   if (todayStats.food.totalMeals > 0 || todayStats.water.totalLogs > 0 || todayStats.mood.totalLogs > 0) {
     return 0;
   }
-  // This would need last log date from stats - simplified for now
-  return 1;
+
+  const lastLogDate = gamification?.lastLogDate;
+  if (!lastLogDate) return 0; // no history at all — not "inactive", just new/unknown
+
+  const offsetMinutes = gamification?.timezoneOffset || 0;
+  const lastLocalDay = getLocalDateUTC(offsetMinutes, new Date(lastLogDate));
+  const todayLocalDay = getLocalDateUTC(offsetMinutes, new Date());
+
+  const diffMs = todayLocalDay.getTime() - lastLocalDay.getTime();
+  return Math.max(0, Math.round(diffMs / (24 * 60 * 60 * 1000)));
 }
 
 /**
@@ -1007,12 +1004,18 @@ async function getGamificationData(userId) {
 
 /**
  * Get today's stats for all domains
+ *
+ * timezoneOffset determines what "today" actually means for this user —
+ * without it (the previous behavior), "today" was the server's own UTC
+ * calendar day, not the user's. For anyone west of UTC (any US timezone),
+ * server-UTC midnight falls in the middle of their previous evening, so a
+ * water log made right after real local midnight could still count toward
+ * the wrong "today", and logCount could read as 0 for a user who had
+ * already logged — which the hydration "no logs today, still no water?"
+ * copy takes as a literal claim.
  */
-async function getTodayStats(userId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+async function getTodayStats(userId, timezoneOffset = null) {
+  const { start: today, end: tomorrow } = getLocalDayRange(timezoneOffset, new Date());
 
   try {
     const [foodStats, waterStats, moodStats, activityStats] = await Promise.all([
@@ -1172,16 +1175,24 @@ async function getNotificationPreferences(userId) {
  */
 export async function scheduleUserReminders(userId) {
   try {
-    const patterns = await learnUserPatterns(userId);
-    const preferences = await getNotificationPreferences(userId);
+    const [patterns, preferences, gamification] = await Promise.all([
+      learnUserPatterns(userId),
+      getNotificationPreferences(userId),
+      getGamificationData(userId),
+    ]);
 
     if (!preferences.enabled) {
       return [];
     }
 
     const scheduled = [];
-    const now = new Date();
-    const currentHour = now.getHours();
+    // Same fix as getSmartReminders — this is the user-facing "what's
+    // coming up today" preview (GET /api/reminders/schedule), not the
+    // delivery cron, but it independently had the identical bug: comparing
+    // candidate hours against the server's raw UTC hour instead of this
+    // user's actual local hour.
+    const timezoneOffset = Number.isFinite(gamification?.timezoneOffset) ? gamification.timezoneOffset : null;
+    const currentHour = getLocalHour(timezoneOffset);
 
     // Schedule hydration reminders based on patterns
     if (preferences.hydration) {
@@ -1191,7 +1202,7 @@ export async function scheduleUserReminders(userId) {
           scheduled.push({
             type: 'hydration',
             scheduledHour: hour,
-            estimatedTime: getScheduledTime(hour),
+            estimatedTime: getScheduledTime(hour, timezoneOffset),
           });
         }
       }
@@ -1207,7 +1218,7 @@ export async function scheduleUserReminders(userId) {
             type: 'food',
             meal,
             scheduledHour: reminderHour,
-            estimatedTime: getScheduledTime(reminderHour),
+            estimatedTime: getScheduledTime(reminderHour, timezoneOffset),
           });
         }
       }
@@ -1221,7 +1232,7 @@ export async function scheduleUserReminders(userId) {
           scheduled.push({
             type: 'mood',
             scheduledHour: hour,
-            estimatedTime: getScheduledTime(hour),
+            estimatedTime: getScheduledTime(hour, timezoneOffset),
           });
         }
       }
@@ -1237,11 +1248,18 @@ export async function scheduleUserReminders(userId) {
 /**
  * Get scheduled time for an hour
  */
-function getScheduledTime(hour) {
-  const scheduled = new Date();
-  scheduled.setHours(hour, 0, 0, 0);
+// `hour` is the user's LOCAL hour (see scheduleUserReminders above) — the
+// old scheduled.setHours(hour, ...) set it as the SERVER's local hour (UTC
+// in production) instead, so a preview reminder the user expects at their
+// own 3pm would carry a timestamp for 3pm UTC. Anchoring off
+// getLocalDayRange's already-correct local-midnight boundary and adding
+// pure millisecond offsets (never calendar-component setters) keeps this
+// correct regardless of what timezone the server itself is running in.
+function getScheduledTime(hour, offsetMinutes = null) {
+  const { start } = getLocalDayRange(offsetMinutes, new Date());
+  let scheduled = new Date(start.getTime() + hour * 60 * 60 * 1000);
   if (scheduled < new Date()) {
-    scheduled.setDate(scheduled.getDate() + 1);
+    scheduled = new Date(scheduled.getTime() + 24 * 60 * 60 * 1000);
   }
   return scheduled.toISOString();
 }

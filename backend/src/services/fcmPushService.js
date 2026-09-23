@@ -11,17 +11,36 @@
  */
 
 import { eq, isNotNull } from 'drizzle-orm';
-import { accountSettingsTable } from '../db/schema.js';
+import { accountSettingsTable, devicesTable } from '../db/schema.js';
 import { getMessaging, isFirebaseReady } from '../config/firebase.js';
+import { getDevicesForUser } from '../utils/deviceRegistry.js';
+import { isCurrentTokenOwner } from '../utils/pushTokenOwnership.js';
 import WittyMessageEngine from './wittyMessageEngine.js';
 
 /**
- * FCM Notification types
- * Maps to user preference keys in accountSettingsTable.notifications JSON
+ * FCM Notification types.
+ *
+ * Values MUST exactly match the preference keys the settings screen writes
+ * to accountSettingsTable.notifications JSON (mobile/app/profile/notifications.jsx's
+ * NOTIFICATION_TYPES config: dailyReminder, hydrationNudges, activityReminders,
+ * moodCheckins, streakProtection, insightDrops, streakCelebrations) — this
+ * object's value is passed straight into sendUserFCMNotification's
+ * `prefs[notificationType] !== false` check. DAILY_REMINDER and
+ * HYDRATION_NUDGE previously held 'food'/'hydration', which never matched
+ * any real preference key, so turning those categories off in the app never
+ * actually stopped the backend from sending them — confirmed via a real
+ * end-to-end regression test (toggleEnforcement.test.js) before this fix.
+ * MOOD_CHECKIN and ACTIVITY_REMINDER previously didn't exist at all;
+ * sendMoodCheckInNotification/sendActivityNudgeNotification borrowed
+ * INSIGHT_DROP/DAILY_REMINDER instead, which had the same effect (and also
+ * corrupted the outgoing push's own data.type field, since this same value
+ * gets embedded there too — see sendFCMNotification).
  */
 export const FCM_NOTIFICATION_TYPES = {
-  DAILY_REMINDER: 'food',
-  HYDRATION_NUDGE: 'hydration',
+  DAILY_REMINDER: 'dailyReminder',
+  HYDRATION_NUDGE: 'hydrationNudges',
+  MOOD_CHECKIN: 'moodCheckins',
+  ACTIVITY_REMINDER: 'activityReminders',
   INSIGHT_DROP: 'insightDrops',          // granular preference key
   STREAK_CELEBRATION: 'streakCelebrations', // granular preference key
   STREAK_AT_RISK: 'streakProtection',    // granular preference key
@@ -79,6 +98,13 @@ export async function sendFCMNotification(fcmToken, notification) {
           sound: 'default',
           badge: notification.badge,
           'mutable-content': 1,
+          // Required for iOS to wake the app's background message handler
+          // for a visible-alert push while backgrounded/killed — without
+          // this, the client's local/remote dedup and delivery-ack logic
+          // (see mobile/services/fcmService.js) never run on iOS when the
+          // app isn't already open, which is the exact scenario they exist
+          // to handle.
+          'content-available': 1,
         },
       },
     },
@@ -180,13 +206,26 @@ export async function sendBatchFCMNotifications(messages) {
 }
 
 /**
- * Send notification to a user via FCM (checks preferences)
+ * Send notification to a user via FCM (checks preferences).
+ *
+ * Device routing:
+ * - `options.deviceId` given → send only to that specific `devices` row
+ *   (used by smartReminderJob's per-device loop, which already decided
+ *   this exact device should get this exact reminder).
+ * - No `deviceId` → fan out to every real `devices` row for this user, or
+ *   fall back to the legacy single-token accountSettingsTable column if
+ *   the user has zero device rows. This keeps every non-reminder-job
+ *   caller (goal-achieved, insight-drop, weekly-summary, correlation) working
+ *   unchanged for both pre- and post-device-model app installs — see
+ *   docs/architecture and deviceRegistry.js for why the fallback exists.
+ *
  * @param {object} db - Database instance
  * @param {string} userId - User ID
  * @param {string} notificationType - Type from FCM_NOTIFICATION_TYPES
  * @param {object} notification - Notification content
+ * @param {{deviceId?: number}} [options]
  */
-export async function sendUserFCMNotification(db, userId, notificationType, notification) {
+export async function sendUserFCMNotification(db, userId, notificationType, notification, options = {}) {
   if (!isFirebaseReady()) {
     console.log(`[FCMService] Firebase not ready - skipping notification for user ${userId}`);
     return { success: false, reason: 'firebase_not_ready' };
@@ -201,38 +240,88 @@ export async function sendUserFCMNotification(db, userId, notificationType, noti
       .from(accountSettingsTable)
       .where(eq(accountSettingsTable.userId, userId));
 
-    if (!settings?.fcmToken) {
-      console.log(`[FCMService] User ${userId} has no FCM token`);
-      return { success: false, reason: 'no_fcm_token' };
-    }
-
-    // Check notification preference (default to enabled)
-    const prefs = settings.notifications || {};
+    const prefs = settings?.notifications || {};
     const isEnabled = prefs[notificationType] !== false;
-
     if (!isEnabled) {
       console.log(`[FCMService] User ${userId} has ${notificationType} disabled`);
       return { success: false, reason: 'preference_disabled' };
     }
 
-    const result = await sendFCMNotification(settings.fcmToken, {
-      ...notification,
-      type: notificationType,
-    });
+    const resolvedTargets = await resolveFCMSendTargets(db, userId, options.deviceId, settings);
 
-    // Clean up invalid token
-    if (result.shouldRemove) {
-      console.log(`[FCMService] Removing invalid FCM token for user ${userId}`);
-      await db
-        .update(accountSettingsTable)
-        .set({ fcmToken: null, fcmTokenUpdatedAt: new Date() })
-        .where(eq(accountSettingsTable.userId, userId));
+    // Authoritative delivery gate: accountSettingsTable/devicesTable rows
+    // resolved above are per-account bookkeeping and can be transiently
+    // stale (this account's own copy of a token another account has since
+    // atomically claimed isn't retroactively corrected until this
+    // account's own next registration). push_token_ownership is checked
+    // fresh, right before dispatch, so a stale resolved target is silently
+    // skipped rather than delivered to someone else's now-owned device.
+    const ownershipChecks = await Promise.all(
+      resolvedTargets.map((t) => isCurrentTokenOwner(db, t.fcmToken, userId))
+    );
+    const targets = resolvedTargets.filter((_, i) => ownershipChecks[i]);
+    const skipped = resolvedTargets.length - targets.length;
+    if (skipped > 0) {
+      console.log(`[FCMService] Skipped ${skipped} target(s) for user ${userId} — token no longer owned by this account`);
     }
 
-    return result;
+    if (targets.length === 0) {
+      console.log(`[FCMService] User ${userId} has no FCM token`);
+      return { success: false, reason: 'no_fcm_token' };
+    }
+
+    const results = await Promise.all(targets.map(async (target) => {
+      const result = await sendFCMNotification(target.fcmToken, {
+        ...notification,
+        type: notificationType,
+      });
+      if (result.shouldRemove) {
+        await clearInvalidFCMToken(db, userId, target);
+      }
+      return result;
+    }));
+
+    // Preserve the single-object shape existing callers (deliveryId cleanup
+    // logic, etc.) already expect when there's exactly one target — which
+    // is every case except an explicit multi-device fan-out.
+    return targets.length === 1 ? results[0] : { success: results.some((r) => r.success), results };
   } catch (error) {
     console.error(`[FCMService] Error sending to user ${userId}:`, error);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Resolves which device(s) to actually send an FCM message to for a user.
+ */
+export async function resolveFCMSendTargets(db, userId, explicitDeviceId, legacySettings) {
+  if (explicitDeviceId != null) {
+    const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, explicitDeviceId));
+    return device?.fcmToken ? [{ deviceRowId: device.id, fcmToken: device.fcmToken }] : [];
+  }
+
+  const devices = await getDevicesForUser(db, userId);
+  const withToken = devices.filter((d) => d.fcmToken);
+  if (withToken.length > 0) {
+    return withToken.map((d) => ({ deviceRowId: d.id, fcmToken: d.fcmToken }));
+  }
+
+  return legacySettings?.fcmToken ? [{ deviceRowId: null, fcmToken: legacySettings.fcmToken }] : [];
+}
+
+async function clearInvalidFCMToken(db, userId, target) {
+  if (target.deviceRowId != null) {
+    console.log(`[FCMService] Removing invalid FCM token for device ${target.deviceRowId} (user ${userId})`);
+    await db
+      .update(devicesTable)
+      .set({ fcmToken: null, fcmTokenUpdatedAt: new Date() })
+      .where(eq(devicesTable.id, target.deviceRowId));
+  } else {
+    console.log(`[FCMService] Removing invalid legacy FCM token for user ${userId}`);
+    await db
+      .update(accountSettingsTable)
+      .set({ fcmToken: null, fcmTokenUpdatedAt: new Date() })
+      .where(eq(accountSettingsTable.userId, userId));
   }
 }
 
@@ -351,16 +440,16 @@ export async function sendGoalAchievedNotification(db, userId, goalType, value, 
 /**
  * Send streak celebration notification with personality for EVERY day
  */
-export async function sendStreakCelebrationNotification(db, userId, streakDays) {
+export async function sendStreakCelebrationNotification(db, userId, streakDays, context = {}) {
   // Get witty message for ANY streak day (not just milestones)
   const message = WittyMessageEngine.getStreakMessage(streakDays);
 
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.STREAK_CELEBRATION, {
     title: message.title,
     body: message.body,
-    data: { streakDays: String(streakDays), screen: 'profile' },
+    data: { streakDays: String(streakDays), screen: 'profile', deliveryId: context.deliveryId },
     channelId: 'insights',
-  });
+  }, { deviceId: context.deviceId });
 }
 
 /**
@@ -457,9 +546,10 @@ export async function sendHydrationNudgeNotification(db, userId, currentMl, goal
       currentMl: String(currentMl),
       goalMl: String(goalMl),
       screen: 'water',
+      deliveryId: context.deliveryId,
     },
     channelId: 'hydration',
-  });
+  }, { deviceId: context.deviceId });
 }
 
 /**
@@ -516,9 +606,9 @@ export async function sendReengagementNotification(db, userId, context = {}) {
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, {
     title: message.title,
     body: message.body,
-    data: { screen: 'dashboard', type: 'reengagement' },
+    data: { screen: 'dashboard', type: 'reengagement', deliveryId: context.deliveryId },
     channelId: 'reminders',
-  });
+  }, { deviceId: context.deviceId });
 }
 
 /**
@@ -539,9 +629,9 @@ export async function sendMealReminderNotification(db, userId, context = {}) {
   return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, {
     title: message.title,
     body: message.body,
-    data: { screen: 'log', type: 'meal_reminder' },
+    data: { screen: 'log', type: 'meal_reminder', deliveryId: context.deliveryId },
     channelId: 'reminders',
-  });
+  }, { deviceId: context.deviceId });
 }
 
 /**
@@ -557,12 +647,12 @@ export async function sendMoodCheckInNotification(db, userId, context = {}) {
     return { success: false, reason: 'no_relevant_message' };
   }
 
-  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.INSIGHT_DROP, {
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.MOOD_CHECKIN, {
     title: message.title,
     body: message.body,
-    data: { screen: 'mood', type: 'mood_checkin' },
+    data: { screen: 'mood', type: 'mood_checkin', deliveryId: context.deliveryId },
     channelId: 'insights',
-  });
+  }, { deviceId: context.deviceId });
 }
 
 /**
@@ -580,12 +670,12 @@ export async function sendActivityNudgeNotification(db, userId, context = {}) {
     return { success: false, reason: 'no_relevant_message' };
   }
 
-  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, {
+  return sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.ACTIVITY_REMINDER, {
     title: message.title,
     body: message.body,
-    data: { screen: 'activity', type: 'activity_nudge' },
+    data: { screen: 'activity', type: 'activity_nudge', deliveryId: context.deliveryId },
     channelId: 'reminders',
-  });
+  }, { deviceId: context.deviceId });
 }
 
 export default {

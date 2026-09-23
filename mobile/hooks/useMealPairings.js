@@ -49,6 +49,27 @@ export function useMealPairings({ meal, userGoals, dailyTotals, dietary, enabled
   const macros = meal?.macros;
   const mealName = meal?.name;
 
+  // Primitives extracted from macros/userGoals/dailyTotals for the effect's
+  // dependency array below. Both MealLoggedCard.jsx (which builds `macros`)
+  // and log.js (which builds `dailyGoals`, passed through as `userGoals`)
+  // construct fresh object literals on every render — depending on the
+  // objects themselves made this effect re-fire, and re-POST
+  // /recommendations/pairings, on every re-render of the screen (at least
+  // once guaranteed, ~400ms after mount) rather than only when a value
+  // actually changed. dailyTotals comes from a query result rather than an
+  // inline literal but gets the same treatment for the same reason: a
+  // future caller shouldn't need to know this hook is fragile to how its
+  // props were constructed.
+  const proteinG = macros?.protein_g;
+  const fiberG = macros?.fiber_g;
+  const caloriesKcal = macros?.calories_kcal;
+  const sodiumMg = macros?.sodium_mg;
+  const goalCalories = userGoals?.dailyCalories;
+  const goalProtein = userGoals?.proteinG;
+  const totalProtein = dailyTotals?.totalProtein;
+  const totalCalories = dailyTotals?.totalCalories;
+  const totalFiber = dailyTotals?.totalFiber;
+
   useEffect(() => {
     // No dietary profile means nothing has been screened — show nothing rather
     // than something unscreened. Same rule the local selector applies.
@@ -60,7 +81,12 @@ export function useMealPairings({ meal, userGoals, dailyTotals, dietary, enabled
     let cancelled = false;
 
     const localFallback = () => {
-      const remainingProtein = (userGoals?.dailyProtein || 0) - (dailyTotals?.totalProtein || 0);
+      // userGoals.dailyProtein doesn't exist — the caller's field is
+      // `proteinG` (see log.js's dailyGoals literal) — so this always read
+      // undefined -> 0, making remainingProtein <= 0 always true and the
+      // protein-boost suggestion (line below, remainingProtein > 15) unable
+      // to ever trigger on the offline fallback path.
+      const remainingProtein = (userGoals?.proteinG || 0) - (dailyTotals?.totalProtein || 0);
       const remainingCalories = (userGoals?.dailyCalories || 0) - (dailyTotals?.totalCalories || 0);
       const remainingFiber = 28 - (dailyTotals?.totalFiber || 0);
       const protein = macros.protein_g || 0;
@@ -119,7 +145,14 @@ export function useMealPairings({ meal, userGoals, dailyTotals, dietary, enabled
     })();
 
     return () => { cancelled = true; };
-  }, [macros, mealName, userGoals, dailyTotals, dietary, enabled, meal?.mealType]);
+    // Primitives, not the macros/userGoals/dailyTotals objects — see comment
+    // above. dietary is already memoized by its caller (SmartMealInsights.jsx),
+    // safe to depend on directly. exhaustive-deps wants the literal
+    // expressions used inside the effect body listed verbatim; it can't know
+    // proteinG/fiberG/etc. are equivalent to macros?.protein_g/fiber_g/etc.
+    // — that equivalence is the whole point of this fix (see comment above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proteinG, fiberG, caloriesKcal, sodiumMg, mealName, goalCalories, goalProtein, totalProtein, totalCalories, totalFiber, dietary, enabled, meal?.mealType]);
 
   return { pairings, source };
 }

@@ -21,6 +21,7 @@ import GoalCard from '../../components/onboarding/GoalCard';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { GOALS, ONBOARDING_COPY } from '../../constants/onboardingConfig';
 import { AUTH_COLORS } from '../../components/auth/constants';
+import { deregisterAllPushChannels } from '../../services/fcmService';
 
 const FEATURES = [
   { label: 'Personalized\nNutrition', icon: 'locate', color: '#2C7A53', bg: 'rgba(44, 122, 83, 0.12)' },
@@ -45,6 +46,7 @@ const Step1Screen = () => {
           text: 'Exit',
           style: 'destructive',
           onPress: async () => {
+            await deregisterAllPushChannels().catch(() => {});
             await signOut();
             router.replace('/(auth)/sign-in');
           },

@@ -512,7 +512,15 @@ const generateInsights = (meal, userGoals, historicalData) => {
   // MEAL TIMING INSIGHTS (Enhanced with eating window context)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const hour = new Date().getHours();
+  // meal.loggedAt is when this meal was actually saved — used instead of
+  // "now" so the timing insight reflects when it was eaten, not whenever
+  // this card happens to render. Without it, reopening or re-rendering a
+  // saved meal near/after 10pm could relabel an earlier dinner as a "Late
+  // Night Snack" purely because the CURRENT clock is late, contradicting
+  // the meal's own already-assigned mealType shown elsewhere (e.g. the
+  // Details screen), which is computed once at log time and doesn't drift.
+  const loggedAt = meal.loggedAt ? new Date(meal.loggedAt) : new Date();
+  const hour = loggedAt.getHours();
 
   // Late night eating (affects sleep, digestion, weight)
   if (hour >= 21 && calories > 500) {
@@ -526,11 +534,15 @@ const generateInsights = (meal, userGoals, historicalData) => {
       priority: 2,
     });
   } else if (hour >= 22 && calories > 200) {
+    // Titled to describe the eating window, not to recategorize the meal —
+    // this can legitimately fire for a meal whose own mealType is "Dinner"
+    // (eaten late), and "Late Night Snack" as a title reads as contradicting
+    // that label rather than adding timing context to it.
     insights.push({
       type: 'info',
       category: 'timing',
       icon: 'moon-outline',
-      title: 'Late Night Snack',
+      title: 'Late-Night Eating',
       message: 'Late eating may reduce overnight fat burning.',
       detail: 'Your body naturally shifts to fat-burning mode during sleep; eating late can interrupt this.',
       priority: 4,
@@ -753,7 +765,9 @@ const generateDailyContext = (meal, userGoals, dailyTotals) => {
     ? Math.round((newTotalProtein / userGoals.proteinG) * 100)
     : null;
 
-  const remainingCalories = Math.max(0, userGoals.dailyCalories - newTotalCalories);
+  // Keep this signed so the UI can report the actual amount over target;
+  // clamping to zero made every over-goal state say “0 cal over target”.
+  const remainingCalories = userGoals.dailyCalories - newTotalCalories;
 
   return {
     calories: {
@@ -786,13 +800,15 @@ const detectWeeklyPatterns = (historicalData) => {
   const { weeklyAverage, monthlyTrend, mealTypeAverage } = historicalData;
 
   // Consistency pattern
-  if (weeklyAverage.daysOfData >= 5) {
+  const daysOfData = Math.min(7, Math.max(0, Number(weeklyAverage.daysOfData) || 0));
+
+  if (daysOfData >= 5) {
     patterns.push({
       type: 'positive',
       icon: 'checkmark-circle-outline',
-      message: `Great consistency! Logged ${weeklyAverage.daysOfData} of the last 7 days.`,
+      message: `Great consistency! Logged ${daysOfData} of the last 7 days.`,
     });
-  } else if (weeklyAverage.daysOfData <= 2) {
+  } else if (daysOfData <= 2) {
     patterns.push({
       type: 'info',
       icon: 'calendar-outline',
@@ -890,9 +906,9 @@ const DailyProgressBar = ({ dailyContext }) => {
         />
       </View>
       <Text style={styles.dailyProgressSubtext}>
-        {calories.remaining > 0
-          ? `${calories.remaining} cal remaining today`
-          : `${Math.abs(calories.remaining)} cal over target`}
+        {calories.remaining >= 0
+          ? `${Math.round(calories.remaining)} cal remaining today`
+          : `${Math.round(Math.abs(calories.remaining))} cal over target`}
       </Text>
     </View>
   );
@@ -1101,9 +1117,16 @@ const SmartMealInsights = ({
     [historicalData]
   );
 
-  // Calculate total score from breakdown
-  const totalScore = scoreBreakdown.reduce((sum, item) => sum + item.score, 0);
+  // Stage 8c: the breakdown's own component sum used to be shown as the
+  // big total here — a second, independently-weighted score next to the
+  // real one (this component is rendered on the same post-log screen as
+  // MealLoggedCard, which already shows the trusted meal.healthScore).
+  // The per-factor breakdown rows below are still useful as an
+  // explanation of the score, so they're unchanged — only the headline
+  // number now matches the trusted value instead of its own separate sum.
+  const breakdownSum = scoreBreakdown.reduce((sum, item) => sum + item.score, 0);
   const maxScore = scoreBreakdown.reduce((sum, item) => sum + item.maxScore, 0);
+  const totalScore = meal?.healthScore > 0 ? Math.round(meal.healthScore) : breakdownSum;
 
   const toggleInsight = async (index) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

@@ -13,9 +13,9 @@ import { createClient } from 'redis';
 import OpenAI, { toFile } from 'openai';
 import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
-import { buildImageAnalysisPrompt } from './prompts/nutritionAnalysis.js';
+import { buildImageAnalysisPrompt, QUANTITY_FROM_REPETITION_GUIDANCE, UNRECOGNIZED_FOOD_GUIDANCE } from './prompts/nutritionAnalysis.js';
 import { normalizeNutritionAnalysis, normalizeMultiItemAnalysis, hasRequiredFields, calculateDataQuality } from './schemas/nutritionSchema.js';
-import { canonicalize, validateExtraction } from '../canonicalIngredients.js';
+import { canonicalize, validateExtraction, isComplexDishInput } from '../canonicalIngredients.js';
 
 class OpenAIClient extends BaseApiClient {
   constructor() {
@@ -258,6 +258,20 @@ class OpenAIClient extends BaseApiClient {
           return `chat:${model}:${systemId}:${userContent}`;
         })()
 
+    // Cache lookup/write is handled here, not passed into this.request(), so
+    // that only a response whose content actually parses as JSON gets
+    // cached. this.request() only sees "did the HTTP call succeed" — a 200
+    // with a truncated/malformed body (e.g. hitting a token or length limit
+    // mid-object) counts as success at that layer, and caching it there
+    // permanently freezes the broken response: every subsequent call for
+    // the same input — including an immediate retry-on-failure — would
+    // become a guaranteed cache HIT replaying the identical unparseable
+    // string for the full cache TTL, rather than a fresh model call.
+    if (cacheKey) {
+      const cached = this._getFromCache(cacheKey);
+      if (cached) return cached;
+    }
+
     try {
       const data = await this.request(
         `${this.baseURL}/chat/completions`,
@@ -268,8 +282,7 @@ class OpenAIClient extends BaseApiClient {
             'Authorization': `Bearer ${this.apiKey}`,
           },
           body: JSON.stringify(requestBody),
-        },
-        cacheKey
+        }
       );
 
       // Extract response
@@ -288,6 +301,10 @@ class OpenAIClient extends BaseApiClient {
         console.error('[OpenAI] JSON parse failed:', parseError.message);
         console.error('[OpenAI] Raw content:', content.substring(0, 500));
         throw new Error(`OpenAI returned invalid JSON: ${parseError.message}`);
+      }
+
+      if (cacheKey) {
+        this._saveToCache(cacheKey, jsonResponse);
       }
 
       // Track usage and costs
@@ -346,6 +363,7 @@ CRITICAL RULES:
 8. Treat named dishes as single items (e.g., "chicken curry", "beef tacos", "pad thai")
 9. Split into multiple items when user lists separate foods (commas, "and", "with")
 10. NEVER hallucinate or guess different foods - use EXACTLY what the user wrote
+11. ${QUANTITY_FROM_REPETITION_GUIDANCE}
 
 Examples:
 - "five eggs" → {"name": "eggs", "quantity": 5, "unit": "serving"}
@@ -485,7 +503,16 @@ Return JSON: {"foods": [{"name": "...", "quantity": N, "unit": "..."}]}`,
     const simpleFoods = /\b(egg|eggs|rice|bread|milk|banana|apple|chicken breast|water|toast|cereal|yogurt|cheese|butter|oil)\b/i;
 
     if (regionalDishes.test(text)) return 'regional';
-    if (simpleFoods.test(text)) return 'simple';
+    // A recognized simple-food word anywhere in the text used to be enough
+    // to classify the WHOLE utterance as 'simple' (cheap model, 400-token
+    // cap) — so "chole with rice" got treated as simple because "rice"
+    // matched, even though "chole" is an entirely different, unrecognized
+    // dish sitting right next to it that then got silently dropped when the
+    // response truncated. isComplexDishInput already does the general,
+    // non-whitelist check for "is there a dish name here the local
+    // dictionary doesn't recognize" — defer to it instead of keeping a
+    // second, independently-drifting judgment call.
+    if (simpleFoods.test(text) && !isComplexDishInput(text)) return 'simple';
     const wordCount = text.split(/\s+/).length;
     return wordCount > 3 ? 'complex' : 'simple';
   }
@@ -557,11 +584,24 @@ Rules:
 1. CRITICAL: Split multiple foods into SEPARATE items in the foods array
    - "5 eggs and 2 toast" → foods: [{name: "eggs", quantity: 5}, {name: "toast", quantity: 2}]
    - "Indian vadas and chicken curry" → foods: [{name: "Indian vadas"}, {name: "chicken curry"}]
-   - Split on: "and", commas, "with" (when listing separate items)
+   - "with" often introduces a distinct accompaniment, not an ingredient of
+     the main dish — split these too: "biryani with raita" → foods:
+     [{name: "vegetable biryani"}, {name: "raita"}]; "dosa with sambar and
+     chutney" → three separate items. Only treat "with X" as part of the
+     SAME item when X is genuinely mixed into it, not served alongside it
+     (e.g. "rice with butter" stays one item — the butter isn't a separate
+     component on the plate).
+   - Split on: "and", commas, "with" (when listing separate items or a
+     named accompaniment/side)
 2. Extract food name, quantity, and unit. Use meal context to infer typical portion sizes.
+2a. ${QUANTITY_FROM_REPETITION_GUIDANCE}
+    Set "quantitySource" to "stated" only when you found that exact number
+    word/counting phrase; otherwise set it to "assumed" (this applies even
+    when quantity is 1 by default — 1 is still an assumption unless the
+    text actually says "one").
 3. Account for regional cooking methods: South Indian uses more oil/coconut, American uses butter/cream
 4. Estimate nutrition for the SPECIFIED quantity and cooking method
-5. Include macros: calories, protein (g), carbs (g), fat (g)
+5. Include macros: calories, protein (g), carbs (g), fat (g), fiber (g), sugar (g), sodium (mg). Estimate these too — do not omit them.
 6. Include detailed INGREDIENTS breakdown (what makes up this dish)
 7. Include key micros if significant: iron (mg), calcium (mg), vitaminC (mg), vitaminA (µg), potassium (mg)
 8. Calculate Health Score (0-100) and NutriScore (A-E) based on:
@@ -571,14 +611,17 @@ Rules:
 9. Identify the "cookingMethod" (fried, steamed, grilled, boiled, baked, raw)
 10. Identify the "cuisine" (South Indian, American, Italian, etc.)
 11. Provide a short analysis note explaining the score
+12. ${UNRECOGNIZED_FOOD_GUIDANCE}
 
 Return JSON:
 {
   "foods": [
     {
       "name": "food name",
+      "recognized": true | false,
       "quantity": number,
       "unit": "unit",
+      "quantitySource": "stated" | "assumed",
       "cuisine": "South Indian" | "American" | "Other",
       "cookingMethod": "fried" | "steamed" | "grilled" | "boiled" | "baked" | "raw",
       "nutrition": {
@@ -586,9 +629,12 @@ Return JSON:
         "protein": number,
         "carbs": number,
         "fat": number,
+        "fiber": number,
+        "sugar": number,
+        "sodium": number,
         "micros": { "calcium": { "value": 10, "unit": "mg" }, "iron": { "value": 2, "unit": "mg" } }
       },
-      "🆕 ingredients": [
+      "ingredients": [
         { "name": "rice", "amount": "1 cup", "calories": 200, "protein": 4, "carbs": 45, "fat": 0 },
         { "name": "dal", "amount": "0.5 cup", "calories": 115, "protein": 9, "carbs": 20, "fat": 0 }
       ],
@@ -605,25 +651,73 @@ Return JSON:
       },
     ];
 
+    // A flat 1500-token ceiling was reproducibly truncating mid-response for
+    // any non-simple query naming 2+ items (e.g. "chole with rice") — each
+    // item's full nutrition/micros/ingredients/analysis breakdown is dense
+    // enough that even one extra item pushes past the limit. Scale the
+    // budget by a cheap proxy for item count (comma/"and"/"with" splits)
+    // instead of raising one flat number, which would just move the same
+    // failure to a 3-item meal.
+    const likelyItemCount = complexity === 'simple'
+      ? 1
+      : query.split(/,| and | with /i).filter((s) => s.trim().length > 0).length;
+    const maxTokens = complexity === 'simple'
+      ? 400
+      : Math.min(1500 + Math.max(0, likelyItemCount - 1) * 800, 3200);
+
     try {
       const json = await this.chatCompletionJSON(messages, {
         model, // 🆕 DYNAMIC MODEL SELECTION: Uses detectDishComplexity + chooseModel
         temperature: 0.2,
-        maxTokens: complexity === 'simple' ? 400 : 1500, // Regional/complex foods with ingredients need more tokens
+        maxTokens,
       });
 
-      if (!json.foods || !Array.isArray(json.foods)) {
-        return [];
+      // A genuinely-parsed response whose `foods` field is missing or not
+      // an array is a SHAPE mismatch, not the model saying "no food here" —
+      // those are different failure modes and must not be reported to the
+      // user identically. (A parse failure inside chatCompletionJSON itself
+      // is already re-thrown rather than swallowed, for the same reason —
+      // see its own comment. This closes the equivalent gap one level up:
+      // valid JSON that just doesn't have the field we asked for.)
+      // Array.isArray(json.foods) && length === 0 is the one legitimate
+      // "AI looked and found nothing" case — that alone still returns [].
+      if (!json.foods) {
+        const err = new Error('AI response missing "foods" field');
+        err.code = 'MALFORMED_AI_RESPONSE';
+        throw err;
+      }
+      if (!Array.isArray(json.foods)) {
+        const err = new Error(`AI response "foods" field was ${typeof json.foods}, not an array`);
+        err.code = 'MALFORMED_AI_RESPONSE';
+        throw err;
       }
 
       // Map to application structure
       const results = json.foods.map(item => ({
         name: item.name,
+        // Defaults to true (recognized) — a model that omits the field
+        // entirely (e.g. an older cached response, or a schema deviation)
+        // should not retroactively become "unrecognized" for every food;
+        // only an explicit false blocks the item for review.
+        recognized: item.recognized !== false,
         quantity: item.quantity || 1,
         unit: item.unit || 'serving',
+        // Whether the model found an explicit count/amount for this food in
+        // the text, or defaulted to a single serving — see rule 2a above.
+        // Not yet surfaced in the mobile UI (existing QuantityAdjuster
+        // already lets the user freely correct any quantity regardless);
+        // carried through so a later pass can build a proactive "confirm
+        // this" indicator without another backend change.
+        quantitySource: item.quantitySource === 'stated' ? 'stated' : 'assumed',
         confidence: 0.8,
         notes: "AI Estimated Nutrition",
         source: 'ai_estimate', // EXPLICIT DISCLAIMER
+        // The prompt above asks for "nutrition for the SPECIFIED quantity"
+        // (rule 4) — item.nutrition is already the total for `quantity`, not
+        // a per-unit value. unifiedResponseBuilder.js's buildFoodItem
+        // defaults to treating nutrition as per-unit and multiplying by
+        // quantity again, which silently inflated e.g. "3 eggs" by 3x.
+        nutritionIsPerUnit: false,
         // Construct a synthetic canonical object with the estimated nutrition
         canonical: {
           canonical: item.name,
@@ -653,7 +747,19 @@ Return JSON:
 
     } catch (error) {
       console.error(`[OpenAI] Nutrition estimation failed:`, error.message);
-      return [];
+      // Was `return []` — indistinguishable from the model genuinely
+      // finding no food in the text. voiceLog.js's callers then treated a
+      // truncated/malformed response (e.g. "Unterminated string in JSON",
+      // seen in practice on longer transcripts with corrections/exclusions
+      // hitting the token budget) as "couldn't identify any food, try
+      // rewording" — telling the user their input was the problem when a
+      // plain retry of the same text would likely succeed. Throwing here
+      // lets voiceLog.js's existing catch-and-retry-once fallback run (it
+      // already calls this function a second time on any failure), and if
+      // that also fails, its outer error handler returns a real "please
+      // try again" response instead of a misleadingly confident zero-items
+      // result.
+      throw error;
     }
   }
 
@@ -780,7 +886,14 @@ Return JSON:
           {
             type: 'image_url',
             image_url: {
-              url: `data:image/jpeg;base64,${base64Image}`,
+              // Every current caller already sends a full `data:image/...;base64,`
+              // URI — imageAnalysisSchema (middleware/validation.js) enforces that
+              // prefix on the way in. Re-wrapping it here doubled the prefix
+              // (`data:image/jpeg;base64,data:image/jpeg;base64,...`), which OpenAI
+              // rejects as a malformed image_url with a bare HTTP 400 — silently
+              // breaking every real photo analysis since the schema started
+              // requiring the prefix.
+              url: base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`,
             },
           },
         ],
@@ -790,7 +903,13 @@ Return JSON:
     try {
       const json = await this.chatCompletionJSON(messages, {
         model: visionModel,
-        maxTokens: highAccuracy ? 2000 : 1000, // Increased for multi-item + per-ingredient breakdown
+        // A real multi-item photo (5-6 foods, each with macros + several
+        // micros) runs well past 2000 tokens and gets cut off mid-JSON —
+        // confirmed live against a real bowl photo, which failed with
+        // "Unterminated string in JSON" at ~6200 chars (~1 item's worth) in.
+        // 4096 is gpt-4o's completion ceiling, so this is the most headroom
+        // available rather than an arbitrary guess.
+        maxTokens: highAccuracy ? 4096 : 1000,
         temperature: 0.2, // Lower temperature for more consistent quality
       });
 

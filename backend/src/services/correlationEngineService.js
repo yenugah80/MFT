@@ -86,7 +86,7 @@ const CORRELATION_CONFIG = {
  * Calculate scaled confidence based on sample size
  * Returns higher confidence for larger sample sizes
  */
-function getScaledConfidence(occurrences, baseConfidence) {
+export function getScaledConfidence(occurrences, baseConfidence) {
   const { SAMPLE_SIZE_SCALING, MIN_OCCURRENCES } = CORRELATION_CONFIG;
 
   if (occurrences < MIN_OCCURRENCES) {
@@ -109,7 +109,7 @@ function getScaledConfidence(occurrences, baseConfidence) {
 /**
  * Get the previous day's date key (YYYY-MM-DD format)
  */
-function getPreviousDay(dateKey) {
+export function getPreviousDay(dateKey) {
   if (!dateKey) return null;
   const date = new Date(dateKey);
   date.setDate(date.getDate() - 1);
@@ -130,7 +130,7 @@ function getPreviousDay(dateKey) {
  * @param {Object} params.additionalFields - Any extra fields specific to this correlation
  * @returns {Object} Standardized evidence JSON
  */
-function buildStandardizedEvidence({
+export function buildStandardizedEvidence({
   examples = [],
   avgValueWith = null,
   avgValueWithout = null,
@@ -211,7 +211,7 @@ function buildStandardizedEvidence({
 /**
  * Check if user has sufficient data for correlation analysis
  */
-function hasInsufficientData(foodLogs, moodLogs, waterLogs) {
+export function hasInsufficientData(foodLogs, moodLogs, waterLogs) {
   const { MIN_FOOD_LOGS, MIN_MOOD_LOGS, MIN_WATER_LOGS } = CORRELATION_CONFIG;
 
   return {
@@ -328,7 +328,7 @@ function extractWaterSignals(waterLog) {
 /**
  * Map mood category to valence (-1 to 1)
  */
-function mapMoodToValence(mood) {
+export function mapMoodToValence(mood) {
   const moodMap = {
     happy: 1.0,
     energized: 0.8,
@@ -402,7 +402,7 @@ function detectHighNovaMoodCrash(foodSignals, moodSignals, windowHours = 4) {
  * WHEN: Same day, cumulative effect
  * HOW AFFECTS: Energy crashes, mood negativity, focus issues
  */
-function detectDehydrationFatigue(dailyWaterTotal, moodSignals, hydrationGoal) {
+export function detectDehydrationFatigue(dailyWaterTotal, moodSignals, hydrationGoal) {
   if (!moodSignals) return null;
 
   const hydrationDeficit = Math.max(0, 1 - (dailyWaterTotal / hydrationGoal));
@@ -433,7 +433,7 @@ function detectDehydrationFatigue(dailyWaterTotal, moodSignals, hydrationGoal) {
  * WHEN: Same day or 4h window
  * HOW AFFECTS: Nutrition consistency, energy, recovery
  */
-function detectStressEatingPattern(stressIntensity, mealCount, expectedMeals, calorieDeviation) {
+export function detectStressEatingPattern(stressIntensity, mealCount, expectedMeals, calorieDeviation) {
   if (stressIntensity < 6) return null; // Only detect if high stress (6+/10)
 
   const isMealSkipping = mealCount < expectedMeals - 1;
@@ -906,7 +906,12 @@ function detectDailyHydrationMoodStability(dailyWaterTotal, dayMoodLogs, hydrati
       evidence: {
         dayKey,
         avgHydration: Math.round(dailyWaterTotal * 10) / 10, // Used by suggestion generator
-        goalPercent: Math.round(hydrationPercent),
+        // Named to match the sibling dehydration_mood_instability rule
+        // below (hydrationPercent, not goalPercent) — the mismatch meant
+        // hydration_mood_stability_positive's consumer (this file, ~line
+        // 2263) always read undefined here, rendering "NaN% of goal" in
+        // production text.
+        hydrationPercent: Math.round(hydrationPercent),
         moodBoost: moodBoost > 0 ? moodBoost : 1,
         moodLogCount: dayMoodLogs.length,
         energyStability: Math.round(energyStability * 100) / 100,
@@ -1628,7 +1633,7 @@ function detectWeekendPatternShift(allFoodLogs, windowDays) {
 /**
  * Calculate confidence based on pattern strength, occurrence count, and confounders
  */
-function calculateConfidence(occurrences, baseConfidence, confounderPenalties) {
+export function calculateConfidence(occurrences, baseConfidence, confounderPenalties) {
   // Base confidence from occurrence count
   let confidence = Math.min(occurrences / 3, 1.0) * baseConfidence;
 
@@ -1645,7 +1650,7 @@ function calculateConfidence(occurrences, baseConfidence, confounderPenalties) {
 /**
  * Determine health impact severity based on affected domains and frequency
  */
-function determineHealthImpactSeverity(affectedDomains, occurrences, isPositive = false) {
+export function determineHealthImpactSeverity(affectedDomains, occurrences, isPositive = false) {
   if (isPositive) return 'positive';
 
   const severityScore = affectedDomains.length + (occurrences >= 3 ? 1 : 0);
@@ -1780,7 +1785,9 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
             AND logged_at <= ${now.toISOString()}
           ORDER BY logged_at
         `);
-        return result.rows || [];
+        // db.execute() returns the row array directly on this driver, not
+        // { rows: [...] } — see gamificationRewardService.js.
+        return result || [];
       } catch (err) {
         // Table may not exist - return empty array
         console.log('[Correlation Engine] activity_log not available:', err.message);
@@ -2258,7 +2265,12 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
       occurrences: matches.length,
       healthImpactSeverity: 'positive',
       affectedDomains: ['mood_stability', 'energy', 'irritability'],
-      expectedOutcome: `On days you drink enough water (${Math.round(matches.reduce((s, m) => s + m.evidence.hydrationPercent, 0) / matches.length)}% of goal), your mood stays more stable with ${Math.round((1 - matches.reduce((s, m) => s + m.evidence.irritabilityRate, 0) / matches.length / 100) * 100)}% less irritability. Keep it up!`,
+      // evidence.irritabilityRate is already stored as a 0-100 percentage
+      // (see the rule above, Math.round(irritabilityRate * 100)) — dividing
+      // it by 100 again here treated it as 0-1, so (1 - tinyFraction)*100
+      // rounded to ~100% on essentially every occurrence regardless of the
+      // real value. Report the measured rate directly instead.
+      expectedOutcome: `On days you drink enough water (${Math.round(matches.reduce((s, m) => s + m.evidence.hydrationPercent, 0) / matches.length)}% of goal), your mood stays more stable with only ${Math.round(matches.reduce((s, m) => s + m.evidence.irritabilityRate, 0) / matches.length)}% irritability. Keep it up!`,
       lastObservedDate: matches[matches.length - 1].evidence.dayKey,
       firstObservedDate: matches[0].evidence.dayKey,
       isActive: true,
@@ -2345,7 +2357,7 @@ async function computeWindowCorrelations(userId, windowDays, windowType, hydrati
   }
 
   if (proteinBreakfastMatches.length >= 2) {
-    const avgProtein = proteinBreakfastMatches.reduce((s, m) => s + m.evidence.breakfastProtein, 0) / proteinBreakfastMatches.length;
+    const avgProtein = proteinBreakfastMatches.reduce((s, m) => s + m.evidence.proteinGrams, 0) / proteinBreakfastMatches.length;
     correlations.push({
       correlationType: 'meal_timing_mood',
       ruleName: 'protein_breakfast_sustained_energy',

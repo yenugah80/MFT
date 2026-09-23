@@ -27,7 +27,7 @@ import { useFoodLog } from "../hooks/useFoodLog";
 import { useActivityLog } from "../hooks/useActivityLog";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useOrchestrator, useCorrelationFeedback } from "../hooks/useOrchestrator";
-import { useWellnessIntelligence } from "../hooks/useWellnessIntelligence";
+import useModalNavigation from "../hooks/useModalNavigation";
 import { useNotification } from "../providers/NotificationProvider";
 import { useProfileContext } from "../providers/ProfileProvider";
 import { useTheme } from "../providers/ThemeProvider";
@@ -38,7 +38,6 @@ import ThemeSettingsModal from "./ThemeSettingsModal";
 import MoodInsightCard from "./MoodTracker/MoodInsightCard";
 import MoodLogger from "./MoodLogger";
 import DashboardSkeleton from "./dashboard/DashboardSkeleton";
-import FloatingActionButton from "./FloatingActionButton";
 import StreakSavedModal from "./dashboard/StreakSavedModal";
 import StreakRestoreModal from "./dashboard/StreakRestoreModal";
 // Snapchat-style streak components (floating banner)
@@ -229,6 +228,10 @@ export default function DashboardContent() {
   const [streakRestoreChecked, setStreakRestoreChecked] = useState(false);
   const notify = useNotification();
   const router = useRouter();
+  const {
+    navigateAfterModalClose,
+    handleModalDismiss,
+  } = useModalNavigation(router);
   const { user } = useUser();
   const { theme, colors } = useTheme();
   const queryClient = useQueryClient();
@@ -312,22 +315,6 @@ export default function DashboardContent() {
   // Behavioral Health Intelligence - single fetch point
   const { data: orchestratorData, isLoading: orchestratorLoading } = useOrchestrator();
   const { mutate: sendCorrelationFeedback } = useCorrelationFeedback();
-
-  // Wellness Intelligence - Holistic wellness storytelling (uses summary for quick load)
-  const {
-    wellness: wellnessIntelligence,
-    wellnessScore: apiWellnessScore,
-    recoveryScore,
-    emoji: wellnessEmoji,
-    headline: wellnessHeadline,
-    flags: wellnessFlags,
-    narrative: wellnessNarrative,
-    guidance: wellnessGuidance,
-    correlations: wellnessCorrelations,
-    hasData: hasWellnessData,
-    isLoading: wellnessIntelligenceLoading,
-    prefetchFull: prefetchWellnessDetails,
-  } = useWellnessIntelligence({ enabled: true, includeSummary: true });
 
   useEffect(() => {
     let isActive = true;
@@ -1417,12 +1404,12 @@ export default function DashboardContent() {
       >
         <ThemeTransition>
           <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
+            style={styles.scrollView}
+            contentContainerStyle={styles.content}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
         {/* MINIMAL DASHBOARD HEADER - Headspace/Calm pattern */}
         {/* Invitation, not status report - no stats in greeting */}
         {/* Single tappable nudge with smart routing */}
@@ -1462,8 +1449,25 @@ export default function DashboardContent() {
                 <Ionicons name="time-outline" size={20} color={BRAND.primary} />
               </View>
               <View style={styles.yesterdayBannerText}>
-                <Text style={styles.yesterdayBannerTitle}>Showing yesterday&apos;s snapshot</Text>
-                <Text style={styles.yesterdayBannerSubtitle}>Tap to start logging today</Text>
+                {/* Only the stats above this banner (MinimalDashboardHeader)
+                    actually use the fallback-day data — the Wellness
+                    Score card below deliberately shows its own true "nothing
+                    logged today" empty state (see isYesterdayFallback in
+                    WellnessScoreCard) rather than a score computed from a
+                    prior day. The old copy ("Showing yesterday's snapshot")
+                    read as if that applied to the whole page, directly
+                    contradicting the empty state a few cards down.
+                    The backend's fallback can now reach further back than
+                    one day (data?.yesterday.daysAgo) when yesterday was also
+                    empty — the subtitle names the actual day shown instead
+                    of always claiming "yesterday" for what could be data
+                    from several days ago. */}
+                <Text style={styles.yesterdayBannerTitle}>Nothing logged yet today</Text>
+                <Text style={styles.yesterdayBannerSubtitle}>
+                  {data.yesterday.daysAgo === 1
+                    ? "Yesterday's numbers shown above — log today to update your score"
+                    : `Your last logged day (${new Date(data.yesterday.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}) shown above — log today to update your score`}
+                </Text>
               </View>
               <Ionicons name="add-circle" size={28} color={BRAND.primary} />
             </View>
@@ -1666,9 +1670,9 @@ export default function DashboardContent() {
           hydrationLastLoggedAt={hydrationLastLoggedAt}
           hydrationCelebratedKey={hydrationCelebratedKey}
           onCelebrateHydration={handleHydrationCelebration}
-          onOpenMoodInsights={() => router.push('/analytics')}
+          onOpenMoodInsights={() => router.push({ pathname: '/analytics', params: { domain: 'mood' } })}
           onOpenFullMoodLogger={() => setDashMoodModalVisible(true)}
-          onViewMoodHistory={() => router.push('/analytics')}
+          onViewMoodHistory={() => router.push('/history/mood')}
           onOpenHydrationTracker={() => router.push('/(tabs)/log?focus=hydration')}
           onViewHydrationHistory={() => router.push('/analytics/hydration')}
           moodInsights={moodInsightsData}
@@ -1931,14 +1935,11 @@ export default function DashboardContent() {
         visible={dashMoodModalVisible}
         onClose={() => setDashMoodModalVisible(false)}
         onSuccess={handleMoodLogged}
-      />
-
-      {/* Floating Action Button - Quick Actions */}
-      <FloatingActionButton
-        currentWater={parseLiters(today?.waterIntakeLiters || 0)}
-        waterGoal={parseGoal(goals?.waterLiters, 2.0, 0.5, 10)}
-        onWaterLogged={() => refetch()}
-        onMoodLogged={handleMoodLogged}
+        onViewHistory={() => navigateAfterModalClose(
+          () => setDashMoodModalVisible(false),
+          '/history/mood',
+        )}
+        onDismiss={handleModalDismiss}
       />
 
       {/* Recommendation Detail Modal */}
@@ -2071,7 +2072,10 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING[5],
-    paddingBottom: SPACING[28],
+    // The FAB now leaves before the final controls reach it, so only normal
+    // page-ending rhythm is required here. The tab navigator already owns its
+    // safe-area height outside this scroll viewport.
+    paddingBottom: SPACING[6],
   },
   // View Your Progress - Prominent link to Analytics
   progressLinkCard: {

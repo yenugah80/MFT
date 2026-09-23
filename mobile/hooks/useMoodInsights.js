@@ -34,6 +34,24 @@ export const useMoodInsights = ({ windowDays = DEFAULT_WINDOW_DAYS, trendDays = 
 };
 
 /**
+ * Raw, range-scoped mood entries for the dedicated history screen.
+ * Kept separate from aggregateMoodInsights because that utility converts
+ * negative-mood intensity into a wellbeing score for charts; history must
+ * show the exact intensity the user originally logged.
+ */
+export const useMoodHistory = (days = DEFAULT_WINDOW_DAYS) => {
+  return useQuery({
+    queryKey: ['moodHistory', days],
+    queryFn: async () => {
+      const response = await apiClient.get(buildHistoryUrl(days));
+      return Array.isArray(response) ? response : [];
+    },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+};
+
+/**
  * useMoodTrends - Alias for useMoodInsights with period-based configuration
  * @param {Object} options - { period: 'week' | 'month' | 'quarter' }
  */

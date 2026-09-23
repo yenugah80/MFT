@@ -10,6 +10,8 @@
 
 import { db } from '../config/db.js';
 import { eq, gte, desc, and } from 'drizzle-orm';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
+import { getDayKey } from '../utils/timezone.js';
 import {
   moodLogTable,
   activityLogTable,
@@ -27,7 +29,7 @@ import {
  * @returns {Object} Comprehensive user state across all wellness domains
  */
 export async function getUnifiedIntelligence(userId, options = {}) {
-  const { lookbackDays = 7 } = options;
+  const { lookbackDays = 7, offsetMinutes = 0 } = options;
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - lookbackDays);
 
@@ -52,7 +54,7 @@ export async function getUnifiedIntelligence(userId, options = {}) {
     // Calculate domain-specific insights
     const moodInsights = analyzeMoodPatterns(moodLogs);
     const activityInsights = analyzeActivityPatterns(activityLogs);
-    const hydrationInsights = analyzeHydrationPatterns(waterLogs);
+    const hydrationInsights = analyzeHydrationPatterns(waterLogs, offsetMinutes);
     const sleepInsights = analyzeSleepPatterns(sleepLogs);
     const stressInsights = analyzeStressPatterns(stressLogs);
     const foodInsights = analyzeFoodPatterns(foodLogs);
@@ -397,20 +399,32 @@ function analyzeActivityPatterns(activityLogs) {
   };
 }
 
-function analyzeHydrationPatterns(waterLogs) {
+function analyzeHydrationPatterns(waterLogs, offsetMinutes = 0) {
   if (!waterLogs.length) {
     return { hasData: false, isDehydrated: false };
   }
 
-  const today = new Date().toDateString();
-  const todayLogs = waterLogs.filter(l => new Date(l.loggedAt).toDateString() === today);
-  const todayMl = todayLogs.reduce((sum, l) => sum + (l.amountMl || 0), 0);
+  // water_log has no `loggedAt` column (that's activity_log's field) or
+  // `amountMl` (it's `amountLiters`/`hydrationLiters`, in litres). Reading
+  // either as-is means new Date(undefined) → Invalid Date, so `todayLogs`
+  // was always empty and this returned todayMl:0 / isDehydrated:true for
+  // every user regardless of real data — since Aug 2026 across every route
+  // that calls getUnifiedIntelligence (recommendations, /intelligence/unified,
+  // /wellness/intelligence, /wellness/summary, /wellness/narrative).
+  const todayKey = getDayKey(new Date(), offsetMinutes);
+  const todayLogs = waterLogs.filter(
+    (l) => getDayKey(new Date(l.loggedDate), offsetMinutes) === todayKey
+  );
+  const todayMl = todayLogs.reduce(
+    (sum, l) => sum + parseFloat(l.hydrationLiters ?? l.amountLiters ?? 0) * 1000,
+    0
+  );
 
-  const goalMl = 2500; // Default goal
+  const goalMl = DEFAULT_WATER_GOAL_LITERS * 1000;
   const percentOfGoal = Math.round((todayMl / goalMl) * 100);
 
   // Detect persona based on patterns
-  const hourlyDistribution = getHourlyDistribution(waterLogs);
+  const hourlyDistribution = getHourlyDistribution(waterLogs, offsetMinutes);
   const persona = detectHydrationPersona(hourlyDistribution, waterLogs);
 
   return {
@@ -925,10 +939,16 @@ function getRecoveryRecommendation(score) {
   return 'Rest day - focus on recovery nutrition';
 }
 
-function getHourlyDistribution(waterLogs) {
+function getHourlyDistribution(waterLogs, offsetMinutes = 0) {
   const hourCounts = {};
+  const offsetMs = offsetMinutes * 60 * 1000;
   waterLogs.forEach(l => {
-    const hour = new Date(l.loggedAt).getHours();
+    // Same loggedAt→loggedDate fix as analyzeHydrationPatterns above: with the
+    // wrong field, `new Date(undefined).getHours()` is NaN, so every log piled
+    // into a single "NaN" bucket and morningCount/eveningCount below were
+    // always 0 — detectHydrationPersona fell through to the same
+    // misclassification for every user.
+    const hour = new Date(new Date(l.loggedDate).getTime() - offsetMs).getUTCHours();
     hourCounts[hour] = (hourCounts[hour] || 0) + 1;
   });
 

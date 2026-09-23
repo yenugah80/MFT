@@ -30,12 +30,17 @@ import {
 import activityAnalyticsService from '../services/activityAnalyticsService.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
-import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
+import { parseTimezoneOffsetMinutes, getDayKey, getLocalWeekRange } from '../utils/timezone.js';
 import { getActivityIntelligence } from '../services/activityRecommendationEngine.js';
 import { requireOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
 import { ensureActivityLogTableShape, ensureRecoverySnapshotsTable } from '../utils/schemaGuards.js';
 import { invalidateUserSignals } from '../services/userSignalCacheService.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
+import { invalidateActivityAIRecsCache } from '../services/activityAnalyticsService.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -213,6 +218,9 @@ router.post('/log', async (req, res) => {
 
     // Clear pattern cache for this user (new data invalidates cached patterns)
     clearPatternCache(userId);
+    invalidateActivityAIRecsCache(userId).catch((err) =>
+      console.error('[Activity] AI recs cache invalidation failed (non-fatal):', err)
+    );
 
     res.json({
       success: true,
@@ -254,9 +262,7 @@ router.get('/today', async (req, res) => {
     const summary = getActivitySummary(activities);
 
     // Get weekly progress
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
-    weekStart.setHours(0, 0, 0, 0);
+    const { start: weekStart } = getLocalWeekRange(offsetMinutes);
 
     const weeklyActivities = await db
       .select({
@@ -273,6 +279,22 @@ router.get('/today', async (req, res) => {
     const weeklyMinutes = parseInt(weeklyActivities[0]?.totalMinutes) || 0;
     const weeklyProgress = getWeeklyProgress(weeklyMinutes);
 
+    // Domain streak, not the account-wide gamification streak. dayKey is
+    // written in the user's local timezone when each activity is logged.
+    const activityDays = await db
+      .selectDistinct({ dayKey: activityLogTable.dayKey })
+      .from(activityLogTable)
+      .where(eq(activityLogTable.userId, userId))
+      .orderBy(desc(activityLogTable.dayKey));
+    const loggedDays = new Set(activityDays.map((row) => row.dayKey).filter(Boolean));
+    const cursor = new Date(`${today}T00:00:00.000Z`);
+    if (!loggedDays.has(today)) cursor.setUTCDate(cursor.getUTCDate() - 1);
+    let currentActivityStreak = 0;
+    while (loggedDays.has(cursor.toISOString().slice(0, 10))) {
+      currentActivityStreak += 1;
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+
     res.json({
       success: true,
       today: {
@@ -281,6 +303,7 @@ router.get('/today', async (req, res) => {
       },
       activities,
       weeklyProgress,
+      streak: { current: currentActivityStreak },
     });
   } catch (error) {
     console.error('[Activity] GET /today error:', error);
@@ -354,29 +377,55 @@ router.delete('/:id', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const activityId = parseInt(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
     if (!activityId || isNaN(activityId)) {
       return res.status(400).json({ error: 'Invalid activity ID' });
     }
 
-    // Verify ownership and delete
-    const deleted = await db
-      .delete(activityLogTable)
-      .where(
-        and(
-          eq(activityLogTable.id, activityId),
-          eq(activityLogTable.userId, userId)
-        )
-      )
-      .returning();
+    // Delete + streak reconciliation as one transaction: if reconciliation
+    // throws, the delete rolls back too, instead of leaving the entry gone
+    // with an un-reconciled streak.
+    const txResult = await db.transaction(async (tx) => {
+      const beforeStreak = await getTrackedDaySnapshot(userId, tx, offsetMinutes);
 
-    if (deleted.length === 0) {
+      // Verify ownership and delete
+      const deleted = await tx
+        .delete(activityLogTable)
+        .where(
+          and(
+            eq(activityLogTable.id, activityId),
+            eq(activityLogTable.userId, userId)
+          )
+        )
+        .returning();
+
+      if (deleted.length === 0) {
+        return { found: false };
+      }
+
+      const streakReconciliation = await reconcileStreakAfterDeletion({
+        userId,
+        beforeSnapshot: beforeStreak,
+        dbConn: tx,
+        timezoneOffset: offsetMinutes,
+      });
+
+      return { found: true, deleted, streakReconciliation };
+    });
+
+    if (!txResult.found) {
       return res.status(404).json({ error: 'Activity not found or not owned by user' });
     }
 
+    invalidateActivityAIRecsCache(userId).catch((err) =>
+      console.error('[Activity] AI recs cache invalidation failed (non-fatal):', err)
+    );
+
     res.json({
       success: true,
-      deleted: deleted[0],
+      deleted: txResult.deleted[0],
+      streak: txResult.streakReconciliation.streak,
       message: 'Activity deleted successfully',
     });
   } catch (error) {
@@ -441,7 +490,11 @@ router.get('/week-data', async (req, res) => {
 router.get('/analytics/dashboard', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const analytics = await activityAnalyticsService.getDashboardAnalytics(userId);
+    // Optional — defaults to 7 (unchanged prior behavior) when the caller
+    // doesn't pass it. Lets the Your Progress Day/Week/Month toggle actually
+    // change what this endpoint returns instead of always showing 7 days.
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 90);
+    const analytics = await activityAnalyticsService.getDashboardAnalytics(userId, days);
 
     res.json(analytics);
   } catch (error) {
@@ -760,8 +813,9 @@ function getFallbackInsights(patterns) {
 router.get('/intelligence', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
 
-    const intelligence = await getActivityIntelligence(userId);
+    const intelligence = await getActivityIntelligence(userId, offsetMinutes);
 
     if (intelligence.error) {
       return res.status(500).json({ error: intelligence.error });
@@ -772,7 +826,6 @@ router.get('/intelligence', async (req, res) => {
     if (Number.isFinite(intelligence.recovery?.score)) {
       try {
         await ensureRecoverySnapshotsTable();
-        const offsetMinutes = parseTimezoneOffsetMinutes(req);
         const dayKey = getDayKey(new Date(), offsetMinutes);
         const countedWeight = intelligence.recovery.coverage
           ? intelligence.recovery.coverage.countedWeight / 100

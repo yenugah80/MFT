@@ -201,7 +201,7 @@ const TagSelector = ({ category, selectedValue, onSelect }) => {
  * Main Premium MoodLogger Component
  * Note: Mood history is displayed on the Dashboard (EnhancedMoodCard), not here
  */
-export default function MoodLogger({ visible, onClose, onSuccess }) {
+export default function MoodLogger({ visible, onClose, onSuccess, onViewHistory, onDismiss }) {
   const { logMood, isLogging, moodTypes } = useMoodLog();
   const [selectedMood, setSelectedMood] = useState(null);
   const [intensity, setIntensity] = useState(5);
@@ -392,6 +392,11 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
     onClose();
   }, [onClose]);
 
+  const handleViewHistory = useCallback(() => {
+    clearTimeout(closeTimerRef.current);
+    onViewHistory?.();
+  }, [onViewHistory]);
+
   const moodColors = selectedMood ? MOOD_PALETTE[selectedMood] : MOOD_PALETTE.neutral;
 
   return (
@@ -400,6 +405,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
       transparent
       animationType="none"
       onRequestClose={handleClose}
+      onDismiss={onDismiss}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -424,8 +430,24 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
             end={{ x: 1, y: 1 }}
             style={styles.header}
           >
-            <Text style={styles.headerTitle}>How are you feeling?</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+            {onViewHistory && (
+              <TouchableOpacity
+                style={styles.historyButton}
+                onPress={handleViewHistory}
+                accessibilityRole="button"
+                accessibilityLabel="View mood history"
+                accessibilityHint="Opens your mood check-ins and patterns"
+              >
+                <Ionicons name="time-outline" size={21} color={TEXT.white} />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.headerTitle} pointerEvents="none">How are you feeling?</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close mood logger"
+            >
               <Ionicons name="close" size={24} color={TEXT.white} />
             </TouchableOpacity>
           </LinearGradient>
@@ -445,7 +467,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               />
               {selectedMood && freeText.length > 0 && (
                 <Text style={styles.nlpHint}>
-                  Detected: {selectedMood} — tap to adjust below
+                  Detected: {selectedMood}. Tap to adjust below
                 </Text>
               )}
             </View>
@@ -472,8 +494,8 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
                 already covers, asking again in Mood would just duplicate it. */}
             {selectedMood && (
               <Text style={styles.slidersContextHint}>
-                This is what lets us find your real patterns — like a mood dip
-                tracking with low protein — not just averages.
+                This is what lets us find your real patterns, such as a mood dip
+                tracking with low protein, not just averages.
               </Text>
             )}
 
@@ -565,7 +587,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               {/* Streak / log count */}
               {savedResult.logStats?.totalLogsThisWeek > 0 && (
                 <Text style={styles.ackTitle}>
-                  ✓ Logged — {savedResult.logStats.totalLogsThisWeek === 1
+                  ✓ Logged: {savedResult.logStats.totalLogsThisWeek === 1
                     ? 'First mood log this week!'
                     : `${savedResult.logStats.totalLogsThisWeek} mood logs this week`}
                 </Text>
@@ -573,7 +595,7 @@ export default function MoodLogger({ visible, onClose, onSuccess }) {
               {/* Meal correlation hint */}
               {savedResult.mealContext?.length > 0 && (
                 <Text style={styles.ackHint}>
-                  🍽 {savedResult.mealContext[0].foodName} logged {Math.round(savedResult.mealContext[0].timeDeltaHours)}h ago — we're connecting food + mood patterns
+                  🍽 {savedResult.mealContext[0].foodName} logged {Math.round(savedResult.mealContext[0].timeDeltaHours)}h ago. We are connecting food and mood patterns.
                 </Text>
               )}
             </View>
@@ -684,8 +706,27 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    top: SPACING[6],
-    right: SPACING[5],
+    top: SPACING[6] - 4,
+    right: SPACING[4],
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    elevation: 2,
+  },
+  historyButton: {
+    position: 'absolute',
+    top: SPACING[6] - 4,
+    left: SPACING[4],
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    zIndex: 2,
+    elevation: 2,
   },
   scrollContent: {
     paddingHorizontal: SPACING[5],

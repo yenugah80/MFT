@@ -92,7 +92,15 @@ export const useBackendVoice = ({ language = 'en', mealType = 'general' } = {}) 
       // the FormData through and clears Content-Type so fetch can generate the
       // multipart boundary. (The old `transformRequest` option was an axios
       // API; this client is fetch-based and ignored it entirely.)
-      const response = await apiClient.upload('/voice/transcribe', formData);
+      // 60s, not apiClient's 10s default. That budget covers the whole round
+      // trip — audio upload, OpenAI transcription, the follow-up model call that
+      // identifies the foods, and the database writes — and 10s is not enough
+      // for it on a mobile connection or a cold backend. The client was
+      // abandoning requests the server then completed, surfacing as a plain
+      // error with nothing wrong in the backend logs.
+      const response = await apiClient.upload('/voice/transcribe', formData, {
+        _timeout: 60000,
+      });
 
       // apiClient returns the parsed body directly, so `response` IS
       // { success, data: [...ingredients], text }. Reading `response.data.text`

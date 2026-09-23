@@ -9,6 +9,12 @@ module.exports = {
     '**/__tests__/**/pairingSelector.test.js',
     '**/__tests__/**/waterTarget.test.js',
     '**/__tests__/**/hydrationCorrelationInput.test.js',
+    '**/__tests__/**/syncRetryPolicy.test.js',
+    '**/__tests__/**/uiContractGuards.test.js',
+    '**/__tests__/**/sleepWindow.test.js',
+    '**/__tests__/**/spacingScale.test.js',
+    '**/__tests__/**/decisionBrainInsights.test.js',
+    '**/__tests__/**/foodResolution.test.js',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

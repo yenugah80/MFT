@@ -58,32 +58,11 @@ import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme'
 import { DAILY_VALUES } from '../../constants/dailyValues';
 // Import unified scoring function for consistency with MealSummaryScreen
 import { calculateMealScore as calculateUnifiedMealScore, getScoreLabel } from './MealSummary/MealScoreDial';
+import { getMealAllergenWarnings } from '../../utils/allergenDetection';
+import QuantityAdjuster from './QuantityAdjuster';
+import { calculateActiveItemTotals } from './calculateActiveItemTotals';
 
 // ============== UTILITY FUNCTIONS ==============
-
-/**
- * Extract sodium from micros object (handles multiple formats)
- * Returns sodium value in mg, or 0 if not found
- */
-function extractSodiumFromMicros(micros) {
-  if (!micros) return 0;
-
-  // Try various key formats: sodium, sodium_mg, Sodium
-  const sodiumKeys = ['sodium', 'sodium_mg', 'Sodium'];
-  for (const key of sodiumKeys) {
-    const val = micros[key];
-    if (val !== undefined && val !== null) {
-      // Handle both {sodium: 1700} and {sodium: {value: 1700}}
-      if (typeof val === 'object' && val.value !== undefined) {
-        return val.value;
-      }
-      if (typeof val === 'number') {
-        return val;
-      }
-    }
-  }
-  return 0;
-}
 
 function calculateMacroPercentages(protein, carbs, fat) {
   const proteinCal = (protein || 0) * 4;
@@ -315,9 +294,17 @@ const NutrientIcon = ({ type, size = 20, color = '#6B7280' }) => {
 /**
  * Donut Chart for Macro Distribution
  */
-const MacroDonutChart = ({ protein, carbs, fat, size = 140, strokeWidth = 20 }) => {
+const MacroDonutChart = ({ protein, carbs, fat, calories, size = 140, strokeWidth = 20 }) => {
   const pct = calculateMacroPercentages(protein, carbs, fat);
-  const totalCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+  // Previously derived from macro grams via Atwater (protein*4 + carbs*4 +
+  // fat*9) instead of using the actual summed item calories — the two are
+  // not guaranteed to agree (rounding, non-4/4/9 AI-estimated items, fiber),
+  // so the headline could show a different total than the item list summed
+  // to (626 vs. 605 in one observed case). calories is the same value
+  // calculatedTotals.calories already uses for the item badges — this just
+  // stops recomputing a second, independently-driftable number for the
+  // same thing.
+  const totalCalories = calories;
 
   const cx = size / 2;
   const cy = size / 2;
@@ -640,6 +627,7 @@ const ALLERGEN_CONFIG = {
   lactose: { icon: 'water', label: 'Lactose', color: '#3B82F6' },
   nuts: { icon: 'leaf', label: 'Tree Nuts', color: '#92400E' },
   treeNuts: { icon: 'leaf', label: 'Tree Nuts', color: '#92400E' },
+  tree_nuts: { icon: 'leaf', label: 'Tree Nuts', color: '#92400E' },
   peanuts: { icon: 'ellipse', label: 'Peanuts', color: '#B45309' },
   eggs: { icon: 'ellipse', label: 'Eggs', color: '#FBBF24' },
   egg: { icon: 'ellipse', label: 'Eggs', color: '#FBBF24' },
@@ -651,25 +639,33 @@ const ALLERGEN_CONFIG = {
 };
 
 /**
- * Allergen Badge - Warning badge for detected allergens
+ * Allergen Badge - Warning badge for a detected allergen from the user's
+ * own profile. `status` distinguishes an AI-confirmed tag from a name-only
+ * pattern match, so a "possible" match doesn't read with the same certainty
+ * as a confirmed one.
  */
-const AllergenBadge = ({ allergen }) => {
+const AllergenBadge = ({ allergen, status = 'confirmed' }) => {
   const config = ALLERGEN_CONFIG[allergen.toLowerCase()] || {
     icon: 'alert-circle',
     label: allergen,
     color: '#EF4444'
   };
+  const isPossible = status === 'possible';
 
   return (
     <View style={[styles.allergenBadge, { backgroundColor: config.color + '15', borderColor: config.color + '40' }]}>
-      <Ionicons name={config.icon + '-outline'} size={12} color={config.color} />
-      <Text style={[styles.allergenBadgeText, { color: config.color }]}>{config.label}</Text>
+      <Ionicons name={isPossible ? 'help-circle-outline' : config.icon + '-outline'} size={12} color={config.color} />
+      <Text style={[styles.allergenBadgeText, { color: config.color }]}>
+        {config.label}{isPossible ? ' (possible)' : ''}
+      </Text>
     </View>
   );
 };
 
 /**
- * Allergens Section - Shows all detected allergens
+ * Allergens Section - Shows allergens detected in the meal that match the
+ * user's own saved profile allergies. Never renders for an allergen the
+ * user doesn't have, however confidently it was detected in the food.
  */
 const AllergensSection = ({ allergens = [] }) => {
   if (!allergens || allergens.length === 0) return null;
@@ -678,11 +674,11 @@ const AllergensSection = ({ allergens = [] }) => {
     <View style={styles.allergensSection}>
       <View style={styles.allergenHeader}>
         <Ionicons name="warning" size={16} color="#EF4444" />
-        <Text style={styles.allergenTitle}>Contains Allergens</Text>
+        <Text style={styles.allergenTitle}>Contains Your Allergens</Text>
       </View>
       <View style={styles.allergenBadgesRow}>
-        {allergens.map((allergen, idx) => (
-          <AllergenBadge key={idx} allergen={allergen} />
+        {allergens.map(({ allergen, status }, idx) => (
+          <AllergenBadge key={idx} allergen={allergen} status={status} />
         ))}
       </View>
     </View>
@@ -885,14 +881,18 @@ const NutriScoreBadge = ({ grade, size = 'medium' }) => {
 const StatPill = ({ nutrient, label, value, unit, color, warning }) => (
   <View style={[styles.statPill, warning && styles.statPillWarning]}>
     <View style={[styles.statPillIcon, { backgroundColor: color + '20' }]}>
-      <NutrientIcon type={nutrient} size={16} color={color} />
+      <NutrientIcon type={nutrient} size={13} color={color} />
     </View>
     <View style={styles.statPillContent}>
       <Text style={styles.statPillValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
         {Math.round(value)}{unit}
       </Text>
-      <Text style={styles.statPillLabel}>{label}</Text>
+      <Text style={styles.statPillLabel} numberOfLines={1}>{label}</Text>
     </View>
+    {/* Absolutely positioned so it never eats into statPillContent's flex
+        budget — as a normal row sibling it took ~24px (width 16 + gap 8)
+        out of an already-tight ~94px pill, leaving only ~14px for "Sodium"
+        + "900mg" on the one pill (sodium) that actually carries a warning. */}
     {warning && <Text style={styles.statPillWarningBadge}>!</Text>}
   </View>
 );
@@ -932,14 +932,14 @@ const IngredientRow = ({ ingredient, isIncluded, onToggle }) => (
 /**
  * Food Item Row - with delete and ingredient management
  */
-const FoodItemRow = ({ item, index, isExpanded, onToggle, onRemove, isIncluded, ingredients, excludedIngredients, onToggleIngredient }) => {
+const FoodItemRow = ({ item, index, isExpanded, onToggle, onRemove, isIncluded, ingredients, excludedIngredients, onToggleIngredient, onUpdateItemQuantity }) => {
+  const [isEditingQuantity, setIsEditingQuantity] = useState(false);
   const macros = item.macros || {};
   let calories = macros.calories_kcal || macros.calories || 0;
   let protein = macros.protein_g || macros.protein || 0;
   let carbs = macros.carbs_g || macros.carbs || 0;
   let fat = macros.fat_g || macros.fat || 0;
 
-  const confidence = item.sourceEvidence?.[0]?.confidence || item.confidence || 0.7;
   const itemIngredients = ingredients || item.ingredients || [];
 
   // CRITICAL FIX: Subtract excluded ingredients from displayed values
@@ -999,19 +999,73 @@ const FoodItemRow = ({ item, index, isExpanded, onToggle, onRemove, isIncluded, 
 
       {isExpanded && (
         <View style={styles.foodItemExpanded}>
-          <View style={styles.portionInfo}>
-            <Ionicons name="scale-outline" size={14} color={TEXT.tertiary} />
-            <Text style={styles.portionText}>
-              {item.portion?.amount || 1} {item.portion?.unit || 'serving'}
-              {item.portion?.gramsEquivalent && ` (~${item.portion.gramsEquivalent}g)`}
-              {confidence < 0.7 && <Text style={styles.estimateTag}> (estimate)</Text>}
-            </Text>
-          </View>
+          {/* Tappable, and driven by the real item.portion.isEstimated flag
+              (now correctly forwarded for every input mode — Stage 8e)
+              instead of the previous confidence<0.7 proxy, which measured
+              a completely different thing (how sure the model was about
+              the FOOD, not whether a QUANTITY was ever stated) and left
+              this row non-interactive regardless.
+              canEditQuantity mirrors QuantityAdjuster's own internal
+              render gate (isCountable || suggestedOptions.length) — without
+              this check, an item with neither would show a tappable edit
+              icon that opens to literally nothing (QuantityAdjuster
+              returns null), which looks broken rather than just absent. */}
+          {(() => {
+            const canEditQuantity = !!onUpdateItemQuantity && (
+              item.portion?.isCountable || item.portion?.adjustmentOptions?.suggestedOptions?.length > 0
+            );
+            return (
+              <TouchableOpacity
+                style={styles.portionInfo}
+                onPress={() => canEditQuantity && setIsEditingQuantity((v) => !v)}
+                activeOpacity={canEditQuantity ? 0.6 : 1}
+                disabled={!canEditQuantity}
+              >
+                <Ionicons name="scale-outline" size={14} color={TEXT.tertiary} />
+                <Text style={styles.portionText}>
+                  {item.portion?.amount || 1} {item.portion?.unit || 'serving'}
+                  {item.portion?.gramsEquivalent && ` (~${item.portion.gramsEquivalent}g)`}
+                  {item.portion?.isEstimated === true && <Text style={styles.estimateTag}> (estimated)</Text>}
+                </Text>
+                {canEditQuantity && (
+                  <Ionicons
+                    name={isEditingQuantity ? 'chevron-up' : 'create-outline'}
+                    size={13}
+                    color={BRAND.primary}
+                    style={{ marginLeft: 4 }}
+                  />
+                )}
+              </TouchableOpacity>
+            );
+          })()}
+
+          {isEditingQuantity && (
+            <QuantityAdjuster
+              foodName={item.name}
+              initialQuantity={item.portion?.amount || 1}
+              unitLabel={item.portion?.adjustmentOptions?.unitLabel || item.portion?.unit || 'serving'}
+              isCountable={item.portion?.isCountable || false}
+              adjustmentOptions={item.portion?.adjustmentOptions}
+              onQuantityChange={(quantityData) => {
+                if (quantityData.quantity && onUpdateItemQuantity) {
+                  onUpdateItemQuantity(item.itemId, quantityData.quantity, item.portion?.unit || 'serving');
+                }
+              }}
+            />
+          )}
 
           {/* Ingredients list with toggles */}
           {itemIngredients.length > 0 && (
             <View style={styles.ingredientsSection}>
               <Text style={styles.ingredientsTitle}>Ingredients ({itemIngredients.length})</Text>
+              {item.isComplex && (
+                <View style={styles.complexNoteRow}>
+                  <Ionicons name="information-circle-outline" size={13} color={TEXT.tertiary} />
+                  <Text style={styles.complexNoteText}>
+                    Estimated separately — may not sum exactly to the item total
+                  </Text>
+                </View>
+              )}
               <Text style={styles.ingredientsHint}>Tap to exclude/include</Text>
               {itemIngredients.map((ing, ingIdx) => {
                 const ingKey = `${index}-${ingIdx}`;
@@ -1042,6 +1096,7 @@ export default function UnifiedMealAnalysis({
   onEdit,
   onItemsChange,
   saving = false,
+  saveBlocked = false,
   // Backend plausibility verdict. Text/multi-item path attaches it per item;
   // photo/barcode path attaches it at the top level of the analysis result.
   analysisPlausible,
@@ -1049,6 +1104,13 @@ export default function UnifiedMealAnalysis({
   // Backend already auto-corrected calories to match the stated macros (Atwater) —
   // same per-item vs. top-level split as the plausibility verdict above.
   analysisMacroReconciled,
+  // User's saved allergies (profile.dietary.allergies). Allergen warnings
+  // below are filtered to only these — an allergen the user doesn't have
+  // is never shown, no matter how confidently it's detected in the meal.
+  userAllergies = [],
+  // Stage 8e: backed by useFoodAnalysis.js's updateItemQuantity, threaded
+  // down from log.js — see FoodItemRow's tappable portion row below.
+  onUpdateItemQuantity,
 }) {
   // An estimate is flagged when the backend's calorie-density plausibility check
   // failed for any item, or for the overall photo/barcode result. Surfaced as a
@@ -1099,125 +1161,115 @@ export default function UnifiedMealAnalysis({
     });
   };
 
-  // Notify parent when active items change
-  React.useEffect(() => {
-    if (onItemsChange && (excludedItems.size > 0 || excludedIngredients.size > 0)) {
-      onItemsChange(activeItems, calculatedTotals);
-    }
-  }, [activeItems, calculatedTotals, onItemsChange, excludedItems.size, excludedIngredients.size]);
-
   const calculatedTotals = useMemo(() => {
     // If user has modified items, always recalculate from activeItems
     const hasExclusions = excludedItems.size > 0 || excludedIngredients.size > 0;
 
-    if (!hasExclusions && totals && (totals.calories > 0 || totals.calories_kcal > 0)) {
-      // If sodium is missing from totals, try to extract from micros
-      let sodium = totals.sodium || totals.sodium_mg || 0;
-      if (sodium === 0 && totals.micros) {
-        sodium = extractSodiumFromMicros(totals.micros);
-      }
-      return {
-        calories: totals.calories || totals.calories_kcal || 0,
-        protein: totals.protein || totals.protein_g || 0,
-        carbs: totals.carbs || totals.carbs_g || 0,
-        fat: totals.fat || totals.fat_g || 0,
-        fiber: totals.fiber || totals.fiber_g || 0,
-        sugar: totals.sugar || totals.sugar_g || 0,
-        sodium,
-        micros: totals.micros || {},
-      };
-    }
-
-    // Calculate from active items only (exclude removed items)
-    // Also need original item indices to check excluded ingredients
-    const activeIndices = items.map((_, idx) => idx).filter(idx => !excludedItems.has(idx));
-
-    const result = activeItems.reduce((acc, item, arrIdx) => {
-      const macros = item.macros || {};
-      const itemMicros = item.micros || {};
-      const originalIndex = activeIndices[arrIdx]; // Map back to original index
-
-      // Start with item's base macros
-      let itemCalories = macros.calories_kcal || macros.calories || 0;
-      let itemProtein = macros.protein_g || macros.protein || 0;
-      let itemCarbs = macros.carbs_g || macros.carbs || 0;
-      let itemFat = macros.fat_g || macros.fat || 0;
-      let itemFiber = macros.fiber_g || macros.fiber || 0;
-      let itemSugar = macros.sugar_g || macros.sugar || 0;
-
-      // CRITICAL FIX: Subtract excluded ingredients' nutrients
-      const itemIngredients = item.ingredients || [];
-      itemIngredients.forEach((ing, ingIdx) => {
-        const ingKey = `${originalIndex}-${ingIdx}`;
-        if (excludedIngredients.has(ingKey)) {
-          // Subtract this ingredient's calories and macros
-          itemCalories -= ing.calories || 0;
-          itemProtein -= ing.protein || 0;
-          itemCarbs -= ing.carbs || 0;
-          itemFat -= ing.fat || 0;
-          itemFiber -= ing.fiber || 0;
-          itemSugar -= ing.sugar || 0;
+    // Macros always come from summing activeItems (below), not from the
+    // top-level `totals` object — the backend's totals.macros is now
+    // reliable (canonicalNutrition.js includes fiber/sugar/sodium and is
+    // used by every input mode), but this screen supports excluding an item
+    // or a single ingredient before logging, which is a client-side-only
+    // edit the server has no round-trip for. This is the "genuinely
+    // required client-side aggregation for optimistic edits" case — it
+    // stays, using the same field names as the canonical totals it can't
+    // substitute for here.
+    //
+    // nutriScore/healthScore ARE reliable at the top level regardless
+    // (enrichWithHealthMetrics adds them onto draft.totals directly), so
+    // they're read here independent of the macro source, and only when the
+    // user isn't actively excluding items/ingredients — that's a live-edit
+    // state with no backend round-trip, so it keeps the local estimate
+    // further down instead.
+    const backendScore = !hasExclusions && totals?.nutriScore != null
+      ? {
+          nutriScore: totals.nutriScore,
+          nutriScoreValue: totals.nutriScoreValue ?? null,
+          healthScore: totals.healthScore ?? null,
         }
-      });
+      : { nutriScore: null, nutriScoreValue: null, healthScore: null };
 
-      // Ensure we don't go negative
-      acc.calories += Math.max(0, itemCalories);
-      acc.protein += Math.max(0, itemProtein);
-      acc.carbs += Math.max(0, itemCarbs);
-      acc.fat += Math.max(0, itemFat);
-      acc.fiber += Math.max(0, itemFiber);
-      acc.sugar += Math.max(0, itemSugar);
+    // Calculate from active items only (exclude removed items), honoring
+    // per-ingredient exclusions too. See calculateActiveItemTotals above.
+    const result = calculateActiveItemTotals(items, activeItems, excludedItems, excludedIngredients);
 
-      // FIX: Get sodium from macros first, fallback to micros
-      let itemSodium = macros.sodium_mg || macros.sodium || 0;
-      if (itemSodium === 0) {
-        itemSodium = extractSodiumFromMicros(itemMicros);
-      }
-      acc.sodium += itemSodium;
-
-      // Aggregate micros
-      Object.entries(itemMicros).forEach(([key, val]) => {
-        const numVal = typeof val === 'object' ? val.value : val;
-        if (!acc.micros[key]) {
-          acc.micros[key] = { value: 0, unit: typeof val === 'object' ? val.unit : 'mg' };
-        }
-        acc.micros[key].value += numVal || 0;
-      });
-
-      return acc;
-    }, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, micros: {} });
-
-    return result;
+    return { ...result, ...backendScore };
   }, [activeItems, totals, excludedItems, excludedIngredients]);
+
+  // Notify parent when active items change — declared after calculatedTotals
+  // (previously referenced it above its own declaration, a temporal-dead-zone
+  // bug that made this effect's dependency tracking on calculatedTotals
+  // unreliable regardless of onItemsChange being wired). This is how
+  // exclusions (item removal, ingredient exclusion) reach the parent's
+  // canonical analysisResult — see log.js's onItemsChange wiring, which
+  // keeps handleSaveMeal's save payload in sync with what this screen
+  // actually displays, instead of saving the pre-exclusion original.
+  React.useEffect(() => {
+    if (onItemsChange && (excludedItems.size > 0 || excludedIngredients.size > 0)) {
+      // calculatedTotals.adjustedItems, not the raw activeItems — each
+      // adjusted item's own macros already reflect its ingredient
+      // exclusions (calculateActiveItemTotals), which activeItems (a plain
+      // filter of the original items) does not. Passing activeItems here
+      // was the reason an excluded ingredient changed the review screen's
+      // numbers but the saved per-item record still hit the original,
+      // pre-exclusion values.
+      onItemsChange(calculatedTotals.adjustedItems, calculatedTotals);
+    }
+    // Deliberately NOT depending on `calculatedTotals`/`activeItems` (both
+    // objects/arrays that get a new reference on every render, including
+    // one caused by this very effect's own onItemsChange call — log.js's
+    // handleItemsChange calls setAnalysisResult with a new `items` array
+    // every time, which flows back down as a new `items` prop, recomputing
+    // calculatedTotals with a new reference, re-triggering this effect,
+    // forever). Confirmed live: excluding a single ingredient hung the app
+    // with "Maximum update depth exceeded." Firing only on an actual change
+    // to the exclusion sets (their .size) breaks the cycle; calculatedTotals
+    // is still read fresh from the closure when the effect does run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onItemsChange, excludedItems.size, excludedIngredients.size]);
 
   // Calculate average confidence first (needed for unified scoring)
   const avgConfidence = items.reduce((sum, i) => sum + (i.sourceEvidence?.[0]?.confidence || i.confidence || 0.7), 0) / (items.length || 1);
 
-  // Use unified scoring function (same as MealSummaryScreen) for consistency
-  const mealScore = calculateUnifiedMealScore({
-    macros: {
-      protein_g: calculatedTotals.protein,
-      carbs_g: calculatedTotals.carbs,
-      fat_g: calculatedTotals.fat,
-      fiber_g: calculatedTotals.fiber,
-      sugar_g: calculatedTotals.sugar,
-      calories_kcal: calculatedTotals.calories,
-    },
-    micros: calculatedTotals.micros,
-    confidence: avgConfidence,
-  });
-  const nutriGrade = scoreToNutriGrade(mealScore);
+  const hasExclusions = excludedItems.size > 0 || excludedIngredients.size > 0;
+
+  // Prefer the backend's own healthScore/nutriScore (same values the post-log
+  // confirmation card shows) over a client-side recalculation — this screen
+  // used to compute its own score via a completely different ratio-based
+  // rubric, which could land nowhere near the backend's number for the same
+  // meal (e.g. 98/Excellent here vs C/59 post-log for one real meal). While
+  // the user is actively excluding items/ingredients there's no backend
+  // round-trip for that edited state, so this is the one path that still
+  // computes locally — it's a live preview, not the value that gets saved.
+  const hasBackendScore = !hasExclusions && calculatedTotals.nutriScore != null;
+  const mealScore = hasBackendScore
+    ? calculatedTotals.healthScore
+    : calculateUnifiedMealScore({
+        macros: {
+          protein_g: calculatedTotals.protein,
+          carbs_g: calculatedTotals.carbs,
+          fat_g: calculatedTotals.fat,
+          fiber_g: calculatedTotals.fiber,
+          sugar_g: calculatedTotals.sugar,
+          calories_kcal: calculatedTotals.calories,
+        },
+        micros: calculatedTotals.micros,
+        confidence: avgConfidence,
+      });
+  const nutriGrade = hasBackendScore ? calculatedTotals.nutriScore : scoreToNutriGrade(mealScore);
   const hasHighSodium = calculatedTotals.sodium > 800;
 
-  // Extract allergens from all items
-  const allAllergens = useMemo(() => {
-    const allergenSet = new Set();
-    items.forEach(item => {
-      const itemAllergens = item.allergens || item.potentialAllergens || [];
-      itemAllergens.forEach(a => allergenSet.add(a.toLowerCase()));
-    });
-    return Array.from(allergenSet);
-  }, [items]);
+  // Allergen warnings, filtered to the user's own saved allergies (profile).
+  // Was previously every allergen category detectAllergensInFoodName knows
+  // about, regardless of whether the user has that allergy at all — a
+  // dairy-free, nut-free eater with no allergies would still see gluten/
+  // soy/etc. warnings on ordinary meals. Now: no match against the user's
+  // profile, no warning, full stop; a name-only pattern match ('possible')
+  // only ever surfaces for an allergen already in that profile.
+  const allAllergens = useMemo(
+    () => getMealAllergenWarnings(items, userAllergies),
+    [items, userAllergies]
+  );
 
   const toggleItem = (index) => {
     setExpandedItems(prev => ({ ...prev, [index]: !prev[index] }));
@@ -1231,6 +1283,7 @@ export default function UnifiedMealAnalysis({
           protein={calculatedTotals.protein}
           carbs={calculatedTotals.carbs}
           fat={calculatedTotals.fat}
+          calories={calculatedTotals.calories}
           size={140}
         />
         <View style={styles.scoreSection}>
@@ -1273,6 +1326,7 @@ export default function UnifiedMealAnalysis({
             onRemove={() => toggleItemExclusion(index)}
             excludedIngredients={excludedIngredients}
             onToggleIngredient={toggleIngredientExclusion}
+            onUpdateItemQuantity={onUpdateItemQuantity}
           />
         ))}
       </View>
@@ -1353,9 +1407,10 @@ export default function UnifiedMealAnalysis({
         )}
         {onSave && (
           <TouchableOpacity
-            style={[styles.primaryButton, saving && styles.primaryButtonDisabled]}
+            style={[styles.primaryButton, (saving || saveBlocked) && styles.primaryButtonDisabled]}
             onPress={onSave}
-            disabled={saving}
+            disabled={saving || saveBlocked}
+            accessibilityState={{ disabled: saving || saveBlocked }}
           >
             <ExpoGradient
               colors={[BRAND.primary, BRAND.secondary || '#8B6EFF']}
@@ -1363,8 +1418,14 @@ export default function UnifiedMealAnalysis({
               end={{ x: 1, y: 0 }}
               style={styles.primaryButtonGradient}
             >
-              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Log Meal'}</Text>
+              <Ionicons
+                name={saveBlocked ? 'alert-circle' : 'checkmark-circle'}
+                size={20}
+                color="#FFFFFF"
+              />
+              <Text style={styles.primaryButtonText}>
+                {saving ? 'Saving...' : saveBlocked ? 'Confirm Ingredient First' : 'Log Meal'}
+              </Text>
             </ExpoGradient>
           </TouchableOpacity>
         )}
@@ -1600,7 +1661,8 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACES.card.secondary,
     borderRadius: 12,
     padding: 10,
-    gap: 8,
+    gap: 6,
+    position: 'relative',
   },
   statPillWarning: {
     borderWidth: 1,
@@ -1608,9 +1670,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
   },
   statPillIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1636,11 +1698,13 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
   },
   statPillWarningBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
     fontSize: 12,
     fontWeight: '700',
     fontFamily: TYPOGRAPHY.family.bold,
     color: '#EF4444',
-    width: 16,
     textAlign: 'center',
   },
 
@@ -1927,6 +1991,17 @@ const styles = StyleSheet.create({
     color: TEXT.tertiary,
     marginBottom: 8,
     fontStyle: 'italic',
+  },
+  complexNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  complexNoteText: {
+    fontSize: 10,
+    color: TEXT.tertiary,
+    flexShrink: 1,
   },
   ingredientRow: {
     flexDirection: 'row',

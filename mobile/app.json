@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MFT : My Flow Tracker",
+    "name": "MFT : My Flourish Tracker",
     "slug": "my-food-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.zennxt.myfoodtracker",
-      "buildNumber": "1",
+      "buildNumber": "37",
       "usesAppleSignIn": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -23,8 +23,10 @@
         "NSPhotoLibraryUsageDescription": "MFT needs photo library access to select food photos for analysis.",
         "NSPhotoLibraryAddUsageDescription": "MFT needs permission to save meal photos to your library.",
         "CFBundleAllowMixedLocalizations": true,
+        "CFBundleDisplayName": "MFT",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSSpeechRecognitionUsageDescription": "MFT uses speech recognition to transcribe your voice meal logs."
+        "NSSpeechRecognitionUsageDescription": "MFT uses speech recognition to transcribe your voice meal logs.",
+        "NSFaceIDUsageDescription": "MFT uses Face ID to unlock the app so your health data stays private."
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -108,6 +110,12 @@
         }
       ],
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "MFT uses Face ID to unlock the app so your health data stays private."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "MFT needs photo library access to select food photos for analysis.",
@@ -157,7 +165,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/91264355-29bc-4019-be18-08002c3180c2"
+      "url": "https://u.expo.dev/91264355-29bc-4019-be18-08002c3180c2",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     }
   }
 }

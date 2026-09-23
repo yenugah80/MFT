@@ -1,37 +1,28 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { AUTH_COLORS } from "./constants";
 
 /**
- * Single bundled agreement for account creation — Terms of Service, Privacy
- * Policy, and AI-assisted food analysis (voice/photo logging via OpenAI) all
- * covered by one explicit, unchecked-by-default checkbox. Checking it and
- * creating an account is what grants OpenAI consent; nothing is pre-ticked.
+ * Clickwrap consent, not a checkbox — same pattern DoorDash and Yelp use:
+ * tapping Continue/Apple/Google IS the agreement to the Terms of Service and
+ * Privacy Policy, no separate tick-then-tap step. Names all three sign-up
+ * methods explicitly so the scope reads as covering whichever one the
+ * person taps, not just email.
+ *
+ * Deliberately does NOT cover AI-assisted analysis (voice/photo food
+ * logging via OpenAI). That consent touches health-adjacent data, and
+ * GDPR Art. 9 requires it to be explicit and un-pre-ticked — a bundled
+ * "by continuing" action doesn't satisfy that on its own. It's asked for
+ * separately, once, via AIConsentPrompt (components/consent/AIConsentPrompt.jsx)
+ * on first app open, with its own real Agree/Not now choice.
  */
-export function TermsConsentCheckbox({ checked, onToggle }) {
+export function ConsentDisclaimer() {
   const router = useRouter();
 
-  const toggle = () => {
-    try { Haptics.selectionAsync(); } catch (_) {}
-    onToggle(!checked);
-  };
-
   return (
-    <Pressable
-      onPress={toggle}
-      style={styles.row}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-      accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
-      hitSlop={8}
-    >
-      <View style={[styles.box, checked && styles.boxChecked]}>
-        {checked && <Ionicons name="checkmark" size={14} color={AUTH_COLORS.white} />}
-      </View>
-      <Text style={styles.label}>
-        I agree to the{" "}
+    <View style={styles.wrap}>
+      <Text style={styles.text}>
+        By continuing with email, Apple, or Google, you agree to our{" "}
         <Text style={styles.link} onPress={() => router.push("/terms")}>
           Terms of Service
         </Text>{" "}
@@ -39,39 +30,22 @@ export function TermsConsentCheckbox({ checked, onToggle }) {
         <Text style={styles.link} onPress={() => router.push("/privacy")}>
           Privacy Policy
         </Text>
-        , including AI-assisted meal analysis.
+        .
       </Text>
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    marginTop: 16,
-    marginBottom: 4,
+  wrap: {
+    marginTop: 14,
+    marginBottom: 2,
   },
-  box: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: AUTH_COLORS.line,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-  },
-  boxChecked: {
-    backgroundColor: AUTH_COLORS.primary,
-    borderColor: AUTH_COLORS.primary,
-  },
-  label: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+  text: {
+    fontSize: 12,
+    lineHeight: 16,
     color: AUTH_COLORS.muted,
+    textAlign: "center",
   },
   link: {
     color: AUTH_COLORS.primary,

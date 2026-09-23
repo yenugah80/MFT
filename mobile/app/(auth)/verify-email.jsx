@@ -15,7 +15,6 @@ import {
   AUTH_COLORS,
 } from "../../components/auth/LaunchAuthDesign";
 import { saveProfileBasics } from "../../services/profileAPI";
-import apiClient from "../../services/apiClient";
 
 const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
   const router = useRouter();
@@ -59,18 +58,12 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
       email,
     });
 
-    // Reaching this point requires having checked the bundled Terms/Privacy/AI
-    // consent box on the sign-up form, so this just records that agreement now
-    // that the account (and auth token) actually exist. Best-effort — a failed
-    // write here must not block onboarding.
-    try {
-      await apiClient.post("/consent/give-openai-consent", {
-        understand: true,
-        purpose: "signup-terms-privacy-ai",
-      });
-    } catch (err) {
-      console.warn("[Auth] Could not record bundled consent:", err?.message);
-    }
+    // AI-assisted analysis consent is deliberately NOT granted here. ToS/Privacy
+    // agreement happens via the clickwrap disclaimer on sign-up (tapping Continue
+    // is the agreement); OpenAI-specific consent is a separate, explicit,
+    // un-pre-ticked ask handled by AIConsentPrompt on first app open — GDPR
+    // Art. 9 requires explicit consent for health-adjacent data specifically,
+    // which a bundled "by continuing" action doesn't provide on its own.
 
     try {
       await AsyncStorage.removeItem("@onboarding_draft");
@@ -83,7 +76,10 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
   };
 
   const handleVerification = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
 
     const sanitizedCode = (code || "").toString().trim();
 
@@ -125,7 +121,10 @@ const VerifyEmail = ({ email, firstName, lastName, onBack }) => {
   };
 
   const resendCode = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
 
     setResending(true);
     try {

@@ -32,7 +32,7 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="Introduction">
           <Text style={styles.text}>
-            MFT (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy.
+            MFT : My Flourish Tracker (&quot;MFT,&quot; &quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy.
             This Privacy Policy explains how we collect, use, disclose, and safeguard your
             information when you use our mobile application.
           </Text>

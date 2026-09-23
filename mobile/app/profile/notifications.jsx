@@ -27,7 +27,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { useNotification } from '../../providers/NotificationProvider';
-import apiClient from '../../services/apiClient';
 import {
   BRAND,
   SURFACES,
@@ -317,6 +316,40 @@ export default function NotificationsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  // Dev-only diagnostic: the underlying getScheduledNotifications() function
+  // already existed (notify.push.getScheduled) but had no UI caller anywhere
+  // — inspecting it required attaching a JS debugger. This surfaces it
+  // directly for device acceptance testing; __DEV__ keeps it out of
+  // production builds entirely.
+  const [debugScheduled, setDebugScheduled] = useState(null);
+  const [isLoadingDebug, setIsLoadingDebug] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  // Same reasoning as handleViewScheduled: notify.push.sendTest already
+  // existed (it wraps showLocalNotification, a real local OS notification
+  // with trigger: null — fires through the exact same platform pathway as
+  // every scheduled reminder, just immediately instead of at a future
+  // hour) but had no UI caller. Surfaces it for acceptance testing —
+  // specifically, confirming local delivery works with zero connectivity
+  // without waiting for a real reminder's fixed clock hour.
+  const handleSendTest = useCallback(async () => {
+    setIsSendingTest(true);
+    try {
+      await notify.push.sendTest();
+    } finally {
+      setIsSendingTest(false);
+    }
+  }, [notify]);
+
+  const handleViewScheduled = useCallback(async () => {
+    setIsLoadingDebug(true);
+    try {
+      const scheduled = await notify.push.getScheduled();
+      setDebugScheduled(scheduled);
+    } finally {
+      setIsLoadingDebug(false);
+    }
+  }, [notify]);
 
   // Load permission status on mount (no duplicate API fetch for preferences)
   useEffect(() => {
@@ -360,29 +393,31 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Handle toggle
+  // Handle toggle. Applies immediately and is never rolled back — local
+  // scheduling reflects the change right away regardless of connectivity;
+  // notify.push.updatePreferences saves to the backend best-effort and
+  // queues a retry for reconnect if that part fails (see
+  // NotificationProvider's updateNotificationPreferences/
+  // retryPendingPreferenceSave). A failed backend save doesn't mean the
+  // toggle "didn't work" from the user's point of view, so this doesn't
+  // revert the switch or treat it as an error requiring their attention.
   const handleToggle = useCallback(async (key, value) => {
-    const oldSettings = { ...settings };
     const newSettings = { ...settings, [key]: value };
 
-    // Optimistic update
     setSettings(newSettings);
     setIsSaving(true);
 
     try {
-      await apiClient.post('/profile/notifications', { notifications: newSettings });
-
-      // Sync notification schedules (if available)
-      if (notify?.push?.syncSchedules) {
-        await notify.push.syncSchedules();
+      const result = await notify.push.updatePreferences(newSettings);
+      if (!result?.savedToBackend) {
+        notify?.info?.("Saved on this device — we'll sync it once you're back online");
       }
-
-      console.log('[NotificationsScreen] Settings saved:', newSettings);
+      console.log('[NotificationsScreen] Settings applied:', newSettings, result);
     } catch (error) {
-      console.error('[NotificationsScreen] Failed to save:', error);
-      // Rollback on error
-      setSettings(oldSettings);
-      notify?.error?.('Failed to save setting');
+      // updatePreferences itself doesn't throw (its internal steps each
+      // catch their own errors), but guard anyway rather than leave the
+      // toggle stuck disabled if something unexpected happens.
+      console.error('[NotificationsScreen] Unexpected error applying setting:', error);
     } finally {
       setIsSaving(false);
     }
@@ -466,11 +501,60 @@ export default function NotificationsScreen() {
           </View>
         </View>
 
+        {/* Debug: scheduled-notification inspector (dev builds only) */}
+        {__DEV__ && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Debug: Scheduled Notifications</Text>
+            <Text style={styles.sectionSubtitle}>
+              Lists every notification currently registered with the OS on this device — for verifying
+              ownership and occurrence-level cancellation during testing. Not shown in production builds.
+            </Text>
+            <TouchableOpacity style={styles.debugButton} onPress={handleViewScheduled} disabled={isLoadingDebug}>
+              {isLoadingDebug ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : (
+                <Text style={styles.debugButtonText}>Refresh scheduled list</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.debugButton, { marginTop: SPACING.sm }]} onPress={handleSendTest} disabled={isSendingTest}>
+              {isSendingTest ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : (
+                <Text style={styles.debugButtonText}>Send test notification now</Text>
+              )}
+            </TouchableOpacity>
+            {debugScheduled !== null && (
+              debugScheduled.length === 0 ? (
+                <Text style={styles.debugEmptyText}>No notifications currently scheduled.</Text>
+              ) : (
+                <View style={styles.debugList}>
+                  {debugScheduled.map((n) => (
+                    <View key={n.id} style={styles.debugRow}>
+                      <Text style={styles.debugRowTitle}>{n.category || '(no category)'}{n.dateKey ? ` — ${n.dateKey}` : ' — permanent repeating'}</Text>
+                      <Text style={styles.debugRowDetail}>id: {n.id}</Text>
+                      <Text style={styles.debugRowDetail}>screen: {n.screen || '—'}{n.hour !== undefined ? `  hour: ${n.hour}` : ''}</Text>
+                      <Text style={styles.debugRowDetail}>trigger: {JSON.stringify(n.trigger)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )
+            )}
+          </View>
+        )}
+
         {/* Info Footer */}
         <View style={styles.infoSection}>
           <Ionicons name="information-circle-outline" size={20} color={TEXT.tertiary} />
           <Text style={styles.infoText}>
             Notifications help you build healthy habits. You can change these settings anytime.
+          </Text>
+        </View>
+
+        <View style={styles.infoSection}>
+          <Ionicons name="phone-portrait-outline" size={20} color={TEXT.tertiary} />
+          <Text style={styles.infoText}>
+            These settings apply to your account and sync to every device where you&apos;re signed in.
+            Reminder times adjust automatically for each device based on when you actually log there.
           </Text>
         </View>
       </ScrollView>
@@ -658,5 +742,46 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     color: TEXT.tertiary,
     lineHeight: 20,
+  },
+  debugButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: SPACING[2],
+    paddingHorizontal: SPACING[4],
+    borderRadius: RADIUS.full,
+    backgroundColor: SURFACES.card.primary,
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+  },
+  debugButtonText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: BRAND.primary,
+  },
+  debugEmptyText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: TEXT.tertiary,
+  },
+  debugList: {
+    gap: SPACING[2],
+  },
+  debugRow: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: RADIUS.md,
+    padding: SPACING[3],
+    borderWidth: 1,
+    borderColor: SURFACES.card.border,
+    gap: 2,
+  },
+  debugRowTitle: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontWeight: TYPOGRAPHY.weight.semibold,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.primary,
+  },
+  debugRowDetail: {
+    fontSize: TYPOGRAPHY.size.xs,
+    color: TEXT.tertiary,
+    fontFamily: 'monospace',
   },
 });

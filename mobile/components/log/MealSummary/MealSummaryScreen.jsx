@@ -19,122 +19,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 // BlurView available if needed for glassmorphism effects
-import { TYPOGRAPHY, SPACING } from '../../../constants/designTokens';
 import { useTheme } from '../../../providers/ThemeProvider';
+import { TYPOGRAPHY, SPACING, BRAND, SURFACES } from '../../../constants/premiumTheme';
 
 // Sub-components
 import MealScoreDial from './MealScoreDial';
 // NutriScoreCard removed - conflicted with MealScoreDial (showed different grades for same meal)
-import MacroProgressSection from './MacroProgressSection';
+import MacroProgressSection, { CaloriesDisplay } from './MacroProgressSection';
 import IngredientsSection from './IngredientsSection';
 import MicrosGrid from './MicrosGrid';
 import ActionButtons from './ActionButtons';
 import MealFeelingPrediction from '../MealFeelingPrediction';
 import QuantityAdjuster from '../QuantityAdjuster';
 import EditableIngredientsSection from '../EditableIngredientsSection';
-
-/**
- * Extract sodium from micros object (handles multiple formats)
- * Returns sodium value in mg, or 0 if not found
- */
-function extractSodiumFromMicros(micros) {
-  if (!micros) return 0;
-
-  // Try various key formats: sodium, sodium_mg, Sodium
-  const sodiumKeys = ['sodium', 'sodium_mg', 'Sodium'];
-  for (const key of sodiumKeys) {
-    const val = micros[key];
-    if (val !== undefined && val !== null) {
-      // Handle both {sodium: 1700} and {sodium: {value: 1700}}
-      if (typeof val === 'object' && val.value !== undefined) {
-        return val.value;
-      }
-      if (typeof val === 'number') {
-        return val;
-      }
-    }
-  }
-  return 0;
-}
-
-/**
- * Aggregate nutrition data from multiple items
- * FIX: Ensures sodium from micros is copied to macros for consistent display
- */
-function aggregateNutrition(analysisResult) {
-  if (!analysisResult?.items || analysisResult.items.length === 0) {
-    return null;
-  }
-
-  // Single item - return directly
-  if (analysisResult.items.length === 1) {
-    const item = analysisResult.items[0];
-    const macros = { ...(item.macros || {}) };
-    const micros = item.micros || {};
-
-    // FIX: If sodium_mg is missing or 0 in macros, copy from micros
-    if (!macros.sodium_mg || macros.sodium_mg === 0) {
-      const sodiumFromMicros = extractSodiumFromMicros(micros);
-      if (sodiumFromMicros > 0) {
-        macros.sodium_mg = sodiumFromMicros;
-      }
-    }
-
-    return {
-      item,
-      macros,
-      micros,
-      ingredients: item.ingredients || [],
-      isComplex: item.isComplex || false,
-      name: item.name,
-      portion: item.portion,
-      confidence: item.confidence,
-    };
-  }
-
-  // Multiple items - use totals
-  const totals = analysisResult.totals || {};
-  // Names aggregation available if needed for display
-  // const names = analysisResult.items.map(i => i.name).join(', ');
-
-  // Aggregate micros - handle both formats: {calcium: 15} and {calcium: {value: 15}}
-  const aggregatedMicros = {};
-  analysisResult.items.forEach(item => {
-    if (item.micros) {
-      Object.entries(item.micros).forEach(([key, val]) => {
-        // Handle both flat numbers and object format
-        const isObject = typeof val === 'object' && val !== null;
-        const value = isObject ? (val.value ?? 0) : (typeof val === 'number' ? val : 0);
-        const unit = isObject ? (val.unit || 'mg') : 'mg';
-
-        if (!aggregatedMicros[key]) {
-          aggregatedMicros[key] = { value: 0, unit };
-        }
-        aggregatedMicros[key].value += value;
-      });
-    }
-  });
-
-  // FIX: Ensure macros has sodium_mg from micros if missing
-  const macros = { ...(totals.macros || {}) };
-  if (!macros.sodium_mg || macros.sodium_mg === 0) {
-    const sodiumFromMicros = extractSodiumFromMicros(aggregatedMicros);
-    if (sodiumFromMicros > 0) {
-      macros.sodium_mg = sodiumFromMicros;
-    }
-  }
-
-  return {
-    item: analysisResult.items[0], // First item for confidence
-    macros,
-    micros: aggregatedMicros,
-    ingredients: analysisResult.items, // Use items as "ingredients" for multi-item meals
-    isComplex: true,
-    name: `Meal (${analysisResult.items.length} items)`,
-    portion: { servingText: `${analysisResult.items.length} items` },
-    confidence: analysisResult.items[0]?.confidence || 0.7,
-  };
-}
+import { aggregateNutrition, buildMealFeelingPayload } from './aggregateNutrition';
 
 export default function MealSummaryScreen({
   visible,
@@ -146,10 +44,21 @@ export default function MealSummaryScreen({
   onEdit,
   onShare,
   isSaving = false,
+  // Stage 8e: backed by useFoodAnalysis.js's updateItemQuantity, threaded
+  // down from log.js. Mutates the one shared analysisResult both this
+  // screen and UnifiedMealAnalysis.jsx read from, instead of the previous
+  // local-only `modifiedNutrition` state — which fixed nothing beyond this
+  // screen's own display and, critically, was NEVER read by onSave, so a
+  // quantity edit here was silently lost at save time (confirmed: "2
+  // rotis" edited to "4 rotis" showed doubled calories on screen but saved
+  // the original 2-roti values).
+  onUpdateItemQuantity,
+  // Backs handleNutritionChange below — same shared-state fix, for
+  // ingredient-editing edits instead of quantity edits.
+  onUpdateItemMacros,
 }) {
   const { isDark } = useTheme();
   const [isFavorite, setIsFavorite] = useState(false);
-  const [modifiedNutrition, setModifiedNutrition] = useState(null);
   const [currentQuantity, setCurrentQuantity] = useState(1);
 
   // Aggregate nutrition data
@@ -165,31 +74,40 @@ export default function MealSummaryScreen({
   // Get ingredient breakdown from the first item (for single-item meals)
   const ingredientBreakdown = nutrition?.item?.ingredientBreakdown || null;
 
-  // Handle quantity change for countable foods
+  // QuantityAdjuster only ever renders for a single-item meal (a
+  // multi-item meal's synthetic aggregate has no portion of its own, so
+  // portionInfo is always {} there) — safe to target items[0] directly.
   const handleQuantityChange = (quantityData) => {
     setCurrentQuantity(quantityData.quantity);
-    if (quantityData.calories) {
-      setModifiedNutrition((prev) => ({
-        ...prev,
-        calories: quantityData.calories,
-        macros: quantityData.macros,
-        quantityChanged: true,
-      }));
+    if (quantityData.quantity && onUpdateItemQuantity && analysisResult?.items?.[0]) {
+      onUpdateItemQuantity(analysisResult.items[0].itemId, quantityData.quantity, portionInfo.unit);
     }
   };
 
-  // Handle nutrition change from ingredient editing
+  // Handle nutrition change from ingredient editing. Same fix as
+  // handleQuantityChange above, same root bug: this used to only write to
+  // local `modifiedNutrition` — which changed the display but was never
+  // read by onSave, so an ingredient edit here (unlike a quantity edit)
+  // silently reverted at save time. Now writes through to the shared
+  // analysisResult via updateItemMacros, same as quantity edits, so both
+  // this screen's own re-render AND save pick up the edit from one place.
+  // EditableIngredientsSection only ever renders for a single-item meal
+  // (ingredientBreakdown is null for the multi-item synthetic aggregate),
+  // same as QuantityAdjuster above — items[0] is the safe target.
   const handleNutritionChange = (nutritionData) => {
-    setModifiedNutrition((prev) => ({
-      ...prev,
-      ...nutritionData,
-      ingredientsChanged: true,
-    }));
+    if (onUpdateItemMacros && analysisResult?.items?.[0]) {
+      onUpdateItemMacros(analysisResult.items[0].itemId, nutritionData.macros, nutritionData.micros);
+    }
   };
 
-  // Get display values (use modified if available)
-  const displayCalories = modifiedNutrition?.calories || nutrition?.macros?.calories_kcal || nutrition?.macros?.calories;
-  const displayMacros = modifiedNutrition?.macros || nutrition?.macros;
+  // Get display values straight from the (possibly just-edited) nutrition —
+  // no separate local `modifiedNutrition` overlay needed now that both
+  // quantity and ingredient edits write through to the shared
+  // analysisResult and flow back down as a fresh prop.
+  const displayCalories = nutrition?.macros?.calories_kcal ?? nutrition?.macros?.calories;
+  const displayMacros = nutrition?.macros;
+  const displayMicros = nutrition?.micros;
+  const displayItem = nutrition?.item;
 
   // Theme colors
   const cardBg = isDark ? 'rgba(30, 30, 35, 0.95)' : 'rgba(255, 255, 255, 0.98)';
@@ -208,10 +126,10 @@ export default function MealSummaryScreen({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={[styles.container, { backgroundColor: isDark ? '#0F0F12' : '#F9F9FB' }]}>
+      <View style={[styles.container, { backgroundColor: isDark ? '#0F0F12' : SURFACES.background.primary }]}>
         {/* Header with gradient */}
         <LinearGradient
-          colors={isDark ? ['#1A1A1F', '#0F0F12'] : ['#6B4EFF', '#8B6EFF']}
+          colors={isDark ? ['#1A1A1F', '#0F0F12'] : [BRAND.primary, BRAND.primaryLight]}
           style={styles.headerGradient}
         >
           {/* Close button */}
@@ -254,30 +172,33 @@ export default function MealSummaryScreen({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Primary Score Section - ONE score, ONE truth */}
-          {/* DESIGN FIX: Removed NutriScoreCard to eliminate conflicting scores */}
-          {/* MealScoreDial (0-100) is the single source of meal quality */}
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <MealScoreDial item={nutrition.item} />
-          </View>
-
-          {/* How Will This Make Me Feel - DIFFERENTIATOR */}
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
+          {/* HERO CARD — the three things a user checks first, in one card
+              instead of three: is this meal good (score), how much is it
+              (calories), and how will it make me feel. Previously each had
+              its own card with identical borderRadius/shadow, giving the
+              whole screen a flat "wall of cards" with no visual hierarchy
+              — nothing signaled these three belonged together as the
+              headline, ahead of the drill-down detail below. */}
+          <View style={[styles.card, styles.heroCard, { backgroundColor: cardBg }]}>
+            {/* DESIGN FIX: Removed NutriScoreCard to eliminate conflicting
+                scores — MealScoreDial (0-100) is the single source of
+                meal quality. */}
+            <MealScoreDial item={displayItem} />
+            <CaloriesDisplay calories={displayCalories} />
+            <View style={[styles.heroDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]} />
             <MealFeelingPrediction
-              mealData={{
-                calories: displayCalories,
-                protein: displayMacros?.protein_g,
-                carbs: displayMacros?.carbs_g,
-                sugar: nutrition.micros?.sugar?.value || nutrition.micros?.sugar,
-                fiber: nutrition.micros?.fiber?.value || nutrition.micros?.fiber,
-                novaScore: nutrition.item?.novaScore,
-                mealType: nutrition.item?.mealType,
-              }}
+              mealData={buildMealFeelingPayload({ displayCalories, displayMacros, item: displayItem })}
             />
           </View>
 
-          {/* Quantity Adjuster - for countable foods (roti, idli, egg, etc.) */}
-          {isCountable && (
+          {/* Quantity Adjuster - countable foods (roti, idli, egg) get the
+              stepper; non-countable foods (curry, dal, rice) get the
+              serving-fraction "Quick select" picker instead, when the
+              backend provided suggestedOptions. Previously gated on
+              `isCountable` alone (so non-countable foods never got any
+              edit UI at all) and hardcoded `isCountable={true}`
+              regardless of the food's real type. */}
+          {(isCountable || adjustmentOptions?.suggestedOptions?.length > 0) && (
             <View style={[styles.card, { backgroundColor: cardBg }]}>
               <QuantityAdjuster
                 foodName={nutrition.name}
@@ -286,15 +207,18 @@ export default function MealSummaryScreen({
                 macrosPerUnit={adjustmentOptions?.macrosPerUnit}
                 unitLabel={adjustmentOptions?.unitLabel || portionInfo.unit}
                 onQuantityChange={handleQuantityChange}
-                isCountable={true}
+                isCountable={isCountable}
                 adjustmentOptions={adjustmentOptions}
               />
             </View>
           )}
 
-          {/* Editable Ingredients Section */}
+          {/* Editable Ingredients Section — compact/drill-down tier: quieter
+              shadow than the hero/standard tiers above, so the visual
+              hierarchy reads at a glance (headline vs. detail you tap into),
+              not nine identically-weighted cards in a row. */}
           {ingredientBreakdown && (
-            <View style={[styles.card, { backgroundColor: cardBg }]}>
+            <View style={[styles.card, styles.compactCard, { backgroundColor: cardBg }]}>
               <EditableIngredientsSection
                 ingredientBreakdown={ingredientBreakdown}
                 totalCalories={displayCalories}
@@ -309,9 +233,9 @@ export default function MealSummaryScreen({
             <MacroProgressSection macros={displayMacros} />
           </View>
 
-          {/* Ingredients (for complex meals) */}
+          {/* Ingredients (for complex meals) — compact/drill-down tier */}
           {nutrition.ingredients && nutrition.ingredients.length > 0 && (
-            <View style={[styles.card, { backgroundColor: cardBg }]}>
+            <View style={[styles.card, styles.compactCard, { backgroundColor: cardBg }]}>
               <IngredientsSection
                 ingredients={nutrition.ingredients}
                 isComplex={nutrition.isComplex}
@@ -319,10 +243,11 @@ export default function MealSummaryScreen({
             </View>
           )}
 
-          {/* Micronutrients Grid */}
-          {nutrition.micros && Object.keys(nutrition.micros).length > 0 && (
-            <View style={[styles.card, { backgroundColor: cardBg }]}>
-              <MicrosGrid micros={nutrition.micros} />
+          {/* Micronutrients Grid — compact/drill-down tier (already
+              collapsed by default internally) */}
+          {displayMicros && Object.keys(displayMicros).length > 0 && (
+            <View style={[styles.card, styles.compactCard, { backgroundColor: cardBg }]}>
+              <MicrosGrid micros={displayMicros} />
             </View>
           )}
 
@@ -358,7 +283,7 @@ export default function MealSummaryScreen({
             accessibilityLabel="Confirm and log this meal"
           >
             <LinearGradient
-              colors={['#6B4EFF', '#8B6EFF']}
+              colors={[BRAND.primary, BRAND.primaryLight]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.confirmGradient}
@@ -451,6 +376,26 @@ const styles = StyleSheet.create({
     elevation: 3,
     overflow: 'hidden',
   },
+  // Slightly heavier shadow than a standard card — the hero card is the
+  // one thing on this screen meant to read as "the headline," not a peer
+  // of the drill-down cards below it.
+  heroCard: {
+    padding: SPACING[4],
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  heroDivider: {
+    height: 1,
+    marginVertical: SPACING[3],
+  },
+  // Drill-down tier (ingredients, micronutrients) — quieter than the hero/
+  // standard tiers, signaling "detail you tap into" rather than headline.
+  compactCard: {
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
   // compactGradeContainer removed - NutriScoreCard no longer used
   bottomSpacer: {
     height: SPACING[6],
@@ -468,7 +413,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#6B4EFF',
+    shadowColor: BRAND.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

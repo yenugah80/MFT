@@ -9,6 +9,67 @@
 import { BaseApiClient } from './BaseApiClient.js';
 import { ENV } from '../../config/env.js';
 
+/**
+ * Reads one nutrient's value from a raw USDA `food.foodNutrients` array.
+ *
+ * Previously returned 0 whenever USDA didn't report the nutrient at all —
+ * indistinguishable from USDA explicitly reporting a real zero. That
+ * collapsed "missing" into "confirmed zero" right at the source, before
+ * canonicalNutrition.js's aggregation ever got a chance to preserve the
+ * distinction. null means "USDA has no data for this," never coerced back
+ * to 0 downstream.
+ */
+export function getUsdaNutrientValue(food, nutrientName) {
+  const nutrient = food?.foodNutrients?.find((n) => n.nutrientName === nutrientName);
+  if (!nutrient) return null;
+  return Number.isFinite(nutrient.value) ? nutrient.value : null;
+}
+
+// Math.round(null) coerces to 0 (null -> 0 numerically in JS) — this guard
+// is what actually keeps a missing nutrient missing through the rounding
+// step, rather than getUsdaNutrientValue's null being undone here.
+function roundOrNull(value, decimals = 0) {
+  if (value === null || value === undefined) return null;
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+/**
+ * Transforms one raw USDA food result into this app's canonical-ish
+ * per-100g shape. Pure and exported so it's unit-testable without hitting
+ * the real USDA API.
+ */
+export function transformUsdaFood(food) {
+  const getNutrient = (nutrientName) => getUsdaNutrientValue(food, nutrientName);
+
+  return {
+    fdcId: food.fdcId,
+    description: food.description,
+    dataType: food.dataType,
+    brandOwner: food.brandOwner,
+    servingSize: food.servingSize,
+    servingSizeUnit: food.servingSizeUnit,
+    gramsPerServing: food.servingSize && food.servingSizeUnit === 'g' ? food.servingSize : 100,
+    servingText: food.servingSize ? `${food.servingSize} ${food.servingSizeUnit}` : '100g',
+    macros: {
+      calories_kcal: roundOrNull(getNutrient('Energy')),
+      protein_g: roundOrNull(getNutrient('Protein'), 1),
+      carbs_g: roundOrNull(getNutrient('Carbohydrate, by difference'), 1),
+      fat_g: roundOrNull(getNutrient('Total lipid (fat)'), 1),
+      fiber_g: roundOrNull(getNutrient('Fiber, total dietary'), 1),
+      sugar_g: roundOrNull(getNutrient('Sugars, total including NLEA'), 1),
+      sodium_mg: roundOrNull(getNutrient('Sodium, Na')),
+    },
+    micros: {
+      calcium: { value: getNutrient('Calcium, Ca'), unit: 'mg' },
+      iron: { value: getNutrient('Iron, Fe'), unit: 'mg' },
+      potassium: { value: getNutrient('Potassium, K'), unit: 'mg' },
+      vitamin_a: { value: getNutrient('Vitamin A, RAE'), unit: 'µg' },
+      vitamin_c: { value: getNutrient('Vitamin C, total ascorbic acid'), unit: 'mg' },
+    },
+  };
+}
+
 class USDAClient extends BaseApiClient {
   constructor() {
     super({
@@ -126,39 +187,7 @@ class USDAClient extends BaseApiClient {
 
     console.log(`[USDA] Search "${name}": ${foods.length} raw → ${filtered.length} filtered → ${topResults.length} returned`);
 
-    return topResults.map((food) => {
-      const getNutrient = (nutrientName) => {
-        const nutrient = food.foodNutrients?.find((n) => n.nutrientName === nutrientName);
-        return nutrient ? nutrient.value : 0;
-      };
-
-      return {
-        fdcId: food.fdcId,
-        description: food.description,
-        dataType: food.dataType,
-        brandOwner: food.brandOwner,
-        servingSize: food.servingSize,
-        servingSizeUnit: food.servingSizeUnit,
-        gramsPerServing: food.servingSize && food.servingSizeUnit === 'g' ? food.servingSize : 100,
-        servingText: food.servingSize ? `${food.servingSize} ${food.servingSizeUnit}` : '100g',
-        macros: {
-          calories_kcal: Math.round(getNutrient('Energy')),
-          protein_g: Math.round(getNutrient('Protein') * 10) / 10,
-          carbs_g: Math.round(getNutrient('Carbohydrate, by difference') * 10) / 10,
-          fat_g: Math.round(getNutrient('Total lipid (fat)') * 10) / 10,
-          fiber_g: Math.round(getNutrient('Fiber, total dietary') * 10) / 10,
-          sugar_g: Math.round(getNutrient('Sugars, total including NLEA') * 10) / 10,
-          sodium_mg: Math.round(getNutrient('Sodium, Na')),
-        },
-        micros: {
-          calcium: { value: getNutrient('Calcium, Ca'), unit: 'mg' },
-          iron: { value: getNutrient('Iron, Fe'), unit: 'mg' },
-          potassium: { value: getNutrient('Potassium, K'), unit: 'mg' },
-          vitamin_a: { value: getNutrient('Vitamin A, RAE'), unit: 'µg' },
-          vitamin_c: { value: getNutrient('Vitamin C, total ascorbic acid'), unit: 'mg' },
-        },
-      };
-    });
+    return topResults.map(transformUsdaFood);
   }
 
   /**

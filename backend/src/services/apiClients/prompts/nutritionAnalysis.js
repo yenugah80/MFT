@@ -8,6 +8,77 @@
  */
 
 /**
+ * Shared guidance against inferring extra portions from repeated words —
+ * every text-derived food-analysis prompt in this codebase (text parsing,
+ * text/voice nutrition estimation, and voice context attached to a photo)
+ * independently risks the same failure: transcribed or typed text that
+ * mentions a food twice (a stutter, a corrected restart, transcription
+ * noise, or just re-referencing it in a later sentence) gets read as "the
+ * user had two servings." One shared string, referenced everywhere text
+ * reaches a food-analysis prompt, instead of three separately-drifting
+ * copies of the same instruction.
+ */
+export const QUANTITY_FROM_REPETITION_GUIDANCE = `QUANTITY FROM REPETITION — READ CAREFULLY: text (especially a voice
+transcript) frequently repeats a food name because of a stutter, a
+corrected restart, disfluency, or transcription noise — NOT because the
+person had a second serving. Merely SEEING a food word twice is NEVER, BY
+ITSELF, evidence of 2 servings — treat every repeated mention of the same
+food as referring to the SAME single serving unless a number word or
+counting phrase is attached to it.
+WRONG: "I had rice with dal and rice again" → rice quantity: 2 (wrong —
+nothing here COUNTS servings, it just mentions the word twice).
+RIGHT: rice quantity: 1 (unless another rule here already covers marking it
+as an estimate rather than a stated amount).
+WRONG: "cooked rice ... and cooked rice among ..." (rambling repetition,
+no number attached) → quantity: 2.
+RIGHT: quantity: 1.
+RIGHT (quantity 2 IS correct here): "two cups of rice", "a second cup of
+rice", "I had rice, then later had rice again" — an actual number word,
+counting phrase, or language explicitly marking a separate occasion.
+Before assigning a quantity above 1 for any food, find the exact number
+word or counting phrase in the text that justifies it. If none exists, use
+quantity 1.`;
+
+/**
+ * Shared guidance against silently substituting a different, plausible-
+ * sounding real food when the input word is garbled, misheard, or simply
+ * not a real food/dish at all. Found via a live device test: a nonsense
+ * word spoken alongside real foods ("... and some kind of blorptato
+ * thing") came back as a fully-detailed, confident item named "potato
+ * dish" — complete macros, ingredients, health score. Because the response
+ * was structurally complete and nutritionally plausible, none of the
+ * existing low-confidence signals (near-zero calories, severe plausibility
+ * failure) ever fired, so it was never flagged for review — it would have
+ * saved silently as a food the user never said. This is the same failure
+ * class as the earlier "Mondal"/"moong dal" case, just reproduced with an
+ * invented word to confirm it isn't specific to any one food or accent:
+ * asked to always return a complete nutrition profile, an LLM will treat
+ * "estimate the nutrition" as "find the closest real food" rather than
+ * "tell me if you don't actually know what this is." The fix has to be an
+ * explicit escape hatch in the schema itself, not a macro-based heuristic
+ * after the fact — a confidently-invented substitute has no numeric
+ * fingerprint to catch.
+ */
+export const UNRECOGNIZED_FOOD_GUIDANCE = `UNRECOGNIZED FOOD NAMES — READ CAREFULLY: some input words won't correspond
+to any real food or dish — a mis-transcription, a typo, background noise
+transcribed as a word, or something you simply don't recognize in any
+cuisine. When that happens, set "recognized": false for that item and keep
+its "name" EXACTLY as given in the input — do NOT substitute the closest-
+sounding real food and do NOT invent plausible nutrition for a guess. Still
+provide your best-effort nutrition estimate in case it's useful, but the
+"recognized" flag is what tells the app to ask the user to confirm or
+correct this item instead of saving it silently.
+WRONG: input mentions "blorptato" → {"name": "potato dish", "recognized": true, ...}
+(wrong — silently swapped in a different, unrequested food).
+RIGHT: {"name": "blorptato", "recognized": false, ...} (best-effort estimate
+still fine, but the name is preserved and recognized is false).
+RIGHT: "chicken curry" → {"name": "chicken curry", "recognized": true, ...}
+(a real, identifiable dish — no ambiguity here).
+Set "recognized": true for every ordinary, identifiable food or regional
+dish, even an unfamiliar one you don't have precise data for — this flag is
+about NAME IDENTITY, not about how confident the nutrition numbers are.`;
+
+/**
  * System prompt for food image analysis
  * PRECISE: Use USDA-standard values for known foods
  * ENHANCED v2: Better portion estimation, cooking method detection, regional awareness
@@ -252,6 +323,7 @@ export function buildImageAnalysisPrompt(options = {}) {
     userPrompt += `\n- Identify specific dishes mentioned`;
     userPrompt += `\n- Adjust portions based on descriptions`;
     userPrompt += `\n- Account for mentioned ingredients/modifications`;
+    userPrompt += `\n\n${QUANTITY_FROM_REPETITION_GUIDANCE}`;
   }
 
   return {

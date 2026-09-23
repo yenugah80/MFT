@@ -1,9 +1,8 @@
 /**
- * Sleep Analytics Screen
+ * Sleep Patterns Screen
  *
- * Deep-dive on sleep trends: average duration/quality, bedtime consistency,
- * and which context tags (caffeine, alcohol, screen time, etc.) correlate
- * with better or worse sleep quality.
+ * Deep-dive on sleep patterns: schedule, quality trend, weekday rhythm,
+ * duration balance, and context associations.
  *
  * Wired to GET /api/sleep/trends?days=30 via useSleepLog().trends.
  */
@@ -17,13 +16,28 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../constants/premiumTheme';
-import { useSleepLog, SLEEP_CONTEXT_TAGS } from '../../hooks/useSleepLog';
+import { useSleepLog, useSleepHistory, SLEEP_CONTEXT_TAGS } from '../../hooks/useSleepLog';
+import { SleepEntry } from '../../components/history/WellnessHistoryScreen';
+
+const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const TREND_META = {
+  improving: { label: 'Improving', color: '#10B981', icon: 'trending-up' },
+  declining: { label: 'Declining', color: '#EF4444', icon: 'trending-down' },
+  stable: { label: 'Stable', color: TEXT.tertiary, icon: 'remove' },
+};
+
+function qualityColor(value) {
+  if (value >= 7) return '#10B981';
+  if (value >= 5) return '#F59E0B';
+  return '#EF4444';
+}
 
 function formatBedTime(avgBedTime) {
   // avgBedTime is "H:MM" in 24h, minutes since midnight-relative average
@@ -41,8 +55,19 @@ function tagLabel(key) {
 
 export default function SleepAnalyticsScreen() {
   const router = useRouter();
-  const { trends, isTrendsLoading, refetchTrends } = useSleepLog();
+  const { days } = useLocalSearchParams();
+  const requestedDays = Number(Array.isArray(days) ? days[0] : days);
+  const rangeDays = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
+  const expandedRange = rangeDays < 30 ? 30 : (rangeDays < 90 ? 90 : null);
+  const { trends, isTrendsLoading, trendsError, refetchTrends } = useSleepLog(rangeDays);
+  // Same fallback as Stress Patterns: the trends endpoint discards the raw
+  // nights it fetches once it decides there aren't enough for a reliable
+  // trend, so without this the "not enough data" screen had nothing else
+  // to show even though real logged nights exist.
+  const rawHistory = useSleepHistory(rangeDays);
+  const rawEntries = rawHistory.data?.sleepLogs || [];
   const [refreshing, setRefreshing] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState(null);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -66,13 +91,16 @@ export default function SleepAnalyticsScreen() {
   const tagImpactEntries = trends?.tagImpact
     ? Object.entries(trends.tagImpact).sort((a, b) => Math.abs(b[1].impact) - Math.abs(a[1].impact))
     : [];
+  const hasTaggedNights = Object.values(trends?.tagCounts || {}).some((count) => count > 0);
+  const trendMeta = trends?.trend ? (TREND_META[trends.trend.direction] || TREND_META.stable) : TREND_META.stable;
+  const durationBuckets = trends?.durationBuckets ? Object.entries(trends.durationBuckets) : [];
 
   return (
     <View style={styles.container}>
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Sleep Analytics',
+          title: 'Sleep Patterns',
           headerStyle: { backgroundColor: SURFACES.background.primary },
           headerTintColor: TEXT.primary,
           headerTitleStyle: {
@@ -95,16 +123,80 @@ export default function SleepAnalyticsScreen() {
       {isTrendsLoading && !refreshing ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={BRAND.primary} />
-          <Text style={styles.centerText}>Loading your sleep analytics...</Text>
+          <Text style={styles.centerText}>Loading your sleep patterns...</Text>
         </View>
-      ) : !trends ? (
+      ) : trendsError ? (
+        <View style={styles.centerContainer} accessibilityRole="alert">
+          <Ionicons name="cloud-offline-outline" size={48} color={TEXT.tertiary} />
+          <Text style={styles.errorTitle}>Sleep patterns are unavailable</Text>
+          <Text style={styles.centerText}>Check your connection and try again.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refetchTrends} accessibilityRole="button">
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : !trends && rawEntries.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="moon-outline" size={48} color={TEXT.tertiary} />
-          <Text style={styles.errorTitle}>Not enough data yet</Text>
+          <Text style={styles.errorTitle}>Not enough data in this {rangeDays}-day view</Text>
           <Text style={styles.centerText}>
-            Log at least 3 nights of sleep to unlock trends and quality insights.
+            This range needs at least 3 nights of sleep to calculate reliable trends.
           </Text>
+          {!!expandedRange && (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => router.replace(`/insights/sleep-analytics?days=${expandedRange}`)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryButtonText}>View {expandedRange} days</Text>
+            </TouchableOpacity>
+          )}
         </View>
+      ) : !trends ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
+          }
+        >
+          <View style={styles.card}>
+            <Text style={styles.insufficientEvidenceText}>
+              Sleep trends need at least 3 nights in this {rangeDays}-day view — you have {rawEntries.length}
+              {' '}so far. Here's what you've logged:
+            </Text>
+          </View>
+          <View style={styles.entryList}>
+            {rawEntries.map((entry) => (
+              <SleepEntry
+                key={entry.id}
+                entry={entry}
+                isDeleting={deletingId === entry.id}
+                deleteDisabled={deletingId !== null}
+                onDelete={() => Alert.alert(
+                  'Delete sleep entry?',
+                  'This removes the night from your history and insights.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        setDeletingId(entry.id);
+                        try {
+                          await rawHistory.deleteEntry(entry.id);
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      },
+                    },
+                  ]
+                )}
+              />
+            ))}
+          </View>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -114,36 +206,101 @@ export default function SleepAnalyticsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
           }
         >
-          {/* Summary stats */}
+          {/* Overall + trend — mirrors the evidence hierarchy in Stress Patterns. */}
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{trends.avgDurationHours}h</Text>
-              <Text style={styles.statLabel}>Avg Duration</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{trends.avgQuality}/10</Text>
+              <Text style={[styles.statValue, { color: qualityColor(trends.avgQuality) }]}>{trends.avgQuality}</Text>
               <Text style={styles.statLabel}>Avg Quality</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{trends.consistencyScore}%</Text>
-              <Text style={styles.statLabel}>Consistency</Text>
+              <View style={styles.trendRow}>
+                <Ionicons name={trendMeta.icon} size={20} color={trendMeta.color} />
+                <Text style={[styles.trendValue, { color: trendMeta.color }]}>{trendMeta.label}</Text>
+              </View>
+              <Text style={styles.statLabel}>Recent Trend</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{trends.daysTracked}</Text>
+              <Text style={styles.statLabel}>Nights</Text>
             </View>
           </View>
+          <Text style={styles.evidenceText}>Based on {trends.daysTracked} nights in this {rangeDays}-day view.</Text>
 
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="bed-outline" size={20} color={BRAND.primary} />
-              <Text style={styles.cardTitle}>Bedtime Pattern</Text>
+              <Text style={styles.cardTitle}>Sleep Schedule</Text>
             </View>
-            <Text style={styles.bedTimeValue}>{formatBedTime(trends.avgBedTime)}</Text>
-            <Text style={styles.bedTimeSubtext}>Average bedtime over {trends.daysTracked} nights tracked</Text>
+            <View style={styles.scheduleGrid}>
+              <View style={styles.scheduleMetric}>
+                <Text style={styles.scheduleLabel}>BEDTIME</Text>
+                <Text style={styles.scheduleValue}>{formatBedTime(trends.avgBedTime)}</Text>
+              </View>
+              <View style={styles.scheduleMetric}>
+                <Text style={styles.scheduleLabel}>WAKE TIME</Text>
+                <Text style={styles.scheduleValue}>{formatBedTime(trends.avgWakeTime)}</Text>
+              </View>
+              <View style={styles.scheduleMetric}>
+                <Text style={styles.scheduleLabel}>DURATION</Text>
+                <Text style={styles.scheduleValue}>{trends.avgDurationHours}h</Text>
+              </View>
+              <View style={styles.scheduleMetric}>
+                <Text style={styles.scheduleLabel}>CONSISTENCY</Text>
+                <Text style={styles.scheduleValue}>{trends.consistencyScore}%</Text>
+              </View>
+            </View>
           </View>
+
+          {Object.keys(trends.dayOfWeek || {}).length > 0 && (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="calendar-outline" size={20} color={BRAND.primary} />
+                <Text style={styles.cardTitle}>Weekly Rhythm</Text>
+              </View>
+              <View style={styles.barList}>
+                {DAY_ORDER.filter((day) => trends.dayOfWeek[day]).map((day) => {
+                  const data = trends.dayOfWeek[day];
+                  return (
+                    <View key={day} style={styles.barRow}>
+                      <Text style={styles.barLabel}>{day.slice(0, 3)}</Text>
+                      <View style={styles.barTrack}>
+                        <View style={[styles.barFill, { width: `${data.avgQuality * 10}%`, backgroundColor: qualityColor(data.avgQuality) }]} />
+                      </View>
+                      <View style={styles.dayValueGroup}>
+                        <Text style={styles.barValue}>{data.avgQuality}</Text>
+                        <Text style={styles.dayDuration}>{data.avgDurationHours}h</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+              <Text style={styles.cardFootnote}>Bar = average quality · hours shown at right</Text>
+            </View>
+          )}
+
+          {!!durationBuckets.length && (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="hourglass-outline" size={20} color={BRAND.primary} />
+                <Text style={styles.cardTitle}>Duration Balance</Text>
+              </View>
+              <View style={styles.bucketRow}>
+                {durationBuckets.map(([key, bucket]) => (
+                  <View key={key} style={[styles.bucketCard, key === 'goal' && styles.bucketCardGoal]}>
+                    <Text style={[styles.bucketCount, key === 'goal' && styles.bucketCountGoal]}>{bucket.count}</Text>
+                    <Text style={styles.bucketLabel}>{bucket.label}</Text>
+                    <Text style={styles.bucketPercent}>{bucket.percentage}%</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {tagImpactEntries.length > 0 && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Ionicons name="analytics-outline" size={20} color={BRAND.primary} />
-                <Text style={styles.cardTitle}>What Affects Your Sleep</Text>
+                <Text style={styles.cardTitle}>Sleep Quality Associations</Text>
               </View>
               <View style={styles.tagList}>
                 {tagImpactEntries.map(([tag, data]) => {
@@ -158,17 +315,34 @@ export default function SleepAnalyticsScreen() {
                           size={16}
                           color={color}
                         />
-                        <Text style={styles.tagLabel}>{tagLabel(tag)}</Text>
+                        <View>
+                          <Text style={styles.tagLabel}>{tagLabel(tag)}</Text>
+                          <Text style={styles.tagEvidence}>
+                            {data.occurrences} with · {data.comparisonOccurrences} without
+                          </Text>
+                        </View>
                       </View>
                       <Text style={[styles.tagImpact, { color }]}>
-                        {isPositive ? '+' : ''}{data.impact} pts ({data.occurrences}x)
+                        {isPositive ? '+' : ''}{data.impact} pts
                       </Text>
                     </View>
                   );
                 })}
               </View>
               <Text style={styles.tagDisclaimer}>
-                Compares average quality on nights with vs. without each tag.
+                Compares nights with vs. without each tag. These are observational signals, not proof of cause.
+              </Text>
+            </View>
+          )}
+
+          {hasTaggedNights && tagImpactEntries.length === 0 && (
+            <View style={styles.card} accessibilityRole="summary">
+              <View style={styles.cardHeader}>
+                <Ionicons name="analytics-outline" size={20} color={BRAND.primary} />
+                <Text style={styles.cardTitle}>Sleep Quality Associations</Text>
+              </View>
+              <Text style={styles.insufficientEvidenceText}>
+                Keep logging context. A comparison appears after at least {trends.minimumAssociationGroupSize || 3} nights with a tag and {trends.minimumAssociationGroupSize || 3} nights without it.
               </Text>
             </View>
           )}
@@ -213,10 +387,29 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
+  retryButton: {
+    marginTop: SPACING[2],
+    paddingHorizontal: SPACING[5],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.full,
+    backgroundColor: BRAND.primary,
+  },
+  retryButtonText: {
+    color: TEXT.white,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: TYPOGRAPHY.size.sm,
+  },
   statsRow: {
     flexDirection: 'row',
     gap: SPACING[3],
+    marginBottom: SPACING[2],
+  },
+  evidenceText: {
     marginBottom: SPACING[4],
+    color: TEXT.tertiary,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    textAlign: 'center',
   },
   statCard: {
     flex: 1,
@@ -224,6 +417,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     paddingVertical: SPACING[4],
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
   },
   statValue: {
@@ -235,6 +429,15 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.tertiary,
+  },
+  trendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trendValue: {
+    fontSize: TYPOGRAPHY.size.base,
+    fontFamily: TYPOGRAPHY.family.bold,
   },
   card: {
     backgroundColor: SURFACES.card.primary,
@@ -253,16 +456,113 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
-  bedTimeValue: {
-    fontSize: TYPOGRAPHY.size['2xl'],
+  scheduleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING[2],
+  },
+  scheduleMetric: {
+    width: '48%',
+    padding: SPACING[3],
+    borderRadius: RADIUS.md,
+    backgroundColor: SURFACES.background.secondary,
+  },
+  scheduleLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: TEXT.tertiary,
+    letterSpacing: 0.7,
+    marginBottom: 3,
+  },
+  scheduleValue: {
+    fontSize: TYPOGRAPHY.size.base,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
   },
-  bedTimeSubtext: {
+  barList: {
+    gap: SPACING[2],
+  },
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+  },
+  barLabel: {
+    width: 32,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.secondary,
+  },
+  barTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: SURFACES.background.tertiary,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    minWidth: 4,
+    borderRadius: 4,
+  },
+  dayValueGroup: {
+    width: 64,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  barValue: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  dayDuration: {
     fontSize: TYPOGRAPHY.size.xs,
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
-    marginTop: 4,
+  },
+  cardFootnote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.muted,
+    marginTop: SPACING[3],
+  },
+  bucketRow: {
+    flexDirection: 'row',
+    gap: SPACING[2],
+  },
+  bucketCard: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING[3],
+    backgroundColor: SURFACES.background.secondary,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  bucketCardGoal: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  bucketCount: {
+    fontSize: TYPOGRAPHY.size.xl,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: TEXT.primary,
+  },
+  bucketCountGoal: {
+    color: '#059669',
+  },
+  bucketLabel: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.medium,
+    color: TEXT.secondary,
+    marginTop: 2,
+  },
+  bucketPercent: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+    marginTop: 2,
   },
   tagList: {
     gap: SPACING[2],
@@ -283,6 +583,12 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.medium,
     color: TEXT.primary,
   },
+  tagEvidence: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.tertiary,
+  },
   tagImpact: {
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.semibold,
@@ -293,7 +599,16 @@ const styles = StyleSheet.create({
     color: TEXT.muted,
     marginTop: SPACING[2],
   },
+  insufficientEvidenceText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+    lineHeight: 20,
+  },
   bottomPadding: {
     height: 40,
+  },
+  entryList: {
+    gap: SPACING[3],
   },
 });

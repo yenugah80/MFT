@@ -150,31 +150,28 @@ export function useCorrelations({ enabled = true, limit = 5 } = {}) {
     refetchOnWindowFocus: false,
   });
 
-  // Quality thresholds - only show meaningful patterns
-  const MIN_CONFIDENCE = 0.65; // 65% minimum confidence
-  const MIN_OCCURRENCES = 5;   // At least 5 observations
-
-  // Transform backend correlations to frontend format
+  // GET /insights/correlations (see insights.js) already dedupes and filters
+  // against the same >=65%-confidence / >=5-occurrences bar via
+  // filterAndDeduplicateCorrelations, so no client-side re-filtering here —
+  // a previous version duplicated that filter with a slightly different
+  // implicit contract (factor/outcome/instances/dataPoints field names from
+  // the old moodMealCorrelationsTable-backed route) that silently dropped
+  // every correlation once the route was migrated to the Insight Engine's
+  // pattern/occurrences/confidence shape.
   const transformedCorrelations = (data?.correlations || [])
     .map(corr => ({
       id: corr.id,
-      // Construct pattern from factor + outcome (e.g., "High-carb meals → afternoon tiredness")
-      pattern: corr.factor && corr.outcome
-        ? `${capitalizeFirst(corr.factor)} → ${corr.outcome}`
-        : corr.explanation || 'Pattern detected',
-      // Normalize confidence to 0-1 scale (backend may return 0-100 or 0-1)
+      pattern: corr.pattern || corr.explanation || 'Pattern detected',
+      // Normalize confidence to 0-1 scale (backend returns 0-100)
       confidence: corr.confidence > 1 ? corr.confidence / 100 : (corr.confidence || 0),
-      // Map instances/dataPoints to occurrences
-      occurrences: corr.instances || corr.dataPoints || corr.occurrences || 0,
+      occurrences: corr.occurrences || 0,
       // Transform for affected domains display
       impacts: buildImpacts(corr),
       // Original data for UI display
       type: corr.type,
       explanation: corr.explanation,
       suggestion: corr.suggestion,
-    }))
-    // Filter out low-quality patterns (weak confidence or few occurrences)
-    .filter(corr => corr.confidence >= MIN_CONFIDENCE && corr.occurrences >= MIN_OCCURRENCES);
+    }));
 
   return {
     correlations: transformedCorrelations,

@@ -144,10 +144,15 @@ router.get("/analytics/dashboard", async (req, res) => {
       ORDER BY date DESC
     `);
 
+    // db.execute() returns the row array directly on this project's
+    // postgres-js driver, not { rows: [...] } — see config/db.js. Reading
+    // .rows here silently dropped every field from the response (undefined
+    // values are omitted by JSON.stringify), so this endpoint always
+    // returned `{}`.
     res.json({
-      eventCounts: eventCounts.rows,
-      crashCounts: crashCounts.rows,
-      dauCounts: dauCounts.rows,
+      eventCounts,
+      crashCounts,
+      dauCounts,
     });
   } catch (err) {
     console.error("[Analytics] Dashboard error:", err.message);
@@ -284,15 +289,18 @@ router.get("/analytics/voice", async (req, res) => {
       WHERE timestamp > NOW() - INTERVAL '1 day' * ${days}
     `);
 
+    // Same db.execute() shape note as /analytics/dashboard above — .rows[0]
+    // on an array is undefined[0], which threw on every call (500 on this
+    // whole endpoint), not just returned wrong data.
     res.json({
       period_days: days,
-      successRate: successRateQuery.rows[0] || {},
-      confidence: confidenceQuery.rows[0] || {},
-      duration: durationQuery.rows[0] || {},
-      editStats: editQuery.rows[0] || {},
-      errorBreakdown: errorQuery.rows || [],
-      dailyTrends: trendsQuery.rows || [],
-      featureUsage: usageQuery.rows[0] || {},
+      successRate: successRateQuery[0] || {},
+      confidence: confidenceQuery[0] || {},
+      duration: durationQuery[0] || {},
+      editStats: editQuery[0] || {},
+      errorBreakdown: errorQuery || [],
+      dailyTrends: trendsQuery || [],
+      featureUsage: usageQuery[0] || {},
     });
   } catch (err) {
     console.error("[Analytics] Voice analytics error:", err.message);

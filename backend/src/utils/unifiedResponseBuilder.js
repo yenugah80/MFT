@@ -48,6 +48,28 @@ function normalizeNutrition(raw) {
   };
 }
 
+// Every alias normalizeNutrition() checks per field, so buildFoodItem can
+// tell "the source never reported this at all" apart from "reported and
+// it's 0" — normalizeNutrition's own `?? 0` chain collapses that distinction
+// for its internal totalNutrition math (fine for health/NutriScore, which
+// need a number), but the final macros object below must not silently turn
+// an AI response that never asked about fiber/sugar/sodium (see
+// estimateNutritionForText's prompt) into "measured, and it's zero."
+const NUTRITION_FIELD_ALIASES = {
+  calories: ['calories', 'calories_kcal', 'kcal'],
+  protein: ['protein', 'protein_g', 'proteins'],
+  carbs: ['carbs', 'carbs_g', 'carbohydrates'],
+  fat: ['fat', 'fat_g', 'fats'],
+  fiber: ['fiber', 'fiber_g'],
+  sugar: ['sugar', 'sugar_g', 'sugars'],
+  sodium: ['sodium', 'sodium_mg'],
+};
+
+function isNutritionFieldMissing(raw, field) {
+  if (!raw) return true;
+  return !NUTRITION_FIELD_ALIASES[field].some((key) => raw[key] !== undefined && raw[key] !== null);
+}
+
 /**
  * Calculate per-unit nutrition for quantity adjustments
  */
@@ -69,7 +91,7 @@ function calculatePerUnitNutrition(nutrition, quantity) {
  * Calculate totals from items array
  */
 function calculateTotals(items) {
-  const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 };
+  const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, gramsEquivalent: 0 };
 
   items.forEach(item => {
     const nutrition = item.nutrition || {};
@@ -80,6 +102,9 @@ function calculateTotals(items) {
     totals.fiber += nutrition.fiber || 0;
     totals.sugar += nutrition.sugar || 0;
     totals.sodium += nutrition.sodium || 0;
+    // Real meal weight, needed by calculateNutriScore()'s per-100g
+    // normalization — see buildFoodItem() and buildUnifiedResponse().
+    totals.gramsEquivalent += item.gramsEquivalent || 0;
   });
 
   // Round values
@@ -418,8 +443,15 @@ function generateSmartSuggestions(items, totals) {
  * Build a standardized food item
  */
 export function buildFoodItem(raw, index = 0) {
-  const quantity = raw.quantity || raw.portion?.amount || 1;
-  const unit = raw.unit || raw.portion?.unit || 'serving';
+  // The nutrition fallback below already checks raw.canonical?.nutrition —
+  // this one didn't check raw.canonical?.portion, even though the DB-cache
+  // hit path (voiceLog.js's dbMatch branch) puts the AI's actual estimated
+  // portion there (e.g. {amount:1, unit:'bowl'}) and never sets raw.portion
+  // directly. A spoken "one bowl of X" silently became "1 serving" — not a
+  // parsing failure, just this fallback chain never looking in the one
+  // place a cached result actually puts it.
+  const quantity = raw.quantity || raw.portion?.amount || raw.canonical?.portion?.amount || 1;
+  const unit = raw.unit || raw.portion?.unit || raw.canonical?.portion?.unit || 'serving';
   const name = raw.name || raw.foodName || 'Unknown Food';
 
   // Normalize nutrition
@@ -441,17 +473,24 @@ export function buildFoodItem(raw, index = 0) {
   // Get cooking method for health score calculation
   const cookingMethod = raw.cookingMethod || raw.canonical?.cookingMethod || null;
 
-  // Calculate health score if not provided (using per-unit nutrition for accuracy)
+  // Real AI-estimated weight for this item — needed by calculateNutriScore()'s
+  // per-100g normalization (see its own comment). Without it, an item is
+  // scored as if it were 100g of food regardless of its actual size.
+  const gramsEquivalent = raw.gramsEquivalent ?? raw.portion?.gramsEquivalent ?? raw.portion?.estimatedGrams ?? 100;
+
+  // Calculate health score if not provided. Uses totalNutrition (post-quantity
+  // total), not the per-unit `nutrition` — a quantity>1 item (e.g. "2 eggs")
+  // was previously scored off a single unit's nutrition instead of the total.
   let healthScore = raw.healthScore ?? raw.canonical?.healthScore ?? null;
-  if (healthScore === null && nutrition.calories > 0) {
-    healthScore = calculateHealthScoreFromNutrition(nutrition, cookingMethod);
+  if (healthScore === null && totalNutrition.calories > 0) {
+    healthScore = calculateHealthScoreFromNutrition(totalNutrition, cookingMethod);
   }
 
   // Calculate NutriScore if not provided
   let nutriScore = raw.nutriScore ?? raw.canonical?.nutriScore ?? null;
   let nutriScoreValue = null;
-  if (nutriScore === null && nutrition.calories > 0) {
-    const nutriScoreResult = calculateNutriScore(nutrition);
+  if (nutriScore === null && totalNutrition.calories > 0) {
+    const nutriScoreResult = calculateNutriScore(totalNutrition, gramsEquivalent);
     nutriScore = nutriScoreResult.grade;
     nutriScoreValue = nutriScoreResult.score;
   }
@@ -463,25 +502,40 @@ export function buildFoodItem(raw, index = 0) {
     quantity: quantity,
     unit: unit,
 
-    // Portion object for frontend compatibility
+    // Portion object for frontend compatibility. Was rebuilt from scratch
+    // here with only amount/unit/servingText — silently dropping
+    // `isEstimated` and `gramsEquivalent` even when the raw item (barcode/
+    // photo/multimodal, all routed through this function) had them. Two
+    // real consequences: the mobile "estimated quantity" badge had nothing
+    // to read for these input modes, and useFoodAnalysis.js's
+    // updateItemQuantity() requires gramsEquivalent to scale a quantity
+    // edit at all — it was refusing to work for every item that came
+    // through here, regardless of input mode.
     portion: {
       amount: quantity,
       unit: unit,
-      servingText: `${quantity} ${unit}`
+      servingText: `${quantity} ${unit}`,
+      gramsEquivalent,
+      isEstimated: raw.portion?.isEstimated ?? raw.canonical?.portion?.isEstimated ?? true,
     },
 
     // Nutrition for total quantity (standardized field names)
     nutrition: totalNutrition,
 
-    // Macros with legacy field names for frontend compatibility
+    // Macros with legacy field names for frontend compatibility. null (not
+    // 0) when the source never reported the field under any known name —
+    // aggregateCanonicalTotals and the mobile client both already treat
+    // null as "unknown, don't sum a fake zero" and 0 as a real reported
+    // value; this is the one place that distinction has to be decided,
+    // since totalNutrition itself has already defaulted everything to 0.
     macros: {
-      calories_kcal: totalNutrition.calories,
-      protein_g: totalNutrition.protein,
-      carbs_g: totalNutrition.carbs,
-      fat_g: totalNutrition.fat,
-      fiber_g: totalNutrition.fiber,
-      sugar_g: totalNutrition.sugar,
-      sodium_mg: totalNutrition.sodium
+      calories_kcal: isNutritionFieldMissing(rawNutrition, 'calories') ? null : totalNutrition.calories,
+      protein_g: isNutritionFieldMissing(rawNutrition, 'protein') ? null : totalNutrition.protein,
+      carbs_g: isNutritionFieldMissing(rawNutrition, 'carbs') ? null : totalNutrition.carbs,
+      fat_g: isNutritionFieldMissing(rawNutrition, 'fat') ? null : totalNutrition.fat,
+      fiber_g: isNutritionFieldMissing(rawNutrition, 'fiber') ? null : totalNutrition.fiber,
+      sugar_g: isNutritionFieldMissing(rawNutrition, 'sugar') ? null : totalNutrition.sugar,
+      sodium_mg: isNutritionFieldMissing(rawNutrition, 'sodium') ? null : totalNutrition.sodium
     },
 
     // Per-unit nutrition for quantity adjustments
@@ -499,14 +553,76 @@ export function buildFoodItem(raw, index = 0) {
     nutriScore: nutriScore,
     nutriScoreValue: nutriScoreValue,
 
+    // Real estimated weight — summed by calculateTotals() for the meal-level
+    // NutriScore normalization.
+    gramsEquivalent: gramsEquivalent,
+
     // Micronutrients
     micros: raw.micros || raw.canonical?.nutrition?.micros || {},
 
     // Data quality
     confidence: raw.confidence ?? 0.7,
     source: raw.source || 'ai_estimate',
-    isEstimated: raw.source === 'ai_estimate' || raw.source === 'ai_estimated' || raw.isEstimated === true
+    isEstimated: raw.source === 'ai_estimate' || raw.source === 'ai_estimated' || raw.isEstimated === true,
+
+    // Whether the AI could actually identify this as a real food/dish, vs.
+    // a garbled or nonsense input it estimated a best-effort guess for
+    // anyway (see UNRECOGNIZED_FOOD_GUIDANCE). Defaults to true — most raw
+    // items (DB cache, dictionary matches, older/other-shaped sources) never
+    // set this field at all and must not become blocked-for-review just
+    // because the field is absent.
+    recognized: raw.recognized !== false,
   };
+}
+
+function normalizeNameForDedup(name) {
+  return (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Collapses two items with the identical name into one.
+ *
+ * Found via a live device test: the same transcript ("...cooked rice with
+ * Rasam and cooked rice and some kind of blue potato thing") sometimes came
+ * back with "cooked rice" as ONE item, and sometimes as TWO separate
+ * 200-kcal entries — the model satisfying "don't set quantity>1 for a
+ * repeated mention" (QUANTITY_FROM_REPETITION_GUIDANCE) by instead emitting
+ * two quantity:1 array entries for the same food, which still silently
+ * doubles the meal total. A prompt instruction alone can't guarantee this
+ * never happens again — it's demonstrably non-deterministic at this
+ * temperature — so this is a deterministic code-level backstop: the app's
+ * own data model has no legitimate reason for the same exact food name to
+ * appear as two separate rows in one meal (a real repeat is "quantity: 2"
+ * on ONE row, never two rows), so any exact-name duplicate here is the bug,
+ * not a valid case.
+ *
+ * Scoped to text/voice only, not photo/barcode: a photo can genuinely show
+ * two distinct plates/instances of the same-named food side by side, and a
+ * vision model splitting that into two rows is a real observation, not a
+ * language model re-parsing a repeated word.
+ */
+function dedupeRepeatedFoodMentions(items, inputMode) {
+  if (inputMode === 'photo' || inputMode === 'barcode') return items;
+  const seenAt = new Map();
+  const deduped = [];
+  for (const item of items) {
+    const key = normalizeNameForDedup(item.name);
+    if (!key) {
+      deduped.push(item);
+      continue;
+    }
+    const existingIndex = seenAt.get(key);
+    if (existingIndex === undefined) {
+      seenAt.set(key, deduped.length);
+      deduped.push(item);
+    } else if ((item.quantity || 1) > (deduped[existingIndex].quantity || 1)) {
+      // Keep whichever occurrence claims the larger quantity — the more
+      // likely to reflect an actually-stated repeat rather than the
+      // spurious duplicate.
+      deduped[existingIndex] = item;
+    }
+  }
+  return deduped;
 }
 
 /**
@@ -521,7 +637,10 @@ export function buildFoodItem(raw, index = 0) {
  */
 export function buildUnifiedResponse({ inputText, inputMode, mealType, rawItems }) {
   // Build standardized items
-  const items = (rawItems || []).map((raw, idx) => buildFoodItem(raw, idx));
+  const items = dedupeRepeatedFoodMentions(
+    (rawItems || []).map((raw, idx) => buildFoodItem(raw, idx)),
+    inputMode
+  );
 
   // Calculate totals (always server-side!)
   const totals = calculateTotals(items);
@@ -535,7 +654,7 @@ export function buildUnifiedResponse({ inputText, inputMode, mealType, rawItems 
   }
 
   // Calculate NutriScore from totals (proper European algorithm)
-  const nutriScoreResult = calculateNutriScore(totals);
+  const nutriScoreResult = calculateNutriScore(totals, totals.gramsEquivalent);
   const nutriScore = nutriScoreResult.grade;
   const nutriScoreValue = nutriScoreResult.score;
 

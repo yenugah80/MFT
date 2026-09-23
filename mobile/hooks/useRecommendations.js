@@ -379,12 +379,14 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
         mealType: recommendation.mealType,
       };
 
-      const response = await apiClient.post('/log/food', {
+      // /log/food was never a registered route (confirmed 404 in production) —
+      // the real endpoint is /log/meal, which also expects `fats` not `fat`.
+      const response = await apiClient.post('/log/meal', {
         foodName: quickLogData.foodName,
         calories: quickLogData.calories,
         protein: quickLogData.protein,
         carbs: quickLogData.carbs,
-        fat: quickLogData.fat || quickLogData.fats,
+        fats: quickLogData.fat || quickLogData.fats,
         fiber: quickLogData.fiber,
         mealType: quickLogData.mealType,
         servingSize: recommendation.portion || '1 serving',
@@ -398,9 +400,14 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
     },
     onSuccess: () => {
       if (__DEV__) console.log('[useSmartRecommendations] Quick log successful');
-      // Invalidate both dashboard and recommendations
+      // Invalidate both dashboard and recommendations. Also Your Progress's
+      // keys — this is a real meal log (backfilled into recommendations_history
+      // per loggingController.js), so it should show up there too.
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['smartRecommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-unified'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['decision-brain'] });
     },
     onError: (err) => {
       if (__DEV__) console.error('[useSmartRecommendations] Quick log error:', err);
@@ -410,9 +417,10 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
   const quickLog = useCallback(async (recommendation) => {
     try {
       const result = await quickLogMutation.mutateAsync(recommendation);
+      // logMeal returns the inserted row directly, not wrapped in { foodLog }.
       return {
         success: true,
-        foodLog: result?.foodLog,
+        foodLog: result,
         message: `${recommendation.name} added to your log!`,
       };
     } catch (err) {
@@ -444,6 +452,13 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
     // Current meal type (auto-detected or forced)
     mealType: data?.mealType || mealType,
 
+    // True when the backend deliberately withheld recommendations because it
+    // couldn't verify allergen/diet safety (a DB lookup failure, not "no
+    // good matches") — distinct from isEmpty so the UI can explain why
+    // instead of showing the generic "log some meals" empty state.
+    blocked: data?.blocked === true,
+    blockedReason: data?.blocked === true ? data?.reasoning || null : null,
+
     // Loading states
     loading,
     isFetching,
@@ -457,7 +472,7 @@ export function useSmartRecommendations({ enabled = false, limit = 5, mealType }
 
     // Derived
     hasRecommendations: (data?.recommendations?.length || 0) > 0,
-    isEmpty: !loading && (data?.recommendations?.length || 0) === 0,
+    isEmpty: !loading && data?.blocked !== true && (data?.recommendations?.length || 0) === 0,
     topPriorities: data?.nutritionalStatus?.priorities || [],
   };
 }

@@ -45,7 +45,19 @@ import { useTheme } from '../../providers/ThemeProvider';
 import * as Haptics from 'expo-haptics';
 
 import MoodIcon3D from '../MoodTracker/MoodIcon3D';
-import { useMoodLog, MOOD_TYPES, MOOD_DEFAULT_INTENSITY } from '../../hooks/useMoodLog';
+import {
+  useMoodLog,
+  MOOD_TYPES,
+  MOOD_DEFAULT_ENERGY,
+  MOOD_DEFAULT_INTENSITY,
+} from '../../hooks/useMoodLog';
+
+// Five high-frequency choices fit compact phone widths. The complete mood
+// taxonomy remains available through the full logger.
+const QUICK_MOOD_KEYS = ['calm', 'happy', 'energized', 'neutral', 'tired'];
+const QUICK_MOODS = QUICK_MOOD_KEYS
+  .map((key) => MOOD_TYPES.find((mood) => mood.key === key))
+  .filter(Boolean);
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -145,6 +157,9 @@ const EnhancedMoodCard = ({
   const { colors, isDark } = useTheme();
   const { logMood } = useMoodLog();
   const [quickLogging, setQuickLogging] = useState(null); // mood key being logged
+  const [selectedQuickMood, setSelectedQuickMood] = useState(null);
+  const [quickStatus, setQuickStatus] = useState(null);
+  const statusTimerRef = useRef(null);
 
   // Theme-aware colors
   const textPrimary = colors.text.primary;
@@ -167,7 +182,44 @@ const EnhancedMoodCard = ({
     ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']
     : getPastelGradient(latestMood?.mood);
   const lastLoggedLabel = useMemo(() => formatLastLogged(latestMood?.loggedDate), [latestMood?.loggedDate]);
+  const moodIsRecent = useMemo(() => isRecentMood(latestMood?.loggedDate), [latestMood?.loggedDate]);
   const trendSummary = insights?.trendSummary || { direction: 'flat', delta: null, lastIntensity: null };
+
+  useEffect(() => {
+    if (latestMood?.mood) setSelectedQuickMood(latestMood.mood);
+  }, [latestMood?.mood]);
+
+  useEffect(() => () => {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+  }, []);
+
+  const handleQuickLog = async (mood) => {
+    if (quickLogging) return;
+
+    setQuickLogging(mood.key);
+    setQuickStatus(null);
+    try {
+      await logMood({
+        mood: mood.key,
+        intensity: MOOD_DEFAULT_INTENSITY[mood.key] ?? 5,
+        energyLevel: MOOD_DEFAULT_ENERGY[mood.key] ?? 5,
+        tags: {},
+        source: 'quick_log',
+      });
+      setSelectedQuickMood(mood.key);
+      setQuickStatus({ type: 'success', message: `${mood.label} saved` });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = setTimeout(() => setQuickStatus(null), 2200);
+    } catch {
+      setQuickStatus({ type: 'error', message: 'Could not save' });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Could not save', 'Failed to log mood. Please try again.');
+    } finally {
+      setQuickLogging(null);
+    }
+  };
 
   // Empty State - also check if mood field is missing
   if ((!latestMood || !latestMood.mood) && !loading) {
@@ -230,20 +282,34 @@ const EnhancedMoodCard = ({
       {/* Mood Summary */}
       <View style={[styles.moodSummary, { backgroundColor: sectionBg, borderColor }]}>
         <View style={styles.moodHeader}>
-          <MoodIcon3D
-            mood={latestMood?.mood || 'neutral'}
-            size={60}
-            selected={true}
-            onSelect={() => {}}
-          />
+          <View
+            style={[styles.currentMoodIcon, { backgroundColor: `${moodColors?.base || textSecondary}14` }]}
+            accessible={false}
+          >
+            <MoodIcon3D
+              mood={latestMood?.mood || 'neutral'}
+              size={44}
+              showLabel={false}
+              selected={false}
+              interactive={false}
+              compact
+              resizeMode="contain"
+            />
+          </View>
           <View style={styles.moodMeta}>
-            <Text style={[styles.currentMoodLabel, { color: textTertiary }]}>Current Mood</Text>
+            <Text style={[styles.currentMoodLabel, { color: textTertiary }]}>
+              {moodIsRecent ? 'Current Mood' : 'Last Mood'}
+            </Text>
             <Text style={[styles.currentMoodValue, { color: textPrimary }]}>
               {latestMood?.mood ? latestMood.mood.charAt(0).toUpperCase() + latestMood.mood.slice(1) : 'Unknown'}
             </Text>
             {lastLoggedLabel && (
               <Text style={[styles.lastLoggedText, { color: textTertiary }]}>Logged {lastLoggedLabel}</Text>
             )}
+            <View style={[styles.energyBadge, { backgroundColor: `${moodColors?.base || textSecondary}12` }]}>
+              <Ionicons name="flash-outline" size={12} color={moodColors?.base || textSecondary} />
+              <Text style={[styles.energyBadgeText, { color: textSecondary }]}>Energy {latestMood?.energyLevel ?? 5}/10</Text>
+            </View>
           </View>
         </View>
         <View style={styles.intensityContainer}>
@@ -263,48 +329,80 @@ const EnhancedMoodCard = ({
         </View>
       </View>
 
-      {/* ─── Quick-Log Strip ────────────────────────────────────────────────
-           One tap = logged. No modal. Lottie icons play on selection.
-           Tap "More" opens the full MoodLogger for intensity + tags + note. */}
+      {/* Five labeled quick choices fit the phone viewport. More opens the
+          complete logger for all moods, intensity, energy, tags and notes. */}
       <View style={[quickLogStyles.strip, { backgroundColor: sectionBg, borderColor }]}>
-        <Text style={[quickLogStyles.label, { color: textTertiary }]}>How are you feeling now?</Text>
+        <View style={quickLogStyles.labelRow}>
+          <Text style={[quickLogStyles.label, { color: textSecondary }]}>Quick check-in</Text>
+          <Text
+            style={[
+              quickLogStyles.status,
+              { color: quickStatus?.type === 'error' ? '#B91C1C' : (quickStatus ? '#0F766E' : textTertiary) },
+            ]}
+            accessibilityLiveRegion="polite"
+          >
+            {quickStatus?.message || 'One tap saves'}
+          </Text>
+        </View>
         <View style={quickLogStyles.icons}>
-          {MOOD_TYPES.map((m) => (
-            <TouchableOpacity
-              key={m.key}
-              style={quickLogStyles.iconWrap}
-              onPress={async () => {
-                if (quickLogging) return;
-                setQuickLogging(m.key);
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                try {
-                  await logMood({ mood: m.key, intensity: MOOD_DEFAULT_INTENSITY[m.key] ?? 5, energyLevel: 5, tags: {}, source: 'quick_log' });
-                } catch {
-                  Alert.alert('Could not save', 'Failed to log mood. Please try again.');
-                } finally {
-                  setQuickLogging(null);
-                }
-              }}
-              disabled={!!quickLogging}
-              activeOpacity={0.75}
-              accessibilityLabel={`Quick log ${m.label}`}
-            >
-              <MoodIcon3D
-                mood={m.key}
-                size={40}
-                showLabel={false}
-                autoPlay={quickLogging === m.key}
-                selected={quickLogging === m.key}
-                onSelect={() => {}}
-              />
-            </TouchableOpacity>
-          ))}
+          {QUICK_MOODS.map((m) => {
+            const isSelected = selectedQuickMood === m.key;
+            const isSaving = quickLogging === m.key;
+            return (
+              <TouchableOpacity
+                key={m.key}
+                style={[
+                  quickLogStyles.moodButton,
+                  { borderColor: isSelected ? m.color : borderColor },
+                  isSelected && { backgroundColor: `${m.color}12` },
+                ]}
+                onPress={() => handleQuickLog(m)}
+                disabled={!!quickLogging}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Quick log ${m.label}`}
+                accessibilityHint={`Saves ${m.label.toLowerCase()} with intensity ${MOOD_DEFAULT_INTENSITY[m.key]} and energy ${MOOD_DEFAULT_ENERGY[m.key]} out of 10`}
+                accessibilityState={{ selected: isSelected, disabled: !!quickLogging, busy: isSaving }}
+              >
+                <View style={[quickLogStyles.iconCircle, { backgroundColor: `${m.color}14` }]}>
+                  <MoodIcon3D
+                    mood={m.key}
+                    size={28}
+                    showLabel={false}
+                    selected={false}
+                    autoPlay={isSaving}
+                    loop={isSaving}
+                    interactive={false}
+                    compact
+                    showSelectionIndicator={false}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text
+                  style={[quickLogStyles.moodLabel, { color: isSelected ? m.color : textSecondary }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.76}
+                >
+                  {m.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
           <TouchableOpacity
-            style={[quickLogStyles.moreBtn, { borderColor: textTertiary }]}
+            style={[quickLogStyles.moodButton, { borderColor }]}
             onPress={onOpenFullLogger}
             activeOpacity={0.8}
+            disabled={!!quickLogging}
+            accessibilityRole="button"
+            accessibilityLabel="Open full mood check-in"
+            accessibilityHint="Choose from every mood and add intensity, energy, context, and notes"
+            accessibilityState={{ disabled: !!quickLogging }}
           >
-            <Text style={[quickLogStyles.moreText, { color: textTertiary }]}>More</Text>
+            <View style={[quickLogStyles.iconCircle, { backgroundColor: pillBg }]}>
+              <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
+            </View>
+            <Text style={[quickLogStyles.moodLabel, { color: textSecondary }]}>More</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -417,6 +515,19 @@ const getPastelGradient = (moodKey) => {
   };
 
   return gradients[moodKey] || PASTEL_NEUTRAL_GRADIENT;
+};
+
+/**
+ * Whether the newest entry is recent enough to call "current".
+ *
+ * The card used to label whatever it had as "Current Mood", so an entry from
+ * three days ago read as how the user feels right now.
+ */
+const isRecentMood = (loggedDate) => {
+  if (!loggedDate) return false;
+  const date = new Date(loggedDate);
+  if (Number.isNaN(date.getTime())) return false;
+  return Date.now() - date.getTime() < 24 * 60 * 60 * 1000;
 };
 
 const formatLastLogged = (loggedDate) => {
@@ -566,7 +677,14 @@ const styles = StyleSheet.create({
   moodHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[2],
+    gap: SPACING[3],
+  },
+  currentMoodIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   moodMeta: {
     flex: 1,
@@ -581,6 +699,20 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
     marginTop: SPACING[0.5],
+  },
+  energyBadge: {
+    marginTop: SPACING[1],
+    paddingHorizontal: SPACING[2],
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  energyBadgeText: {
+    fontSize: 10,
+    fontFamily: TYPOGRAPHY.family.semibold,
   },
   currentMoodValue: {
     fontSize: TYPOGRAPHY.size.xl,
@@ -838,32 +970,51 @@ const quickLogStyles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     borderWidth: 1,
     paddingVertical: SPACING[3],
-    paddingHorizontal: SPACING[3],
+    paddingHorizontal: SPACING[2],
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING[1],
+    marginBottom: SPACING[2],
   },
   label: {
-    fontSize: TYPOGRAPHY.size.xs,
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  status: {
+    fontSize: 10,
     fontFamily: TYPOGRAPHY.family.medium,
-    marginBottom: SPACING[2],
-    textAlign: 'center',
   },
   icons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 4,
   },
-  iconWrap: {
-    alignItems: 'center',
+  moodButton: {
     flex: 1,
-  },
-  moreBtn: {
+    minWidth: 0,
+    minHeight: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderRadius: RADIUS.full,
+    paddingHorizontal: 2,
     paddingVertical: SPACING[1],
-    paddingHorizontal: SPACING[2],
-    marginLeft: SPACING[1],
   },
-  moreText: {
-    fontSize: TYPOGRAPHY.size.xs,
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moodLabel: {
+    width: '100%',
+    textAlign: 'center',
+    fontSize: 10,
     fontFamily: TYPOGRAPHY.family.semibold,
   },
 });

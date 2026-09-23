@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, SURFACES, TYPOGRAPHY } from '../../constants/premiumTheme';
 import { toDisplayText } from '../../utils/displayText';
+import { calculateProteinDensityScore } from '../../utils/mealComparison';
 
 /**
  * Format timestamp to readable date
@@ -147,45 +148,12 @@ function HistoryItem({ log, isSelected, onPress }) {
 }
 
 /**
- * Calculate meal score for comparison
- */
-function calculateMealScore(meal) {
-  const protein = meal.protein || 0;
-  const carbs = meal.carbs || 0;
-  const fat = meal.fat || meal.fats || 0;
-  const fiber = meal.fiber || 0;
-  const sugar = meal.sugar || 0;
-  const calories = meal.calories || 0;
-
-  if (calories <= 0) return 50;
-
-  // Protein ratio score (higher protein per calorie is better)
-  const proteinPerCal = (protein * 4) / calories;
-  const proteinScore = Math.min(100, proteinPerCal * 250);
-
-  // Fiber bonus
-  const fiberScore = Math.min(100, (fiber / 8) * 100);
-
-  // Sugar penalty
-  const sugarPenalty = Math.min(40, (sugar / 25) * 40);
-
-  // Macro balance
-  const totalMacroCal = (protein * 4) + (carbs * 4) + (fat * 9) || 1;
-  const proteinPct = (protein * 4) / totalMacroCal * 100;
-  let balanceScore = 100;
-  if (proteinPct < 15) balanceScore -= 30;
-  else if (proteinPct < 20) balanceScore -= 15;
-
-  return Math.round((proteinScore * 0.35 + fiberScore * 0.2 + balanceScore * 0.3 + (40 - sugarPenalty)) * 0.9);
-}
-
-/**
  * Generate recommendations based on comparison
  */
 function generateRecommendations(log1, log2) {
   const recommendations = [];
-  const score1 = calculateMealScore(log1);
-  const score2 = calculateMealScore(log2);
+  const score1 = calculateProteinDensityScore(log1);
+  const score2 = calculateProteinDensityScore(log2);
 
   const winner = score1 >= score2 ? log1 : log2;
   const loser = score1 >= score2 ? log2 : log1;
@@ -645,7 +613,8 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   historyList: {
-    flex: 1,
+    // No flex:1 — `drawer` has maxHeight '80%' but no height, so it sizes to
+    // content and a flex:1 child would collapse the list to zero height.
     padding: 16,
   },
   // Modern card-style history item
@@ -800,7 +769,8 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   comparisonContent: {
-    flex: 1,
+    // Same as historyList — `comparisonModal` caps with maxHeight '90%' but
+    // sets no height, so it hugs content.
     padding: 20,
   },
   healthierBanner: {

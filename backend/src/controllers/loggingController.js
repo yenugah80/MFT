@@ -1,7 +1,11 @@
-import { foodLogTable, waterLogTable, moodLogTable } from "../db/schema.js";
+import { foodLogTable, waterLogTable, moodLogTable, recommendationsHistoryTable, dailyNutritionSummaryTable } from "../db/schema.js";
+import { db } from "../db/index.js";
+import { sql } from "drizzle-orm";
 import errors from "../utils/errorResponse.js";
 import { clearPatternCache } from "../services/patternMiningService.js";
 import { checkNutritionPlausibility, checkMacroConsistency } from "../services/nutritionPlausibilityChecker.js";
+import { invalidateCFCache } from "../services/collaborativeFilteringService.js";
+import { getLocalDateUTC, parseTimezoneOffsetMinutes, toDateStr } from "../utils/timezone.js";
 
 export async function logMeal(req, res) {
   try {
@@ -28,6 +32,7 @@ export async function logMeal(req, res) {
       imageUrl,
       loggedDate,
       source,
+      sourceMeta: clientSourceMeta,
     } = req.body;
 
     if (!foodName) {
@@ -79,9 +84,15 @@ export async function logMeal(req, res) {
       );
     }
 
-    const result = await req.db
-      .insert(foodLogTable)
-      .values({
+    const safeLoggedDate = loggedDate ? new Date(loggedDate) : new Date();
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    let result;
+
+    // The food row and its denormalized daily summary are one logical write.
+    // /nutrition/log already maintained this summary, but /log/meal did not,
+    // leaving Quick Log charts and averages stale after a successful insert.
+    await req.db.transaction(async (tx) => {
+      result = await tx.insert(foodLogTable).values({
         userId,
         foodName,
         calories: effectiveCalories ?? null,
@@ -102,15 +113,39 @@ export async function logMeal(req, res) {
         ingredients: ingredients ?? [],
         barcode: barcode ?? null,
         imageUrl: imageUrl ?? null,
-        loggedDate: loggedDate ? new Date(loggedDate) : new Date(),
+        loggedDate: safeLoggedDate,
         source,
         sourceMeta: {
+          ...(clientSourceMeta && typeof clientSourceMeta === 'object' ? clientSourceMeta : {}),
           plausibility,
           macroReconciled,
           ...(macroReconciled ? { originalCaloriesKcal } : {}),
         },
-      })
-      .returning();
+      }).returning();
+
+      if (!result || result.length === 0) throw new Error('Meal insert returned no row');
+
+      const localDate = getLocalDateUTC(offsetMinutes, safeLoggedDate);
+      await tx.insert(dailyNutritionSummaryTable)
+        .values({
+          userId,
+          date: toDateStr(localDate),
+          totalCalories: effectiveCalories || 0,
+          totalProtein: protein || 0,
+          totalCarbs: carbs || 0,
+          totalFats: fats || 0,
+        })
+        .onConflictDoUpdate({
+          target: [dailyNutritionSummaryTable.userId, dailyNutritionSummaryTable.date],
+          set: {
+            totalCalories: sql`${dailyNutritionSummaryTable.totalCalories} + ${effectiveCalories || 0}`,
+            totalProtein: sql`${dailyNutritionSummaryTable.totalProtein} + ${protein || 0}`,
+            totalCarbs: sql`${dailyNutritionSummaryTable.totalCarbs} + ${carbs || 0}`,
+            totalFats: sql`${dailyNutritionSummaryTable.totalFats} + ${fats || 0}`,
+            updatedAt: new Date(),
+          },
+        });
+    });
 
     if (!result || result.length === 0) {
       return errors.database(res, "insert meal log");
@@ -118,6 +153,42 @@ export async function logMeal(req, res) {
 
     // Clear pattern cache for this user (new data invalidates cached patterns)
     clearPatternCache(userId);
+
+    // Smart Food Picks (smartRecommendationEngine.js) never persists candidates
+    // to recommendations_history, so quick-logging one previously left zero
+    // audit trail and never fed collaborative filtering. Backfill that here,
+    // recorded as already-accepted since logging *is* the acceptance action
+    // for this surface. Deliberately NOT fed into Thompson Sampling — these
+    // are rule-scored catalogue picks, not bandit-selected candidates, and
+    // recommendationType 'SMART_PICK' is not one of the bandit's arm types.
+    // Best-effort: never let this fail the actual food-log write.
+    if (clientSourceMeta?.source === 'smart_recommendation' && clientSourceMeta?.recommendationId) {
+      db.insert(recommendationsHistoryTable)
+        .values({
+          userId,
+          recommendationId: `smart-${clientSourceMeta.recommendationId}-${result[0].id}`,
+          foodName,
+          calories: Math.round(effectiveCalories ?? 0),
+          protein: Math.round(protein ?? 0),
+          carbs: Math.round(carbs ?? 0),
+          fats: Math.round(fats ?? 0),
+          // Same integer-column constraint as the other 4 fields above —
+          // this one was missed (found via a full sweep for the exact bug
+          // class just found live in nutrition.js: an integer column
+          // silently rejecting a realistic fractional value).
+          fiber: Math.round(fiber ?? 0),
+          recommendationType: 'SMART_PICK',
+          mealType: mealType ?? null,
+          interactionStatus: 'accepted',
+          wasLogged: true,
+          loggedFoodId: result[0].id,
+          loggedAt: new Date(),
+          interactedAt: new Date(),
+          aiGenerated: false,
+        })
+        .then(() => invalidateCFCache(userId))
+        .catch((err) => console.warn('[LoggingController] Smart pick history backfill failed:', err.message));
+    }
 
     res.status(201).json(result[0]);
   } catch (err) {

@@ -36,6 +36,20 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
 
+      # Catches schema.js declaring a NOT NULL / default / unique or check
+      # constraint that the real database does not have, or vice versa —
+      # exactly the shape of bug that let client_event_id's idempotency key
+      # silently accept unlimited duplicates on four tables, and that briefly
+      # broke activity logging in the other direction when the first fix
+      # over-corrected. Fails only on drift NEW since
+      # backend/src/db/schemaDriftBaseline.json was captured — see that
+      # script's own header for why pre-existing drift is a backlog, not a
+      # blocker.
+      - name: Schema drift check
+        run: npm run check:schema-drift --workspace=backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
   mobile:
     name: Mobile – Lint & Test
     runs-on: ubuntu-latest

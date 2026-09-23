@@ -112,27 +112,32 @@ function MyComponent() {
 }
 ```
 
-### 6. **Offline Queue** (`utils/offlineQueue.js`)
+### 6. **Offline Sync Queue** (SQLite `sync_queue` table, `hooks/useFoodLog.js`)
 
-Queue API requests when offline for later replay:
+Food logs write to a local SQLite table immediately, then a `sync_queue`
+table (same DB) tracks which rows still need to reach the server. There is
+no separate `utils/offlineQueue.js` module — an earlier version of this
+queue lived there as an AsyncStorage-backed queue, but it had a data-loss
+bug (`processQueue()` could overwrite the whole stored queue with only the
+in-flight batch, dropping anything enqueued mid-drain) and was dead code by
+the time it was removed — nothing imported it. The SQLite-backed queue below
+is the only offline queue in the app.
 
 ```javascript
-import { enqueue, processQueue } from '@/utils/offlineQueue';
+// Simplified — see hooks/useFoodLog.js for the real implementation,
+// including retry backoff and the 'blocked' state for entries that keep
+// failing after repeated retries.
+const { logs, addLog, pendingSyncCount, hasSyncFailure, retryFailedSyncs } = useFoodLog();
 
-// When offline, enqueue the action
-await enqueue('LOG_FOOD', {
-  foodName: 'Apple',
-  calories: 95,
-});
+// Logging a meal writes to SQLite immediately (works offline) and adds a
+// row to sync_queue for later upload — the caller doesn't need to know
+// whether the device is online.
+await addLog(newFoodLog);
 
-// When back online, process the queue
-const handlers = {
-  LOG_FOOD: async (payload) => {
-    await apiClient.post('/nutrition/log', payload);
-  },
-};
-
-await processQueue(handlers);
+// Sync itself is internal/automatic (a NetInfo reconnect listener drains the
+// queue), not something a screen calls directly. pendingSyncCount and
+// hasSyncFailure are what a screen reads to show sync state; a permanently
+// failed entry (state = 'blocked') needs an explicit retryFailedSyncs().
 ```
 
 ## Usage Examples
@@ -189,35 +194,16 @@ function SettingsScreen() {
 ### Example 3: Offline-First Food Logging
 
 ```javascript
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { enqueue } from '@/utils/offlineQueue';
-import apiClient from '@/services/apiClient';
-import NetInfo from '@react-native-community/netinfo';
+import { useFoodLog } from '@/hooks/useFoodLog';
 
 function LogFoodScreen() {
-  const queryClient = useQueryClient();
+  const { addLog } = useFoodLog();
 
-  const logFoodMutation = useMutation({
-    mutationFn: async (foodData) => {
-      const netInfo = await NetInfo.fetch();
-
-      if (!netInfo.isConnected) {
-        // Queue for later if offline
-        await enqueue('LOG_FOOD', foodData);
-        return { queued: true };
-      }
-
-      // Send immediately if online
-      return await apiClient.post('/nutrition/log', foodData);
-    },
-    onSuccess: () => {
-      // Invalidate dashboard to refresh
-      queryClient.invalidateQueries(['dashboard']);
-    },
-  });
-
+  // No online check needed here — addLog always writes to SQLite first,
+  // whether or not the device is connected. Sync to the server happens in
+  // the background (immediately if online, on reconnect if not).
   const handleLogFood = () => {
-    logFoodMutation.mutate({
+    addLog({
       foodName: 'Apple',
       calories: 95,
       protein: 0,
@@ -424,7 +410,7 @@ export const persistOptions = {
 | Storage full | Clear old data with `clear()` |
 | Slow app startup | Reduce persisted cache size |
 | Data corruption | Clear cache and start fresh |
-| Offline queue stuck | Call `clearQueue()` to reset |
+| Sync stuck on a bad entry | Call `discardBlockedSync(clientEventId)` (see `useFoodLog`) |
 
 ## API Reference
 
@@ -433,6 +419,6 @@ See individual file JSDoc comments for detailed API documentation:
 - `utils/storage.js` - Low-level storage operations
 - `utils/queryPersistence.js` - React Query persistence config
 - `utils/preferences.js` - Preference management
-- `utils/offlineQueue.js` - Offline queue management
+- `hooks/useFoodLog.js` - Local-first food logging + SQLite `sync_queue`
 - `hooks/usePreferences.js` - Preferences hook
 - `hooks/usePersistedState.js` - Persisted state hook

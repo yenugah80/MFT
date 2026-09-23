@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Sleep Tracking Routes
  *
  * Dedicated sleep logging with quality assessment and context tags.
@@ -13,12 +13,22 @@
 
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { eq, and, gte, lte, desc, sql, count, avg } from 'drizzle-orm';
+import { eq, and, gte, desc, sql } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { sleepLogTable } from '../db/schema.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
+import {
+  normalizeHistoryQuery,
+  summarizeClockTimes,
+  summarizeSleepHistory,
+} from '../utils/wellnessHistory.js';
+import { compareBinaryGroups, MIN_PATTERN_GROUP_SIZE } from '../utils/patternEvidence.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -54,6 +64,78 @@ export const SLEEP_CONTEXT_TAGS = [
   { key: 'lateFood', label: 'Late Heavy Meal', icon: 'restaurant' },
 ];
 
+const SLEEP_CONTEXT_KEYS = new Set(SLEEP_CONTEXT_TAGS.map(({ key }) => key));
+
+export function normalizeSleepLogInput(body = {}, offsetMinutes = 0) {
+  const {
+    bedTime,
+    wakeTime,
+    quality,
+    tags = {},
+    notes = null,
+    sleepDate = null,
+    clientEventId = null,
+  } = body || {};
+
+  if (!Number.isInteger(quality) || quality < 1 || quality > 10) {
+    return { error: 'Sleep quality must be an integer between 1 and 10' };
+  }
+  if (!tags || Array.isArray(tags) || typeof tags !== 'object') {
+    return { error: 'Sleep context tags must be an object' };
+  }
+  if (notes !== null && typeof notes !== 'string') {
+    return { error: 'Notes must be text' };
+  }
+  if (typeof notes === 'string' && notes.length > 200) {
+    return { error: 'Notes must be 200 characters or fewer' };
+  }
+  if (sleepDate !== null && (typeof sleepDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(sleepDate))) {
+    return { error: 'Sleep date must use YYYY-MM-DD format' };
+  }
+  if (clientEventId !== null && (typeof clientEventId !== 'string' || clientEventId.length < 1 || clientEventId.length > 200)) {
+    return { error: 'Invalid client event ID' };
+  }
+
+  const bedTimeDate = new Date(bedTime);
+  const wakeTimeDate = new Date(wakeTime);
+  if (Number.isNaN(bedTimeDate.getTime()) || Number.isNaN(wakeTimeDate.getTime())) {
+    return { error: 'Bed time and wake time must be valid timestamps' };
+  }
+
+  const durationMinutes = Math.round((wakeTimeDate - bedTimeDate) / 60000);
+  if (durationMinutes <= 0 || durationMinutes > 1440) {
+    return { error: 'Sleep duration must be greater than zero and no more than 24 hours' };
+  }
+
+  const normalizedTags = {};
+  for (const key of SLEEP_CONTEXT_KEYS) {
+    const value = tags[key];
+    if (value !== undefined && typeof value !== 'boolean') {
+      return { error: `Sleep context tag ${key} must be true or false` };
+    }
+    normalizedTags[key] = value === true;
+  }
+
+  const effectiveSleepDate = sleepDate || getDayKey(bedTimeDate, offsetMinutes);
+  const calendarDate = new Date(`${effectiveSleepDate}T00:00:00.000Z`);
+  if (Number.isNaN(calendarDate.getTime()) || calendarDate.toISOString().slice(0, 10) !== effectiveSleepDate) {
+    return { error: 'Sleep date must be a valid calendar date' };
+  }
+
+  return {
+    value: {
+      bedTimeDate,
+      wakeTimeDate,
+      durationMinutes,
+      quality,
+      tags: normalizedTags,
+      notes: typeof notes === 'string' ? notes.trim() || null : null,
+      effectiveSleepDate,
+      clientEventId,
+    },
+  };
+}
+
 router.get('/constants', (req, res) => {
   res.json({
     qualityLabels: SLEEP_QUALITY_LABELS,
@@ -69,37 +151,21 @@ router.post('/log', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const normalized = normalizeSleepLogInput(req.body, offsetMinutes);
+    if (normalized.error) {
+      return res.status(400).json({ error: normalized.error });
+    }
     const {
-      bedTime,
-      wakeTime,
+      bedTimeDate,
+      wakeTimeDate,
+      durationMinutes,
       quality,
-      tags = {},
+      tags,
       notes,
-      sleepDate, // YYYY-MM-DD of the night
+      effectiveSleepDate,
       clientEventId,
-    } = req.body;
-
-    // Validation
-    if (!bedTime || !wakeTime) {
-      return res.status(400).json({ error: 'Bed time and wake time are required' });
-    }
-
-    if (!quality || quality < 1 || quality > 10) {
-      return res.status(400).json({ error: 'Quality must be between 1 and 10' });
-    }
-
-    // Calculate duration
-    const bedTimeDate = new Date(bedTime);
-    const wakeTimeDate = new Date(wakeTime);
-    const durationMinutes = Math.round((wakeTimeDate - bedTimeDate) / 60000);
-
-    if (durationMinutes <= 0 || durationMinutes > 1440) {
-      return res.status(400).json({ error: 'Invalid sleep duration' });
-    }
-
-    // Determine sleep date (the night the sleep started)
-    const effectiveSleepDate = sleepDate || getDayKey(bedTimeDate, offsetMinutes);
-    const dayKey = getDayKey(new Date(), offsetMinutes);
+    } = normalized.value;
+    const dayKey = effectiveSleepDate;
 
     // Idempotency check
     if (clientEventId) {
@@ -147,13 +213,16 @@ router.post('/log', async (req, res) => {
           durationMinutes,
           quality,
           tags,
-          notes: notes || null,
+          notes,
           clientEventId: clientEventId || null,
+          dayKey,
+          timezoneOffset: offsetMinutes,
           updatedAt: new Date(),
         })
         .where(eq(sleepLogTable.id, existingForDate[0].id))
         .returning();
 
+      clearPatternCache(userId);
       return res.json({
         success: true,
         log: updated,
@@ -172,7 +241,7 @@ router.post('/log', async (req, res) => {
         durationMinutes,
         quality,
         tags,
-        notes: notes || null,
+        notes,
         sleepDate: effectiveSleepDate,
         clientEventId: clientEventId || null,
         dayKey,
@@ -180,10 +249,20 @@ router.post('/log', async (req, res) => {
       })
       .returning();
 
-    // Update streak
+    // Update streak. Every other logging route (activity/food/water/mood/
+    // stress) credits the day the entry is FOR, not the moment it was
+    // submitted — this one used new Date() instead, so a sleep log entered
+    // any time after the fact (backfilling a missed night, bulk import,
+    // even just logging late) credited today instead of the night it
+    // actually happened, and could silently report a gap/break that never
+    // occurred. wakeTimeDate (the morning the sleep session ends, when a
+    // user would naturally log it) is the closest sleep-specific analogue
+    // to "loggedDate" elsewhere — sleepDate/dayKey key off bedTime/now
+    // instead, for the unrelated purpose of identifying which night this
+    // entry is for, not when to credit the streak.
     let streakResult = null;
     try {
-      streakResult = await updateStreak(userId, new Date(), db, offsetMinutes);
+      streakResult = await updateStreak(userId, wakeTimeDate, db, offsetMinutes);
       console.log(`[Sleep] Streak updated: ${streakResult.streak}`);
     } catch (streakError) {
       console.error('[Sleep] Streak update failed (non-fatal):', streakError);
@@ -191,8 +270,8 @@ router.post('/log', async (req, res) => {
 
     // Award XP: 10 base + 5 quality bonus (quality >= 7) + 8 consistent bedtime bonus
     let xpResult = null;
+    let xpToAward = 10;
     try {
-      let xpToAward = 10; // Base XP
       if (quality >= 7) {
         xpToAward += 5; // Quality bonus
       }
@@ -211,11 +290,23 @@ router.post('/log', async (req, res) => {
       log: newLog,
       durationMinutes,
       durationHours: Math.round((durationMinutes / 60) * 10) / 10,
-      xp: xpResult ? { awarded: xpResult.newXP - (xpResult.newXP - 10), total: xpResult.newXP } : null,
+      xp: xpResult ? { awarded: xpToAward, total: xpResult.newXP } : null,
       streak: streakResult ? { current: streakResult.streak } : null,
       message: `Logged ${Math.round((durationMinutes / 60) * 10) / 10} hours of sleep`,
     });
   } catch (error) {
+    const clientEventId = req.body?.clientEventId;
+    if ((error?.code === '23505' || error?.cause?.code === '23505') && typeof clientEventId === 'string') {
+      const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
+      const [existing] = await db
+        .select()
+        .from(sleepLogTable)
+        .where(and(eq(sleepLogTable.userId, userId), eq(sleepLogTable.clientEventId, clientEventId)))
+        .limit(1);
+      if (existing) {
+        return res.json({ success: true, log: existing, idempotent: true, message: 'Sleep already logged' });
+      }
+    }
     console.error('[Sleep] POST /log error:', error);
     res.status(500).json({ error: 'Failed to log sleep' });
   }
@@ -272,58 +363,50 @@ router.get('/today', async (req, res) => {
 router.get('/history', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const { days = 30, limit = 100, offset = 0 } = req.query;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const { days, limit, offset } = normalizeHistoryQuery(req.query);
 
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-    const startDateStr = startDate.toISOString().split('T')[0];
+    startDate.setDate(startDate.getDate() - days + 1);
+    const startDateStr = getDayKey(startDate, offsetMinutes);
 
-    // Get sleep logs
+    const historyFilter = and(
+      eq(sleepLogTable.userId, userId),
+      gte(sleepLogTable.sleepDate, startDateStr)
+    );
+
+    // The range query powers summaries and the chart. Pagination only affects
+    // the recent-entry list, so changing page never changes the headline data.
+    const rangeLogs = await db
+      .select()
+      .from(sleepLogTable)
+      .where(historyFilter)
+      .orderBy(desc(sleepLogTable.sleepDate));
+
     const sleepLogs = await db
       .select()
       .from(sleepLogTable)
-      .where(
-        and(
-          eq(sleepLogTable.userId, userId),
-          gte(sleepLogTable.sleepDate, startDateStr)
-        )
-      )
+      .where(historyFilter)
       .orderBy(desc(sleepLogTable.sleepDate))
-      .limit(parseInt(limit))
-      .offset(parseInt(offset));
+      .limit(limit)
+      .offset(offset);
 
-    // Get total count
-    const [countResult] = await db
-      .select({ count: count() })
-      .from(sleepLogTable)
-      .where(
-        and(
-          eq(sleepLogTable.userId, userId),
-          gte(sleepLogTable.sleepDate, startDateStr)
-        )
-      );
-
-    // Calculate summary
-    const totalDuration = sleepLogs.reduce((sum, log) => sum + (log.durationMinutes || 0), 0);
-    const avgDuration = sleepLogs.length > 0 ? Math.round(totalDuration / sleepLogs.length) : 0;
-    const avgQuality = sleepLogs.length > 0
-      ? Math.round((sleepLogs.reduce((sum, log) => sum + (log.quality || 0), 0) / sleepLogs.length) * 10) / 10
-      : 0;
+    const total = rangeLogs.length;
 
     res.json({
       success: true,
       sleepLogs,
-      total: countResult?.count || 0,
-      summary: {
-        avgDurationMinutes: avgDuration,
-        avgDurationHours: Math.round((avgDuration / 60) * 10) / 10,
-        avgQuality,
-        daysTracked: sleepLogs.length,
-      },
+      total,
+      summary: summarizeSleepHistory(rangeLogs),
+      dailySummaries: [...rangeLogs].reverse().map((log) => ({
+        date: log.sleepDate,
+        durationMinutes: log.durationMinutes,
+        quality: log.quality,
+      })),
       pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: (parseInt(offset) + sleepLogs.length) < (countResult?.count || 0),
+        limit,
+        offset,
+        hasMore: offset + sleepLogs.length < total,
       },
     });
   } catch (error) {
@@ -339,11 +422,12 @@ router.get('/history', async (req, res) => {
 router.get('/trends', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const { days = 30 } = req.query;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const { days } = normalizeHistoryQuery(req.query);
 
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-    const startDateStr = startDate.toISOString().split('T')[0];
+    startDate.setDate(startDate.getDate() - days + 1);
+    const startDateStr = getDayKey(startDate, offsetMinutes);
 
     // Get sleep logs
     const sleepLogs = await db
@@ -372,12 +456,10 @@ router.get('/trends', async (req, res) => {
 
     // Calculate bedtime consistency (standard deviation of bed times)
     const bedTimes = sleepLogs.map(log => {
-      const date = new Date(log.bedTime);
-      return date.getHours() * 60 + date.getMinutes();
+      const date = new Date(new Date(log.bedTime).getTime() - (log.timezoneOffset ?? offsetMinutes) * 60000);
+      return date.getUTCHours() * 60 + date.getUTCMinutes();
     });
-    const avgBedTime = bedTimes.reduce((sum, t) => sum + t, 0) / bedTimes.length;
-    const bedTimeVariance = bedTimes.reduce((sum, t) => sum + Math.pow(t - avgBedTime, 2), 0) / bedTimes.length;
-    const bedTimeStdDev = Math.sqrt(bedTimeVariance);
+    const { averageMinutes: avgBedTime, standardDeviationMinutes: bedTimeStdDev } = summarizeClockTimes(bedTimes);
     const consistencyScore = Math.max(0, 1 - (bedTimeStdDev / 120)); // 120 min = 2 hours variance = 0 consistency
 
     // Count tag occurrences
@@ -395,14 +477,16 @@ router.get('/trends', async (req, res) => {
     // Analyze tag correlations with quality
     const tagImpact = {};
     Object.keys(tagCounts).forEach(tag => {
-      const withTag = sleepLogs.filter(log => log.tags?.[tag]);
-      const withoutTag = sleepLogs.filter(log => !log.tags?.[tag]);
-      if (withTag.length > 0 && withoutTag.length > 0) {
-        const avgWithTag = withTag.reduce((sum, log) => sum + log.quality, 0) / withTag.length;
-        const avgWithoutTag = withoutTag.reduce((sum, log) => sum + log.quality, 0) / withoutTag.length;
+      const comparison = compareBinaryGroups(
+        sleepLogs,
+        (log) => log.tags?.[tag] === true,
+        (log) => log.quality
+      );
+      if (comparison) {
         tagImpact[tag] = {
-          impact: Math.round((avgWithTag - avgWithoutTag) * 10) / 10,
-          occurrences: withTag.length,
+          impact: comparison.difference,
+          occurrences: comparison.countWith,
+          comparisonOccurrences: comparison.countWithout,
         };
       }
     });
@@ -414,10 +498,11 @@ router.get('/trends', async (req, res) => {
         avgDurationHours: Math.round((avgDuration / 60) * 10) / 10,
         avgQuality: Math.round(avgQuality * 10) / 10,
         consistencyScore: Math.round(consistencyScore * 100),
-        avgBedTime: `${Math.floor(avgBedTime / 60)}:${String(Math.round(avgBedTime % 60)).padStart(2, '0')}`,
+        avgBedTime: `${Math.floor(avgBedTime / 60)}:${String(avgBedTime % 60).padStart(2, '0')}`,
         daysTracked: sleepLogs.length,
         tagCounts,
         tagImpact,
+        minimumAssociationGroupSize: MIN_PATTERN_GROUP_SIZE,
       },
     });
   } catch (error) {
@@ -433,30 +518,54 @@ router.get('/trends', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const sleepId = parseInt(req.params.id);
+    const sleepId = Number(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
-    if (!sleepId || isNaN(sleepId)) {
+    if (!Number.isSafeInteger(sleepId) || sleepId <= 0) {
       return res.status(400).json({ error: 'Invalid sleep ID' });
     }
 
-    // Verify ownership and delete
-    const deleted = await db
-      .delete(sleepLogTable)
-      .where(
-        and(
-          eq(sleepLogTable.id, sleepId),
-          eq(sleepLogTable.userId, userId)
-        )
-      )
-      .returning();
+    // Delete + streak reconciliation as one transaction: if reconciliation
+    // throws, the delete rolls back too, instead of leaving the entry gone
+    // with an un-reconciled streak.
+    const txResult = await db.transaction(async (tx) => {
+      const beforeStreak = await getTrackedDaySnapshot(userId, tx, offsetMinutes);
 
-    if (deleted.length === 0) {
+      // Verify ownership and delete
+      const deleted = await tx
+        .delete(sleepLogTable)
+        .where(
+          and(
+            eq(sleepLogTable.id, sleepId),
+            eq(sleepLogTable.userId, userId)
+          )
+        )
+        .returning();
+
+      if (deleted.length === 0) {
+        return { found: false };
+      }
+
+      const streakReconciliation = await reconcileStreakAfterDeletion({
+        userId,
+        beforeSnapshot: beforeStreak,
+        dbConn: tx,
+        timezoneOffset: offsetMinutes,
+      });
+
+      return { found: true, deleted, streakReconciliation };
+    });
+
+    if (!txResult.found) {
       return res.status(404).json({ error: 'Sleep entry not found or not owned by user' });
     }
 
+    clearPatternCache(userId);
+
     res.json({
       success: true,
-      deleted: deleted[0],
+      deleted: txResult.deleted[0],
+      streak: txResult.streakReconciliation.streak,
       message: 'Sleep entry deleted successfully',
     });
   } catch (error) {

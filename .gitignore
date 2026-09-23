@@ -8,6 +8,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.bak*
+
+# Scratch scripts left behind by debugging sessions
+.tmp_*.mjs
 
 # Google OAuth credential files (never commit these)
 client_secret_*.json

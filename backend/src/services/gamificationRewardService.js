@@ -2,18 +2,107 @@
 // Handles XP calculation, awarding, and streak management
 
 import { db } from "../config/db.js";
-import { gamificationTable } from "../db/schema.js";
-import { eq, and, sql } from "drizzle-orm";
-import { normalizeDateUTC, addDaysUTC, getLocalDateUTC } from "../utils/timezone.js";
+import { gamificationTable, gamificationAuditLogTable } from "../db/schema.js";
+import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { normalizeDateUTC, addDaysUTC, getLocalDateUTC, getLocalDayRange } from "../utils/timezone.js";
 import { calculateLevel, checkLevelUp } from "../utils/levelCalculator.js";
+import { reconcileStreakAfterCreate } from './streakReconciliationService.js';
 import {
   sendStreakCelebration,
   sendUserNotification,
   NOTIFICATION_TYPES,
 } from "./pushNotificationService.js";
+import { withReservedNotificationSlot, NOTIFICATION_POLICY } from "../utils/notificationPolicy.js";
+import { getAccountEffectiveDailyCap } from "../utils/deviceRegistry.js";
+
+/**
+ * Gate + deliver for this file's two event-driven PUSH notifications
+ * (level-up, streak milestone). Quiet hours apply here like every other
+ * push — a user who is awake right now (they just logged something) may
+ * still not want their phone lighting up at 2 AM; the push channel doesn't
+ * get to assume otherwise just because its trigger was a live action. The
+ * daily cap and 60-minute spacing floor apply too, so a celebration can't
+ * stack directly on top of a reminder that just fired. Reserved atomically
+ * (withReservedNotificationSlot) so a concurrent job's send for the same
+ * user can't race past this one — see notificationPolicy.js.
+ *
+ * This is deliberately NOT the only way the user learns about a level-up
+ * or streak milestone during active use — the API response from
+ * awardXP/updateStreak already carries { leveledUp, newLevel } /
+ * { isMilestone, streak } synchronously, and the mobile client (
+ * MomentumCard's justLeveledUp/streak-milestone highlight) surfaces that
+ * in-app immediately, unaffected by quiet hours, whether or not this push
+ * ever fires. The push exists for when the user is NOT looking (backgrounded/
+ * closed app) — that is exactly the case quiet hours needs to gate.
+ *
+ * Neither of these call sites previously wrote to
+ * notificationDeliveryLogTable at all — invisible to every other job's
+ * rate-limit accounting, and to each other's. The reservation closes that.
+ */
+async function sendGatedCelebration(dbConn, userId, notificationType, notification, deliveryLogType) {
+  const effectiveDailyCap = await getAccountEffectiveDailyCap(dbConn, userId, null, NOTIFICATION_POLICY.MAX_NOTIFICATIONS_PER_USER_PER_DAY);
+  const result = await withReservedNotificationSlot(dbConn, userId, { maxPerDay: effectiveDailyCap }, async () => {
+    const sendResult = await sendUserNotification(dbConn, userId, notificationType, notification);
+    return {
+      success: sendResult?.success === true,
+      deliveryLog: {
+        notificationType: deliveryLogType,
+        title: notification.title,
+        body: notification.body,
+        channel: 'expo',
+        priority: 2,
+      },
+    };
+  });
+  if (result.held) {
+    console.log(`[GamificationReward] Notification for ${userId} held (${result.held})`);
+  }
+  return result;
+}
+
+// Same gate as sendGatedCelebration, but wraps sendStreakCelebration
+// directly since its per-milestone message text is built internally in
+// pushNotificationService.js rather than passed in here.
+async function sendGatedStreakCelebration(dbConn, userId, streakDays) {
+  const effectiveDailyCap = await getAccountEffectiveDailyCap(dbConn, userId, null, NOTIFICATION_POLICY.MAX_NOTIFICATIONS_PER_USER_PER_DAY);
+  const result = await withReservedNotificationSlot(dbConn, userId, { maxPerDay: effectiveDailyCap }, async () => {
+    const sendResult = await sendStreakCelebration(dbConn, userId, streakDays);
+    return {
+      success: sendResult?.success === true,
+      deliveryLog: {
+        notificationType: 'streak_celebration',
+        title: `${streakDays} Day Streak!`,
+        body: `${streakDays} day streak milestone`,
+        channel: 'expo',
+        priority: 2,
+      },
+    };
+  });
+  if (result.held) {
+    console.log(`[GamificationReward] Streak notification for ${userId} held (${result.held})`);
+  }
+  return result;
+}
 
 // Streak milestones that trigger celebrations
 const STREAK_MILESTONES = [7, 14, 30, 50, 100, 150, 200, 365];
+
+// Fire-and-forget audit trail for every streak write — see migration 0049.
+// Never awaited by the caller and never allowed to throw: a logging failure
+// must not block the real update. callSite is a lightweight "who called
+// updateStreak" hint (file:line from the stack), not a full trace.
+function logGamificationChange(userId, oldValues, newValues, dbConn = db) {
+  const callSite = (new Error().stack || '')
+    .split('\n')
+    .slice(3, 4) // skip this fn, updateStreak's throw point, and the direct caller frame
+    .map((l) => l.trim())
+    .join('') || null;
+
+  return dbConn
+    .insert(gamificationAuditLogTable)
+    .values({ userId, source: 'updateStreak', oldValues, newValues, callSite })
+    .catch((err) => console.warn('[GamificationReward] Audit log insert failed (non-fatal):', err.message));
+}
 
 // ============================================================================
 // XP REWARDS BY LOG TYPE
@@ -71,35 +160,39 @@ export function calculateLogXP(logType, context = {}) {
 /**
  * Calculate XP to award for a meal log
  * Rules: First 3 meals = 10 XP each, meals 4+ = 5 XP each
+ *
+ * "Today" is the user's LOCAL day, matching how the same request bounds the
+ * daily nutrition summary. Bounding it by the UTC day instead made meal
+ * numbering disagree with the summary and reset at UTC midnight — for a user at
+ * UTC-4, dinner at 21:00 local is 01:00 UTC, so it counted as meal 1 of a fresh
+ * day and earned 10 XP instead of 5.
+ *
  * @param {string} userId - User ID
- * @param {Date} date - Date of the meal (will be normalized)
- * @param {Object} db - Database connection (can be transaction)
+ * @param {Date} date - Date of the meal
+ * @param {Object} dbConn - Database connection (can be transaction)
+ * @param {number} [offsetMinutes] - User's timezone offset; falls back to the
+ *   server's local day when absent, same as the other timezone helpers
  * @returns {Promise<Object>} { xp, mealNumber, dailyTotal }
  */
-export async function calculateMealXP(userId, date, dbConn = db) {
-  const normalizedDate = normalizeDateUTC(date);
-
-  // Note: dailyMealCountsTable will be created in migration
-  // For now, we'll query foodLogTable to count meals for the day
-  // This is a temporary implementation until migration is run
-
+export async function calculateMealXP(userId, date, dbConn = db, offsetMinutes) {
   try {
     // Import foodLogTable dynamically to avoid circular dependencies
     const { foodLogTable } = await import("../db/schema.js");
 
-    // Count existing meals for today
-    const startOfDay = new Date(normalizedDate);
-    const endOfDay = new Date(normalizedDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Count existing meals in the user's local day
+    const { start: startOfDay, end: endOfDay } = getLocalDayRange(offsetMinutes, new Date(date));
 
+    // gte/lte, not sql`${col} >= ${date}`: a raw template bypasses Drizzle's
+    // column type mapping, so the Date was handed to postgres.js unserialized
+    // and every call threw ERR_INVALID_ARG_TYPE into the catch below.
     const existingMeals = await dbConn
       .select({ count: sql`count(*)::int` })
       .from(foodLogTable)
       .where(
         and(
           eq(foodLogTable.userId, userId),
-          sql`${foodLogTable.loggedDate} >= ${startOfDay}`,
-          sql`${foodLogTable.loggedDate} <= ${endOfDay}`
+          gte(foodLogTable.loggedDate, startOfDay),
+          lte(foodLogTable.loggedDate, endOfDay)
         )
       );
 
@@ -118,12 +211,17 @@ export async function calculateMealXP(userId, date, dbConn = db) {
       dailyTotal,
     };
   } catch (error) {
+    // Non-fatal on purpose: an XP miscalculation must not fail the meal log.
+    // But award the MINIMUM tier, not the maximum. This previously returned 10
+    // — the best case — so a query that threw on every single call still looked
+    // like normal operation, and the only symptom was silently inflated XP for
+    // anyone logging more than three meals a day. Under-awarding surfaces as a
+    // complaint; over-awarding hides forever and cannot be taken back.
     console.error("[GamificationReward] Error calculating meal XP:", error);
-    // Fallback: award 10 XP if calculation fails
     return {
-      xp: 10,
-      mealNumber: 1,
-      dailyTotal: 10,
+      xp: 5,
+      mealNumber: null,
+      dailyTotal: 5,
     };
   }
 }
@@ -191,12 +289,12 @@ export async function awardXP(userId, xp, source = "meal_log", dbConn = db) {
 
     // Send push notification for level up
     if (levelUpInfo.leveledUp) {
-      sendUserNotification(dbConn, userId, NOTIFICATION_TYPES.GOAL_ACHIEVED, {
+      sendGatedCelebration(dbConn, userId, NOTIFICATION_TYPES.GOAL_ACHIEVED, {
         title: `🎉 Level ${levelInfo.level}!`,
         body: `Congratulations! You've reached Level ${levelInfo.level}. Keep up the great work!`,
         data: { type: 'level_up', newLevel: levelInfo.level, screen: 'profile' },
         channelId: 'insights',
-      }).catch((err) => {
+      }, 'level_up').catch((err) => {
         console.error(`[GamificationReward] Failed to send level-up notification:`, err);
       });
     }
@@ -217,7 +315,8 @@ export async function awardXP(userId, xp, source = "meal_log", dbConn = db) {
 
 /**
  * Update user's streak based on logging activity (Snapchat-style)
- * Rules: ANY log (food, water, mood, activity) counts towards streak
+ * Rules: any food, water, mood, activity, sleep or stress log counts toward
+ * the account-wide streak.
  * @param {string} userId - User ID
  * @param {Date} date - Date of current log
  * @param {Object} dbConn - Database connection (can be transaction)
@@ -230,166 +329,225 @@ export async function updateStreak(userId, date, dbConn = db, timezoneOffset = n
       ? getLocalDateUTC(timezoneOffset, date)
       : normalizeDateUTC(date);
 
-    // PRODUCTION FIX: Remove transaction for Neon HTTP driver compatibility
-    // Neon HTTP driver doesn't support transactions, so we use simple queries
-    // Race conditions are unlikely for single-user streak updates
+    // Read, reconcile, compute, and write all happen inside one transaction
+    // with the row locked FOR UPDATE — mirrors the pattern already used in
+    // gamificationService.js. Without this, two concurrent logs for the same
+    // user (e.g. two devices, or a retried offline-queue request) could both
+    // read the pre-update streak and one increment would be lost. dbConn is
+    // called as `.transaction()` rather than always `db.transaction()` so a
+    // caller that ever threads in an existing `tx` gets a nested
+    // transaction (savepoint) instead of a second top-level one.
+    const outcome = await dbConn.transaction(async (tx) => {
+      const lockQuery = sql`
+        SELECT * FROM gamification
+        WHERE user_id = ${userId}
+        FOR UPDATE
+      `;
+      const lockedRows = await tx.execute(lockQuery);
+      // tx.execute() on this postgres-js-backed Drizzle instance returns
+      // the row array directly, not { rows: [...] } (that shape was
+      // neon-http's, dropped 2026-06-22 — see backend/CLAUDE.md on the driver).
+      let currentGamification = lockedRows[0] || null;
 
-    // Get current gamification data
-    const selectQuery = sql`
-      SELECT * FROM gamification
-      WHERE user_id = ${userId}
-    `;
-    const selectResult = await dbConn.execute(selectQuery);
-    const currentGamification = selectResult.rows?.[0] || null;
+      if (!currentGamification) {
+        // Initialize with streak of 1 for brand new user
+        const insertResult = await tx
+          .insert(gamificationTable)
+          .values({
+            userId,
+            xp: 0,
+            level: 1,
+            streak: 1,
+            previousStreak: 0,
+            lastLogDate: today,
+            lastStreakUpdatedAt: today,
+            timezoneOffset: Number.isFinite(timezoneOffset) ? timezoneOffset : null,
+            badges: [],
+          })
+          .onConflictDoNothing()
+          .returning();
 
-    if (!currentGamification) {
-      // Initialize with streak of 1 for brand new user
-      const insertResult = await dbConn
-        .insert(gamificationTable)
-        .values({
-          userId,
-          xp: 0,
-          level: 1,
-          streak: 1,
+        if (!insertResult || insertResult.length === 0) {
+          const refetch = await tx.execute(lockQuery);
+          const existingRow = refetch[0];
+          if (existingRow) {
+            return {
+              streak: existingRow.streak,
+              streakIncremented: false,
+              previousStreak: existingRow.previous_streak || 0,
+              streakBroken: false,
+              canRestore: false,
+            };
+          }
+        }
+
+        let reconciledStreak = 1;
+        try {
+          const reconciled = await reconcileStreakAfterCreate(
+            userId,
+            tx,
+            timezoneOffset,
+            date
+          );
+          reconciledStreak = reconciled.streak;
+        } catch (reconcileError) {
+          console.warn('[Streak] Initial canonical reconciliation failed:', reconcileError.message);
+        }
+
+        return {
+          streak: reconciledStreak,
+          streakIncremented: true,
           previousStreak: 0,
-          lastLogDate: today,
-          lastStreakUpdatedAt: today,
-          timezoneOffset: Number.isFinite(timezoneOffset) ? timezoneOffset : null,
-          badges: [],
-        })
-        .onConflictDoNothing()
-        .returning();
+          streakBroken: false,
+          canRestore: false,
+          isFirstLog: true,
+        };
+      }
 
-      if (!insertResult || insertResult.length === 0) {
-        const refetch = await dbConn.execute(selectQuery);
-        const existingRow = refetch.rows?.[0];
-        if (existingRow) {
-          return {
-            streak: existingRow.streak,
-            streakIncremented: false,
-            previousStreak: existingRow.previous_streak || 0,
-            streakBroken: false,
-            canRestore: false,
-          };
+      // Repair historical under-counts from actual qualifying days before the
+      // incremental transition. This is increase-only, so a legitimate freeze
+      // offset is never silently removed. Refetch when repaired so all logic
+      // below operates on the corrected projection.
+      try {
+        const reconciled = await reconcileStreakAfterCreate(
+          userId,
+          tx,
+          timezoneOffset,
+          date
+        );
+        if (reconciled.changed) {
+          const refreshed = await tx.execute(lockQuery);
+          currentGamification = refreshed[0] || currentGamification;
+        }
+      } catch (reconcileError) {
+        console.warn('[Streak] Canonical create reconciliation failed:', reconcileError.message);
+      }
+
+      const currentStreak = currentGamification.streak || 0;
+      const storedPreviousStreak = currentGamification.previous_streak || 0;
+      const lastLogDate = currentGamification.last_log_date
+        ? normalizeDateUTC(new Date(currentGamification.last_log_date))
+        : null;
+      const lastStreakUpdated = currentGamification.last_streak_updated_at
+        ? normalizeDateUTC(new Date(currentGamification.last_streak_updated_at))
+        : null;
+      const streakResetAt = currentGamification.streak_reset_at
+        ? new Date(currentGamification.streak_reset_at)
+        : null;
+
+      // Check if already updated streak today
+      if (lastStreakUpdated && lastStreakUpdated.getTime() === today.getTime()) {
+        return {
+          streak: currentStreak,
+          streakIncremented: false,
+          previousStreak: storedPreviousStreak,
+          streakBroken: false,
+          canRestore: false,
+        };
+      }
+
+      let newStreak = currentStreak;
+      let streakIncremented = false;
+      let streakBroken = false;
+      let canRestore = false;
+      let newPreviousStreak = storedPreviousStreak;
+      let newStreakResetAt = streakResetAt;
+
+      if (!lastLogDate) {
+        // First ever log
+        newStreak = 1;
+        streakIncremented = true;
+      } else {
+        const yesterday = addDaysUTC(today, -1);
+        const daysSinceLastLog = Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (daysSinceLastLog === 0) {
+          // Same day log - no streak change
+          newStreak = currentStreak;
+        } else if (daysSinceLastLog === 1 || lastLogDate.getTime() === yesterday.getTime()) {
+          // Consecutive day - increment streak! 🔥
+          newStreak = currentStreak + 1;
+          streakIncremented = true;
+        } else if (daysSinceLastLog > 1) {
+          // MISSED DAY(S) - Snapchat-style: Store previous streak for restoration
+          streakBroken = true;
+          newPreviousStreak = currentStreak; // Store the lost streak
+          newStreakResetAt = new Date(); // Mark when it was reset
+          newStreak = 1; // Start fresh at 1 (they're logging now)
+          streakIncremented = true; // This IS their first day of new streak
+
+          // Can restore within 24 hours if they have freezes
+          const freezesAvailable = currentGamification.streak_freezes || 0;
+          canRestore = freezesAvailable > 0 && currentStreak > 1;
+
+          console.log(`[Streak] 💔 User ${userId}: Streak broken! Was ${currentStreak} days, stored for potential restore`);
         }
       }
 
-      return {
-        streak: 1,
-        streakIncremented: true,
-        previousStreak: 0,
-        streakBroken: false,
-        canRestore: false,
-        isFirstLog: true,
+      // Build update object
+      const updateData = {
+        streak: newStreak,
+        lastLogDate: today,
+        lastStreakUpdatedAt: today,
+        timezoneOffset: Number.isFinite(timezoneOffset)
+          ? timezoneOffset
+          : currentGamification.timezone_offset ?? null,
+        updatedAt: new Date(),
       };
-    }
 
-    const currentStreak = currentGamification.streak || 0;
-    const storedPreviousStreak = currentGamification.previous_streak || 0;
-    const lastLogDate = currentGamification.last_log_date
-      ? normalizeDateUTC(new Date(currentGamification.last_log_date))
-      : null;
-    const lastStreakUpdated = currentGamification.last_streak_updated_at
-      ? normalizeDateUTC(new Date(currentGamification.last_streak_updated_at))
-      : null;
-    const streakResetAt = currentGamification.streak_reset_at
-      ? new Date(currentGamification.streak_reset_at)
-      : null;
-
-    // Check if already updated streak today
-    if (lastStreakUpdated && lastStreakUpdated.getTime() === today.getTime()) {
-      return {
-        streak: currentStreak,
-        streakIncremented: false,
-        previousStreak: storedPreviousStreak,
-        streakBroken: false,
-        canRestore: false,
-      };
-    }
-
-    let newStreak = currentStreak;
-    let streakIncremented = false;
-    let streakBroken = false;
-    let canRestore = false;
-    let newPreviousStreak = storedPreviousStreak;
-    let newStreakResetAt = streakResetAt;
-
-    if (!lastLogDate) {
-      // First ever log
-      newStreak = 1;
-      streakIncremented = true;
-    } else {
-      const yesterday = addDaysUTC(today, -1);
-      const daysSinceLastLog = Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (daysSinceLastLog === 0) {
-        // Same day log - no streak change
-        newStreak = currentStreak;
-      } else if (daysSinceLastLog === 1 || lastLogDate.getTime() === yesterday.getTime()) {
-        // Consecutive day - increment streak! 🔥
-        newStreak = currentStreak + 1;
-        streakIncremented = true;
-      } else if (daysSinceLastLog > 1) {
-        // MISSED DAY(S) - Snapchat-style: Store previous streak for restoration
-        streakBroken = true;
-        newPreviousStreak = currentStreak; // Store the lost streak
-        newStreakResetAt = new Date(); // Mark when it was reset
-        newStreak = 1; // Start fresh at 1 (they're logging now)
-        streakIncremented = true; // This IS their first day of new streak
-
-        // Can restore within 24 hours if they have freezes
-        const freezesAvailable = currentGamification.streak_freezes || 0;
-        canRestore = freezesAvailable > 0 && currentStreak > 1;
-
-        console.log(`[Streak] 💔 User ${userId}: Streak broken! Was ${currentStreak} days, stored for potential restore`);
+      // Only update previousStreak/streakResetAt if streak was broken
+      if (streakBroken) {
+        updateData.previousStreak = newPreviousStreak;
+        updateData.streakResetAt = newStreakResetAt;
       }
-    }
 
-    // Build update object
-    const updateData = {
-      streak: newStreak,
-      lastLogDate: today,
-      lastStreakUpdatedAt: today,
-      timezoneOffset: Number.isFinite(timezoneOffset)
-        ? timezoneOffset
-        : currentGamification.timezone_offset ?? null,
-      updatedAt: new Date(),
-    };
+      await tx
+        .update(gamificationTable)
+        .set(updateData)
+        .where(eq(gamificationTable.userId, userId));
 
-    // Only update previousStreak/streakResetAt if streak was broken
-    if (streakBroken) {
-      updateData.previousStreak = newPreviousStreak;
-      updateData.streakResetAt = newStreakResetAt;
-    }
+      // Awaited (unlike before) so the audit row commits atomically with the
+      // update it describes. Still can't fail the transaction: the insert's
+      // own .catch() swallows a logging error into a resolved value, it just
+      // no longer races the update it's documenting.
+      await logGamificationChange(
+        userId,
+        {
+          streak: currentGamification.streak,
+          previousStreak: currentGamification.previous_streak,
+          lastLogDate: currentGamification.last_log_date,
+          lastStreakUpdatedAt: currentGamification.last_streak_updated_at,
+          streakResetAt: currentGamification.streak_reset_at,
+        },
+        updateData,
+        tx
+      );
 
-    await dbConn
-      .update(gamificationTable)
-      .set(updateData)
-      .where(eq(gamificationTable.userId, userId));
+      if (newStreak !== currentStreak) {
+        const emoji = streakBroken ? '💔→🔥' : (streakIncremented ? '🔥' : '');
+        console.log(`[Streak] User ${userId}: ${currentStreak} → ${newStreak} ${emoji}`);
+      }
 
-    if (newStreak !== currentStreak) {
-      const emoji = streakBroken ? '💔→🔥' : (streakIncremented ? '🔥' : '');
-      console.log(`[Streak] User ${userId}: ${currentStreak} → ${newStreak} ${emoji}`);
-    }
+      return {
+        streak: newStreak,
+        streakIncremented,
+        previousStreak: streakBroken ? newPreviousStreak : storedPreviousStreak,
+        streakBroken,
+        canRestore,
+        isMilestone: STREAK_MILESTONES.includes(newStreak),
+        daysMissed: streakBroken ? Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24)) - 1 : 0,
+      };
+    });
 
-    const result = {
-      streak: newStreak,
-      streakIncremented,
-      previousStreak: streakBroken ? newPreviousStreak : storedPreviousStreak,
-      streakBroken,
-      canRestore,
-      isMilestone: STREAK_MILESTONES.includes(newStreak),
-      daysMissed: streakBroken ? Math.floor((today.getTime() - lastLogDate.getTime()) / (1000 * 60 * 60 * 24)) - 1 : 0,
-    };
-
-    // Send push notification for streak milestones
-    if (result.streakIncremented && !result.streakBroken && STREAK_MILESTONES.includes(result.streak)) {
-      sendStreakCelebration(dbConn, userId, result.streak).catch((err) => {
+    // Push notifications are external I/O, not state — sent after the
+    // transaction commits, fire-and-forget, same as before.
+    if (outcome.streakIncremented && !outcome.streakBroken && STREAK_MILESTONES.includes(outcome.streak)) {
+      sendGatedStreakCelebration(dbConn, userId, outcome.streak).catch((err) => {
         console.error(`[GamificationReward] Failed to send streak notification:`, err);
       });
     }
 
-    return result;
+    return outcome;
   } catch (error) {
     console.error("[GamificationReward] Error updating streak:", error);
     throw error;
@@ -490,12 +648,14 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
 
     // Count food logs (10 XP for first 3 per day, 5 XP for rest)
     const foodLogsResult = await dbConn.execute(sql`
-      SELECT DATE(logged_at) as log_date, COUNT(*) as count
-      FROM food_logs
+      SELECT DATE(logged_date) as log_date, COUNT(*) as count
+      FROM food_log
       WHERE user_id = ${userId}
-      GROUP BY DATE(logged_at)
+      GROUP BY DATE(logged_date)
     `);
-    const foodLogsByDay = foodLogsResult.rows || [];
+    // See updateStreak's note above — dbConn.execute() returns the row
+    // array directly on this driver, not { rows: [...] }.
+    const foodLogsByDay = foodLogsResult || [];
     let foodXP = 0;
     foodLogsByDay.forEach(day => {
       const count = parseInt(day.count) || 0;
@@ -507,16 +667,16 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
 
     // Count water logs (5 XP each)
     const waterLogsResult = await dbConn.execute(sql`
-      SELECT COUNT(*) as count FROM water_logs WHERE user_id = ${userId}
+      SELECT COUNT(*) as count FROM water_log WHERE user_id = ${userId}
     `);
-    const waterCount = parseInt(waterLogsResult.rows?.[0]?.count) || 0;
+    const waterCount = parseInt(waterLogsResult[0]?.count) || 0;
     const waterXP = waterCount * 5;
 
     // Count mood logs (8 XP each)
     const moodLogsResult = await dbConn.execute(sql`
-      SELECT COUNT(*) as count FROM mood_logs WHERE user_id = ${userId}
+      SELECT COUNT(*) as count FROM mood_log WHERE user_id = ${userId}
     `);
-    const moodCount = parseInt(moodLogsResult.rows?.[0]?.count) || 0;
+    const moodCount = parseInt(moodLogsResult[0]?.count) || 0;
     const moodXP = moodCount * 8;
 
     // Count activity logs (10 XP base + duration bonus)
@@ -525,8 +685,8 @@ export async function backfillXPFromHistory(userId, dbConn = db) {
       FROM activity_log
       WHERE user_id = ${userId}
     `);
-    const activityCount = parseInt(activityLogsResult.rows?.[0]?.count) || 0;
-    const totalActivityMinutes = parseInt(activityLogsResult.rows?.[0]?.total_minutes) || 0;
+    const activityCount = parseInt(activityLogsResult[0]?.count) || 0;
+    const totalActivityMinutes = parseInt(activityLogsResult[0]?.total_minutes) || 0;
     // 10 XP per log + 1 XP per 5 minutes (capped at 20 bonus per log)
     const activityXP = activityCount * 10 + Math.min(Math.floor(totalActivityMinutes / 5), activityCount * 20);
 

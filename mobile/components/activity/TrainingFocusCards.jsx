@@ -22,8 +22,10 @@ import {
   RADIUS,
   SHADOWS,
   SEMANTIC,
-  BRAND,
+  VIBRANT_WELLNESS,
 } from '../../constants/premiumTheme';
+
+const ACTIVITY_COLOR = VIBRANT_WELLNESS.activity.solid;
 
 const GROUP_ORDER = ['Upper Body', 'Lower Body', 'Core', 'Full Body'];
 
@@ -43,15 +45,15 @@ export function MuscleBalanceCard({ balance, onLogWorkout }) {
       {!hasData ? (
         <>
           <Text style={styles.empty}>
-            Which muscles you train is recorded from your next logged session onward.
+            Which muscles you train is recorded from your next logged workout onward.
             {unattributedMinutes > 0
-              ? ` ${unattributedMinutes} min of earlier sessions could not be attributed.`
+              ? ` ${unattributedMinutes} min of earlier workouts could not be attributed.`
               : ''}
           </Text>
           {!!onLogWorkout && (
             <TouchableOpacity style={styles.ghostButton} onPress={onLogWorkout} activeOpacity={0.8}>
               <Text style={styles.ghostButtonText}>Log a workout</Text>
-              <Ionicons name="chevron-forward" size={14} color={BRAND.primary} />
+              <Ionicons name="chevron-forward" size={14} color={ACTIVITY_COLOR} />
             </TouchableOpacity>
           )}
         </>
@@ -78,7 +80,7 @@ export function MuscleBalanceCard({ balance, onLogWorkout }) {
 
           {unattributedMinutes > 0 && (
             <Text style={styles.note}>
-              {unattributedMinutes} min from earlier sessions are not attributed to a muscle group.
+              {unattributedMinutes} min from earlier workouts are not attributed to a muscle group.
             </Text>
           )}
         </>
@@ -113,7 +115,7 @@ export function MoodActivityCard({ link }) {
           <View style={styles.compareRow}>
             <View style={styles.compareCell}>
               <Text style={styles.compareValue}>{activeMean}</Text>
-              <Text style={styles.compareLabel}>active days</Text>
+              <Text style={styles.compareLabel}>days with workouts</Text>
               <Text style={styles.compareMeta}>n={activeDays}</Text>
             </View>
             <View style={styles.compareDivider} />
@@ -140,11 +142,12 @@ export function MoodActivityCard({ link }) {
 
 export function NextSessionCard({ suggestion, onLogWorkout }) {
   const { focus, activity, minutes = 30, reasons = [], hasSuggestion } = suggestion || {};
+  const sessionName = activity || focus || 'Movement';
 
   if (!hasSuggestion) {
     return (
       <View style={styles.card}>
-        <Text style={styles.title}>Next session</Text>
+        <Text style={styles.title}>No specific workout needed</Text>
         <Text style={styles.empty}>
           You are on top of the week and nothing has gone stale. Train because you want to.
         </Text>
@@ -153,30 +156,31 @@ export function NextSessionCard({ suggestion, onLogWorkout }) {
   }
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>Next session</Text>
+    <View style={[styles.card, styles.nextCard]}>
+      <View style={styles.nextHeader}>
+        <View style={styles.nextIcon}><Ionicons name="navigate-outline" size={18} color={VIBRANT_WELLNESS.activity.solid} /></View>
+        <View style={styles.nextHeaderCopy}>
+          <Text style={[styles.title, styles.nextTitle]}>{sessionName}</Text>
+          <Text style={styles.nextContext}>Based on your current training picture</Text>
+        </View>
+        <View style={styles.durationPill}><Text style={styles.durationText}>{minutes} min</Text></View>
+      </View>
 
-      <Text style={styles.suggestion}>
-        {activity ? `${activity} · ` : focus ? `${focus} · ` : ''}
-        {minutes} min
-      </Text>
       {!!activity && !!focus && (
         <Text style={styles.suggestionMeta}>{focus} is the gap worth closing</Text>
       )}
 
       {reasons.map((reason) => (
         <View key={reason} style={styles.reasonRow}>
-          <View style={styles.reasonDot} />
+          <Ionicons name="checkmark-circle-outline" size={16} color={SEMANTIC.success.base} />
           <Text style={styles.reasonText}>{reason}</Text>
         </View>
       ))}
 
       {!!onLogWorkout && (
-        <TouchableOpacity style={styles.primaryButton} onPress={onLogWorkout} activeOpacity={0.85}>
-          <Ionicons name="add" size={16} color="#fff" />
-          <Text style={styles.primaryButtonText}>
-            {focus ? `Find ${focus.toLowerCase()} exercises` : 'Log a workout'}
-          </Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => onLogWorkout(suggestion)} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Set up ${minutes} minute ${sessionName} workout`}>
+          <Ionicons name="arrow-forward-circle" size={17} color="#fff" />
+          <Text style={styles.primaryButtonText}>Set up this workout</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -196,6 +200,38 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
     marginBottom: SPACING[3],
+  },
+  nextCard: {
+    borderWidth: 1,
+    borderColor: `${VIBRANT_WELLNESS.activity.solid}22`,
+  },
+  nextHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    marginBottom: SPACING[3],
+  },
+  nextIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${VIBRANT_WELLNESS.activity.solid}12`,
+  },
+  nextHeaderCopy: { flex: 1, minWidth: 0 },
+  nextTitle: { marginBottom: 0, fontSize: TYPOGRAPHY.size.md },
+  nextContext: { marginTop: 2, fontSize: TYPOGRAPHY.size.xs, fontFamily: TYPOGRAPHY.family.regular, color: TEXT.tertiary },
+  durationPill: {
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderRadius: RADIUS.full,
+    backgroundColor: `${VIBRANT_WELLNESS.activity.solid}10`,
+  },
+  durationText: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.bold,
+    color: VIBRANT_WELLNESS.activity.solid,
   },
   empty: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -228,13 +264,13 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 8,
     borderRadius: 4,
-    backgroundColor: `${BRAND.primary}18`,
+    backgroundColor: `${ACTIVITY_COLOR}18`,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
     borderRadius: 4,
-    backgroundColor: BRAND.primary,
+    backgroundColor: ACTIVITY_COLOR,
   },
   rowValue: {
     width: 40,
@@ -295,24 +331,11 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.tertiary,
   },
-  suggestion: {
-    fontSize: TYPOGRAPHY.size.xl,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: TEXT.primary,
-    marginBottom: SPACING[2],
-  },
   reasonRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING[2],
     marginBottom: SPACING[1],
-  },
-  reasonDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: TEXT.tertiary,
-    marginTop: 7,
   },
   reasonText: {
     flex: 1,
@@ -329,7 +352,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingVertical: SPACING[3],
     borderRadius: RADIUS.lg,
-    backgroundColor: BRAND.primary,
+    backgroundColor: VIBRANT_WELLNESS.activity.solid,
   },
   primaryButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -344,11 +367,11 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingVertical: SPACING[2],
     borderRadius: RADIUS.md,
-    backgroundColor: `${BRAND.primary}12`,
+    backgroundColor: `${ACTIVITY_COLOR}12`,
   },
   ghostButtonText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: BRAND.primary,
+    color: ACTIVITY_COLOR,
   },
 });

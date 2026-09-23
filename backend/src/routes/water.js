@@ -19,6 +19,10 @@ import {
   getHydrationSignal,
   invalidateSignalCache,
 } from "../services/hydrationSignalService.js";
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -371,22 +375,47 @@ router.delete("/:id", async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const { id } = req.params;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
-    const [deleted] = await db
-      .delete(waterLogTable)
-      .where(
-        and(
-          eq(waterLogTable.id, parseInt(id)),
-          eq(waterLogTable.userId, userId)
+    // Delete + streak reconciliation as one transaction: if reconciliation
+    // throws, the delete rolls back too, instead of leaving the entry gone
+    // with an un-reconciled streak.
+    const txResult = await db.transaction(async (tx) => {
+      const beforeStreak = await getTrackedDaySnapshot(userId, tx, offsetMinutes);
+
+      const [deleted] = await tx
+        .delete(waterLogTable)
+        .where(
+          and(
+            eq(waterLogTable.id, parseInt(id)),
+            eq(waterLogTable.userId, userId)
+          )
         )
-      )
-      .returning();
+        .returning();
 
-    if (!deleted) {
+      if (!deleted) {
+        return { found: false };
+      }
+
+      const streakReconciliation = await reconcileStreakAfterDeletion({
+        userId,
+        beforeSnapshot: beforeStreak,
+        dbConn: tx,
+        timezoneOffset: offsetMinutes,
+      });
+
+      return { found: true, deleted, streakReconciliation };
+    });
+
+    if (!txResult.found) {
       return errors.notFound(res, 'Water log');
     }
 
-    res.json({ message: "Water log deleted", deleted });
+    res.json({
+      message: "Water log deleted",
+      deleted: txResult.deleted,
+      streak: txResult.streakReconciliation.streak,
+    });
   } catch (error) {
     console.error("[WaterDelete] Error:", error);
     errors.internal(res, 'Failed to delete water log');

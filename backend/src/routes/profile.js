@@ -9,9 +9,11 @@ import {
   saveGoals,
   saveGamification,
   completeOnboarding,
+  devResetOnboarding,
   getNotifications,
   saveNotifications,
   getPrivacySettings,
+  getPrivacyAudit,
   savePrivacySettings,
   getPreferences,
   savePreferences,
@@ -22,6 +24,12 @@ import {
   deleteFCMToken,
   getFCMTokenStatus,
   saveBothPushTokens,
+  getDeliveredToday,
+  acknowledgePushReceived,
+  registerDeviceEndpoint,
+  deregisterDeviceEndpoint,
+  issueDeregisterTokenEndpoint,
+  setNotificationOwnershipEndpoint,
   exportUserData,
   deleteAccount,
 } from "../controllers/profileController.js";
@@ -40,6 +48,7 @@ router.post("/basics", saveBasics);
 router.post("/dietary", saveDietary);
 router.post("/goals", saveGoals);
 router.post("/onboarding-complete", completeOnboarding);
+router.post("/dev/reset-onboarding", devResetOnboarding); // refuses unless NODE_ENV=development, see controller
 
 // Notification preferences
 router.get("/notifications", getNotifications);
@@ -58,9 +67,25 @@ router.delete("/fcm-token", deleteFCMToken);
 // Combined token endpoint (register both Expo and FCM tokens)
 router.post("/push-tokens", saveBothPushTokens);
 
+// Local/remote reminder de-duplication: which local categories already had
+// a real server-sent notification today (see getDeliveredToday for the
+// ownership model this implements)
+router.get("/notifications/delivered-today", getDeliveredToday);
+router.post("/notifications/ack", acknowledgePushReceived);
+
+// Per-device registration and local-delivery ownership. Additive alongside
+// /fcm-token and /push-token above — old app builds keep using those
+// unchanged; new builds use these instead. See deviceRegistry.js.
+router.post("/devices/register", registerDeviceEndpoint);
+router.post("/devices/deregister", deregisterDeviceEndpoint);
+router.post("/devices/issue-deregister-token", issueDeregisterTokenEndpoint);
+router.post("/notifications/ownership", setNotificationOwnershipEndpoint);
+
 // Privacy settings
 router.get("/privacy", getPrivacySettings);
+router.get("/privacy/audit", getPrivacyAudit);
 router.post("/privacy", savePrivacySettings);
+router.patch("/privacy", savePrivacySettings);
 
 // App preferences
 router.get("/preferences", getPreferences);

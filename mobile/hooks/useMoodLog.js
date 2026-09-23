@@ -17,6 +17,14 @@ export const MOOD_DEFAULT_INTENSITY = {
   neutral: 5, tired: 6, stressed: 7, sad: 6,
 };
 
+// Quick logging must not silently record the same energy value for every
+// mood. These are transparent defaults; the full logger remains available
+// whenever the user wants to enter their exact energy level.
+export const MOOD_DEFAULT_ENERGY = {
+  happy: 7, calm: 5, focused: 7, energized: 9,
+  neutral: 5, tired: 3, stressed: 4, sad: 3,
+};
+
 export const MOOD_TYPES = [
   { key: 'happy', emoji: '😊', label: 'Happy', color: '#10B981' },
   { key: 'calm', emoji: '😌', label: 'Calm', color: '#3B82F6' },
@@ -58,9 +66,13 @@ export function useMoodLog() {
       });
     },
     onSuccess: () => {
-      // Batch invalidation — single flush instead of 5 independent refetches
+      // Batch invalidation — single flush instead of 5 independent refetches.
+      // Includes Your Progress's keys (analytics-unified/-recommendations,
+      // decision-brain) so a new mood entry shows up there without a manual
+      // pull-to-refresh — previously only this screen's own queries refreshed.
       queryClient.invalidateQueries({
-        predicate: (q) => ['dashboard', 'moodLogs', 'moodTrends', 'moodInsights', 'moodToday']
+        predicate: (q) => ['dashboard', 'moodLogs', 'moodTrends', 'moodInsights', 'moodToday',
+          'moodHistory', 'analytics-unified', 'analytics-recommendations', 'decision-brain']
           .includes(q.queryKey[0]),
       });
     },

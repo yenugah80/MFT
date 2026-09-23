@@ -22,6 +22,9 @@ import { buildDefaultPortion, getPortionAdjustmentOptions } from "../utils/porti
 import { getIngredientBreakdown, hasIngredientData } from "../services/ingredientEstimator.js";
 import { ingredientBreakdownService } from "../services/ingredientBreakdownService.js";
 import { attachOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import { aggregateCanonicalTotals, normalizeMicros, computeConfidenceTier } from "../utils/canonicalNutrition.js";
+import { isNutrientsComplete, fillMissingNutrients, isMicrosComplete, mergeMissingMicros } from "../utils/nutrientCompleteness.js";
+import { selectBestUSDAMatch } from "../utils/usdaMatching.js";
 
 const router = express.Router();
 router.use(requireAuth());
@@ -106,6 +109,21 @@ router.post("/", attachOpenAIConsent(), async (req, res) => {
     // Enrich items with micronutrients if missing (USDA FoodData Central + AI fallback)
     await enrichMissingMicronutrients(resolvedDraft);
 
+    // Normalize every item's micros into canonical {value, unit} form here,
+    // once, regardless of which resolver (text/photo/barcode) or enrichment
+    // path produced them — bare AI numbers, OFF/USDA unit-suffixed strings,
+    // and enrichment's bare numbers all land in different raw shapes (see
+    // canonicalNutrition.js's header comment). Previously only the meal-level
+    // totals.micros got this treatment; a single-item meal reads item.micros
+    // directly and depended on MicrosGrid's own unit-guessing fallback on
+    // mobile instead of a server-guaranteed unit.
+    if (resolvedDraft?.items) {
+      resolvedDraft.items = resolvedDraft.items.map((item) => ({
+        ...item,
+        micros: normalizeMicros(item.micros),
+      }));
+    }
+
     // Enrich with unified health metrics (healthScore, nutriScore, healthAnalysis)
     const enrichedDraft = enrichWithHealthMetrics(resolvedDraft);
 
@@ -140,14 +158,24 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     return createErrorDraft(draftId, 'barcode', 'Invalid product data received', mealType);
   }
 
-  // Validate required fields with safe defaults
+  // Validate required fields with safe defaults. calories/protein/carbs/fat/
+  // fiber/sugar/sodium are left `null` (not 0) when OFF never reported them —
+  // Math.max(0, null) would coerce to 0 and destroy that distinction, so
+  // null is checked and passed through before the floor is applied.
+  const safeNonNegative = (v) => (Number.isFinite(v) ? Math.max(0, v) : null);
+  const servingGrams = offProduct.servingGrams;
+  const scale = (v) => FoodService.scaleFromPer100g(safeNonNegative(v), servingGrams);
   const safeOffProduct = {
     title: typeof offProduct.title === 'string' ? offProduct.title : 'Unknown Product',
     servingSize: typeof offProduct.servingSize === 'string' ? offProduct.servingSize : '100g',
-    calories: Number.isFinite(offProduct.calories) ? Math.max(0, offProduct.calories) : 0,
-    protein: Number.isFinite(offProduct.protein) ? Math.max(0, offProduct.protein) : 0,
-    carbs: Number.isFinite(offProduct.carbs) ? Math.max(0, offProduct.carbs) : 0,
-    fat: Number.isFinite(offProduct.fats || offProduct.fat) ? Math.max(0, offProduct.fats || offProduct.fat) : 0,
+    servingGrams,
+    calories: scale(offProduct.caloriesPer100g),
+    protein: scale(offProduct.proteinPer100g),
+    carbs: scale(offProduct.carbsPer100g),
+    fat: scale(offProduct.fatPer100g),
+    fiber: scale(offProduct.fiberPer100g),
+    sugar: scale(offProduct.sugarPer100g),
+    sodium: scale(offProduct.sodiumMgPer100g),
     micros: (offProduct.micros && typeof offProduct.micros === 'object') ? offProduct.micros : {},
     ingredients: Array.isArray(offProduct.ingredients) ? offProduct.ingredients : [],
     allergens: Array.isArray(offProduct.allergens) ? offProduct.allergens : [],
@@ -166,14 +194,18 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
     fieldsProvided: ['macros', 'micros', safeOffProduct.nutriscore !== 'UNKNOWN' ? 'nutriscore' : null].filter(Boolean)
   });
 
-  // Build item from validated OFF data
+  // Build item from validated OFF data. gramsEquivalent matches whichever
+  // basis the macros above were actually scaled to (real parsed serving
+  // size, or 100g when unparseable) — previously pinned to 100 regardless,
+  // while macros were the raw per-100g density, over/undercounting any
+  // product whose real serving size wasn't ~100g.
   const item = {
     itemId: uuidv4(),
     name: safeOffProduct.title,
     portion: {
       amount: 1,
-      unit: 'serving',
-      gramsEquivalent: 100,
+      unit: servingGrams ? 'serving' : '100g',
+      gramsEquivalent: servingGrams || 100,
       servingText: safeOffProduct.servingSize,
       isEstimated: false
     },
@@ -182,9 +214,9 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
       protein_g: safeOffProduct.protein,
       carbs_g: safeOffProduct.carbs,
       fat_g: safeOffProduct.fat,
-      fiber_g: 0,
-      sugar_g: 0,
-      sodium_mg: 0
+      fiber_g: safeOffProduct.fiber,
+      sugar_g: safeOffProduct.sugar,
+      sodium_mg: safeOffProduct.sodium,
     },
     micros: safeOffProduct.micros,
     ingredients: safeOffProduct.ingredients.map(i => (typeof i === 'object' && i.name) ? i.name : String(i)).filter(Boolean),
@@ -242,9 +274,17 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
 
   // Step 3: If nutrients incomplete, try USDA fallback
   if (!isNutrientsComplete(item.macros)) {
-    const usdaData = await FoodService.searchUSDAByName(item.name);
+    // searchUSDAByName returns an ARRAY of candidate matches, not a single
+    // result — passing it straight to fillMissingNutrients would read
+    // `usdaData.macros` off an array (always undefined) and throw on the
+    // first missing field. selectBestUSDAMatch (already used elsewhere in
+    // this file for the same purpose) picks the best-scoring candidate.
+    const usdaResults = await FoodService.searchUSDAByName(item.name);
+    const usdaData = Array.isArray(usdaResults) && usdaResults.length > 0
+      ? selectBestUSDAMatch(usdaResults, item.name)
+      : (usdaResults && !Array.isArray(usdaResults) ? usdaResults : null);
     if (usdaData) {
-      fillMissingNutrients(item, usdaData);
+      fillMissingNutrientsWithScaling(item, usdaData, item.portion?.gramsEquivalent);
       sourceEvidence.push({
         source: 'USDA',
         sourceId: usdaData.fdcId,
@@ -275,6 +315,135 @@ async function resolveBarcodeMode(barcode, draftId, mealType) {
  * NEW: Uses StrategicFoodParser with hybrid routing (rule-based vs AI)
  * Pipeline: StrategicFoodParser route → USDA search → OFF search → Best match selection
  */
+/**
+ * A near-zero calorie estimate from the AI-estimation path is not a
+ * legitimately low-calorie food — at virtually any normal portion, a real,
+ * recognized food has non-trivial calories. This is the signature of the
+ * model not actually recognizing the name (a misspelling/garbled
+ * transcription, in any language, for any food — not specific to any one
+ * ingredient) and returning a placeholder/empty guess that still
+ * "succeeds" (no exception thrown), which was previously only ever
+ * soft-flagged as low-confidence and shown as a normal confirmed item.
+ * Shared across every route that resolves an AI-estimated food (text via
+ * resolveGenericFood below, voice via voiceLog.js) so the threshold and
+ * the flag name can't drift between them.
+ *
+ * @returns {string|null} 'unrecognized_food_low_estimate' or null
+ */
+function flagUnrecognizedLowEstimate(source, calories) {
+  // 'estimat' (not 'estimation') deliberately — text-mode's resolver uses
+  // 'openai_estimation'/'openai_estimation_low_confidence'
+  // (smartNutritionResolver.js), voice-mode's uses 'ai_estimate'
+  // (OpenAIClient.js's estimateNutritionForText) — two different words for
+  // the same "this came from an AI guess, not a real record lookup"
+  // concept. Matching only 'estimation' silently never matched voice's
+  // 'ai_estimate' at all, so this check never actually ran for voice input.
+  if (!source || !source.includes('estimat')) return null;
+  if (typeof calories === 'number' && calories < 5) {
+    return 'unrecognized_food_low_estimate';
+  }
+  return null;
+}
+
+/**
+ * Flags an item the AI explicitly marked as unidentified (recognized:
+ * false — see UNRECOGNIZED_FOOD_GUIDANCE in nutritionAnalysis.js), the
+ * companion check to flagUnrecognizedLowEstimate above. That check only
+ * catches an AI guess that comes back near-zero-calorie; it cannot catch a
+ * CONFIDENT wrong guess — a garbled/nonsense input the model silently
+ * renamed to a plausible real food with a full, non-trivial nutrition
+ * profile (found via a live device test: "blorptato" → "potato dish",
+ * 150 kcal, complete macros/ingredients — nothing about that response
+ * looked low-confidence to any macro-based heuristic). This is authoritative
+ * because it's the model's own explicit signal, not inferred after the
+ * fact from the numbers it happened to return.
+ *
+ * @returns {string|null} 'unrecognized_food_name' or null
+ */
+function flagUnidentifiedFoodName(recognized) {
+  if (recognized === false) {
+    return 'unrecognized_food_name';
+  }
+  return null;
+}
+
+function spellingReviewFor(foodName) {
+  if (!foodName || typeof foodName !== 'string') return null;
+  const suggestion = getSpellingSuggestions(foodName);
+  if (!suggestion.needsCorrection || !suggestion.didYouMean) return null;
+
+  return {
+    original: foodName,
+    didYouMean: suggestion.didYouMean,
+    confidence: Math.round(suggestion.confidence * 100),
+    alternatives: suggestion.suggestions.slice(0, 3).map(candidate => candidate.name)
+  };
+}
+
+function ingredientNames(food) {
+  const values = [food?.name || food?.canonicalName];
+  for (const ingredient of food?.ingredients || food?.components || []) {
+    values.push(typeof ingredient === 'string'
+      ? ingredient
+      : ingredient?.name || ingredient?.foodName || ingredient?.canonicalName);
+  }
+  return values.filter(Boolean);
+}
+
+function attachSpellingReviews(parsedFood, resolvedItem, knownReviews) {
+  // The resolver already ran this food through the AI parser and a real
+  // record lookup (USDA/canonical dictionary/ingredient breakdown) before
+  // this ever runs — confidenceTier reflects whether that already
+  // succeeded. Re-validating an already-confidently-resolved name against
+  // fuzzyMatch.js's fixed, necessarily-incomplete word list is how "parsley"
+  // got flagged as a misspelling of "barley" (71% match) and "beet" of
+  // "beef" (75%) — both real, common foods the resolver identified
+  // correctly, just not everything the word list happens to contain. Only
+  // fall through to the spelling check when the resolver's own confidence
+  // is Low — i.e. it's already unsure, so a second opinion is worth having.
+  // BUG FOUND 2026-09: computeConfidenceTier (canonicalNutrition.js) returns
+  // the lowercase strings 'low' | 'medium' | 'high'. This guard compared
+  // against 'Low' (capital L) — a value computeConfidenceTier never
+  // produces — so `confidenceTier !== 'Low'` was true for every possible
+  // tier, including a genuine 'low', and this function returned early on
+  // every call. The spelling-suggestion system (fuzzyMatch.js's
+  // findSimilarFoods, which correctly matches "moongsal" -> "moong dal" at
+  // 78% and "Mondal" -> "moong dal" at 67%, confirmed directly) never
+  // actually ran for ANY food through this path, for any user — not a
+  // per-food gap, a total outage of the feature caused by one string
+  // literal's casing.
+  if (resolvedItem.confidenceTier && resolvedItem.confidenceTier !== 'low') {
+    return;
+  }
+
+  const candidates = Array.from(new Set([
+    ...ingredientNames(parsedFood),
+    ...ingredientNames(resolvedItem),
+  ]));
+  const reviews = candidates
+    .map(spellingReviewFor)
+    .filter(Boolean);
+
+  for (const review of reviews) {
+    if (!knownReviews.some(existing => existing.original.toLowerCase() === review.original.toLowerCase())) {
+      knownReviews.push(review);
+    }
+  }
+
+  if (reviews.length === 0) return;
+  resolvedItem.suggestions = reviews.map(review => ({
+    original: review.original,
+    canonical: review.didYouMean,
+    confidence: review.confidence,
+    alternatives: review.alternatives
+  }));
+  resolvedItem.requiresUserConfirmation = true;
+  resolvedItem.flags = Array.from(new Set([
+    ...(resolvedItem.flags || []),
+    'spelling_confirmation_required'
+  ]));
+}
+
 async function resolveTextMode(query, draftId, mealType, userId) {
   try {
     // Step 1: Parse text with StrategicFoodParser (handles hybrid routing based on user tier)
@@ -292,15 +461,10 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parseResult.items) {
       const foodName = parsedFood.name || parsedFood.canonicalName || '';
       if (foodName) {
-        const suggestion = getSpellingSuggestions(foodName);
-        if (suggestion.needsCorrection && suggestion.didYouMean) {
-          spellingSuggestions.push({
-            original: foodName,
-            didYouMean: suggestion.didYouMean,
-            confidence: Math.round(suggestion.confidence * 100),
-            alternatives: suggestion.suggestions.slice(0, 3).map(s => s.name)
-          });
-          console.log(`[Resolve] 🔍 Spelling suggestion for "${foodName}": Did you mean "${suggestion.didYouMean}"? (${Math.round(suggestion.confidence * 100)}% match)`);
+        const review = spellingReviewFor(foodName);
+        if (review) {
+          spellingSuggestions.push(review);
+          console.log(`[Resolve] 🔍 Spelling suggestion for "${foodName}": Did you mean "${review.didYouMean}"? (${review.confidence}% match)`);
         }
       }
     }
@@ -309,6 +473,10 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     const items = [];
     for (const parsedFood of parseResult.items) {
       const resolvedItem = await resolveGenericFood(parsedFood);
+      attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
+      if (resolvedItem.flags?.includes('unrecognized_food_name') || resolvedItem.flags?.includes('unrecognized_food_low_estimate')) {
+        resolvedItem.requiresUserConfirmation = true;
+      }
       items.push(resolvedItem);
     }
 
@@ -323,6 +491,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
       totals: calculateTotals(items),
       dataQuality,
       uiHints: generateUIHints(items, dataQuality),
+      hasUnresolvedItems: items.some(item => item.requiresUserConfirmation),
       // Strategic parsing metadata
       strategicParsing: {
         engine: parseResult.engine,
@@ -361,21 +530,18 @@ async function resolveTextMode(query, draftId, mealType, userId) {
     for (const parsedFood of parsedFoods) {
       const foodName = parsedFood.name || parsedFood.canonicalName || '';
       if (foodName) {
-        const suggestion = getSpellingSuggestions(foodName);
-        if (suggestion.needsCorrection && suggestion.didYouMean) {
-          spellingSuggestions.push({
-            original: foodName,
-            didYouMean: suggestion.didYouMean,
-            confidence: Math.round(suggestion.confidence * 100),
-            alternatives: suggestion.suggestions.slice(0, 3).map(s => s.name)
-          });
-        }
+        const review = spellingReviewFor(foodName);
+        if (review) spellingSuggestions.push(review);
       }
     }
 
     const items = [];
     for (const parsedFood of parsedFoods) {
       const resolvedItem = await resolveGenericFood(parsedFood);
+      attachSpellingReviews(parsedFood, resolvedItem, spellingSuggestions);
+      if (resolvedItem.flags?.includes('unrecognized_food_name') || resolvedItem.flags?.includes('unrecognized_food_low_estimate')) {
+        resolvedItem.requiresUserConfirmation = true;
+      }
       items.push(resolvedItem);
     }
 
@@ -402,6 +568,7 @@ async function resolveTextMode(query, draftId, mealType, userId) {
       totals: calculateTotals(items),
       dataQuality,
       uiHints,
+      hasUnresolvedItems: items.some(item => item.requiresUserConfirmation),
       spellingSuggestions: spellingSuggestions.length > 0 ? spellingSuggestions : undefined,
       strategicParsing: {
         engine: 'fallback_legacy',
@@ -579,12 +746,26 @@ async function resolveGenericFood(parsedFood) {
     const flags = [];
     if (!parsedFood.quantity) flags.push('portion_estimated');
     if (nutrition.source.includes('estimation')) {
-      if (nutrition.sourceConfidence < 80) {
+      const lowEstimateFlag = flagUnrecognizedLowEstimate(nutrition.source, nutrition.macros?.calories_kcal);
+      if (lowEstimateFlag) {
+        flags.push(lowEstimateFlag);
+      } else if (nutrition.sourceConfidence < 80) {
         flags.push('estimated_nutrients_low_confidence');
       } else {
         flags.push('ai_estimated_nutrients');
       }
     }
+    // Text mode's own estimator prompt (nutritionEstimation.js) already asks
+    // the model to self-report recognitionStatus: "unknown" when it can't
+    // identify the food at all — that signal existed but only ever produced
+    // a dismissible "gentle warning" (see buildInsights below), never
+    // anything that actually blocked Save the way a spelling-confirmation
+    // or near-zero-estimate item does. Route it through the same shared
+    // flag/function voice mode uses for its equivalent signal so "the AI
+    // says it doesn't know what this is" behaves identically everywhere,
+    // instead of being a softer, non-blocking warning only in text mode.
+    const nameFlag = flagUnidentifiedFoodName(nutrition.recognitionStatus !== 'unknown');
+    if (nameFlag) flags.push(nameFlag);
     if (nutrition.warning) flags.push('needs_verification');
     // Absolute calorie-density plausibility (attached by smartNutritionResolver).
     // A severe miss means the estimate is likely wrong by ~2x+ — surface it so the
@@ -620,13 +801,10 @@ async function resolveGenericFood(parsedFood) {
     const quantity = parsedFood.quantity || portionResult.quantity || 1;
     const ingredientBreakdown = getIngredientBreakdown(parsedFood.name, quantity);
 
-    // Determine ingredients: use our curated breakdown if available, else use AI components
-    const ingredients = ingredientBreakdown
-      ? ingredientBreakdown.ingredients
-      : (nutrition.components || []);
-
     // 🆕 PRODUCTION-GRADE: Get full editable ingredient breakdown from AI service
-    // This enables users to add/remove/modify ingredients and recalculate nutrition
+    // This enables users to add/remove/modify ingredients and recalculate nutrition.
+    // Fetched BEFORE `ingredients` below (moved up from after) so it can serve as a
+    // reliable third fallback tier — see comment there.
     let editableIngredientBreakdown = null;
     try {
       // Detect user region from headers or default to US
@@ -654,7 +832,31 @@ async function resolveGenericFood(parsedFood) {
       // Continue without editable breakdown - not a critical failure
     }
 
-    return {
+    // Determine ingredients: curated breakdown -> AI's own components -> the
+    // dedicated ingredient-breakdown service. The middle tier is unreliable:
+    // confirmed live, two equally composite dishes analyzed in the same
+    // request ("coconut pulao" and "chicken gravy curry") — one came back
+    // with a real components array, the other with none, despite both
+    // clearly being multi-ingredient dishes. Falling through to
+    // editableIngredientBreakdown (already fetched above for every item,
+    // previously computed and shipped but only used for the separate
+    // edit-ingredients flow) means a complex item is no longer silently
+    // ingredient-less just because the whole-dish call happened not to
+    // self-report a breakdown this time.
+    const ingredients = ingredientBreakdown
+      ? ingredientBreakdown.ingredients
+      : (nutrition.components?.length > 0
+          ? nutrition.components
+          : (editableIngredientBreakdown?.ingredients || []).map((ing) => ({
+              name: ing.name,
+              portion: ing.portion,
+              calories: ing.nutrition?.calories ?? 0,
+              protein: ing.nutrition?.protein ?? 0,
+              carbs: ing.nutrition?.carbs ?? 0,
+              fat: ing.nutrition?.fat ?? 0,
+            })));
+
+    const resolvedItem = {
       itemId,
       name: finalName, // 🆕 Use ORIGINAL parsed name, not resolver's potentially hallucinated name
       portion: {
@@ -720,6 +922,17 @@ async function resolveGenericFood(parsedFood) {
       nutritionPlausible: nutrition.nutritionPlausible ?? true,
       plausibilityCheck: nutrition.plausibilityCheck || null,
       macroReconciled: nutrition.macroReconciled ?? false,
+      // Stage 3: item-level confidence, derived from the resolver's own
+      // candidate-selection signals (source, plausibility, whether the
+      // portion was stated or defaulted) rather than trusting Atwater
+      // validation alone.
+      resolutionSource: nutrition.source || null,
+      confidenceTier: computeConfidenceTier({
+        source: nutrition.source,
+        portionIsEstimated: !parsedFood.quantity,
+        plausibilitySeverity: nutrition.plausibilityCheck?.severity || 'none',
+        validated: nutrition.macroConsistent !== false,
+      }),
 
       // 🆕 ENHANCED: Disambiguation support for UI
       disambiguationNeeded: nutrition.disambiguationNeeded || false,
@@ -753,15 +966,40 @@ async function resolveGenericFood(parsedFood) {
       }
     };
 
+    // Universal final safety net — NOT gated behind nutrition.source.includes
+    // ('estimation') like the flags block above. Found via live device
+    // testing: the same query ("rasa") sometimes resolves through the AI-
+    // estimation branch (source 'openai_estimation', correctly caught above)
+    // and sometimes through a different internal candidate (e.g. a cached/
+    // USDA-labeled source) that still ends up with near-zero macros for a
+    // clearly-not-actually-zero-calorie food name — that source string
+    // doesn't contain 'estimat', so the entire flags block above never runs
+    // for it, regardless of how wrong the result is. A near-zero result is
+    // exactly as suspicious no matter which internal path produced it — this
+    // checks resolvedItem's own FINAL macros, after any reconciliation, so
+    // it can't be skipped by a source label or bypassed by adjustments made
+    // after the earlier check ran.
+    if (
+      !resolvedItem.flags.includes('unrecognized_food_low_estimate') &&
+      typeof resolvedItem.macros?.calories_kcal === 'number' &&
+      resolvedItem.macros.calories_kcal < 5
+    ) {
+      resolvedItem.flags.push('unrecognized_food_low_estimate');
+    }
+
+    return resolvedItem;
+
   } catch (error) {
     console.error(`[Resolve] Smart resolver failed for "${parsedFood.name}":`, error.message);
 
     // Fallback: Try old USDA method
     const usdaResults = await FoodService.searchUSDAByName(parsedFood.name);
 
-    if (usdaResults && usdaResults.length > 0) {
-      const bestMatch = selectBestUSDAMatch(usdaResults, parsedFood.name);
+    const bestMatch = (usdaResults && usdaResults.length > 0)
+      ? selectBestUSDAMatch(usdaResults, parsedFood.name)
+      : null;
 
+    if (bestMatch) {
       sourceEvidence.push({
         source: 'USDA_FALLBACK',
         sourceId: bestMatch.fdcId,
@@ -812,32 +1050,6 @@ async function resolveGenericFood(parsedFood) {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * KEY MICRONUTRIENTS to track (matches micronutrientService.js)
- * These are the essential vitamins and minerals for health tracking
- */
-const KEY_MICRONUTRIENTS = [
-  'calcium', 'iron', 'magnesium', 'potassium', 'zinc', 'sodium',
-  'vitaminA', 'vitaminC', 'vitaminD', 'vitaminB12', 'folate'
-];
-
-/**
- * Check if micros are complete (has at least 3 key micronutrients with non-zero values)
- */
-function isMicrosComplete(micros) {
-  if (!micros || typeof micros !== 'object') return false;
-
-  let nonZeroCount = 0;
-  for (const key of KEY_MICRONUTRIENTS) {
-    const value = micros[key];
-    const numValue = typeof value === 'number' ? value :
-                     (value?.value ? parseFloat(value.value) : 0);
-    if (numValue > 0) nonZeroCount++;
-  }
-
-  return nonZeroCount >= 3;
-}
-
-/**
  * Enrich food items with micronutrients if missing
  * Uses USDA FoodData Central as primary source, AI fallback
  */
@@ -864,18 +1076,14 @@ async function enrichMissingMicronutrients(draft) {
       const estimatedMicros = await estimateMicronutrients(item.name, portion, macros);
 
       if (estimatedMicros && Object.keys(estimatedMicros).length > 0) {
-        // Merge estimated micros with existing (don't overwrite non-zero values)
-        item.micros = item.micros || {};
-        for (const [key, value] of Object.entries(estimatedMicros)) {
-          const existingValue = item.micros[key];
-          const existingNumValue = typeof existingValue === 'number' ? existingValue :
-                                   (existingValue?.value ? parseFloat(existingValue.value) : 0);
-
-          // Only fill in if existing value is 0 or missing
-          if (!existingNumValue || existingNumValue === 0) {
-            item.micros[key] = value;
-          }
-        }
+        // Merge estimated micros with existing — fill ONLY keys that are
+        // genuinely absent. A present value, including a confirmed zero, is
+        // a real reading from a source already trusted enough to have run
+        // first; a lower-confidence enrichment estimate must not overwrite
+        // it. The previous `!existingNumValue` check treated 0 the same as
+        // missing, so a food legitimately measured at 0mg sodium (or any
+        // other real zero) could get silently overwritten by an estimate.
+        item.micros = mergeMissingMicros(item.micros, estimatedMicros);
 
         // Add flag to indicate micros were enriched
         if (!item.flags) item.flags = [];
@@ -893,243 +1101,21 @@ async function enrichMissingMicronutrients(draft) {
 
   await Promise.all(enrichmentPromises);
 
-  // Recalculate totals.micros after enrichment
+  // Recalculate totals after enrichment, through the same canonical
+  // aggregator used everywhere else — previously reimplemented its own
+  // flat-number micros summation here, which stomped the {value, unit}
+  // shape every other consumer expects right after it was computed.
   if (draft.totals) {
-    draft.totals.micros = {};
-    draft.items.forEach(item => {
-      if (item.micros && typeof item.micros === 'object') {
-        Object.entries(item.micros).forEach(([key, value]) => {
-          const numValue = typeof value === 'number' ? value :
-                           (value?.value ? parseFloat(value.value) : parseFloat(String(value).replace(/[^0-9.]/g, '')));
-          if (!isNaN(numValue) && numValue > 0) {
-            draft.totals.micros[key] = (draft.totals.micros[key] || 0) + numValue;
-          }
-        });
-      }
-    });
+    draft.totals = aggregateCanonicalTotals(draft.items);
   }
 }
 
-function isNutrientsComplete(macros) {
-  return macros.calories_kcal > 0 &&
-         macros.protein_g >= 0 &&
-         macros.carbs_g >= 0 &&
-         macros.fat_g >= 0;
-}
-
-function fillMissingNutrients(item, usdaData) {
-  // Only fill MISSING fields individually, don't overwrite existing values
-  if (!isNutrientsComplete(item.macros)) {
-    if (item.macros.calories_kcal === 0 && usdaData.macros.calories_kcal) {
-      item.macros.calories_kcal = usdaData.macros.calories_kcal;
-    }
-    if (item.macros.protein_g === 0 && usdaData.macros.protein_g) {
-      item.macros.protein_g = usdaData.macros.protein_g;
-    }
-    if (item.macros.carbs_g === 0 && usdaData.macros.carbs_g) {
-      item.macros.carbs_g = usdaData.macros.carbs_g;
-    }
-    if (item.macros.fat_g === 0 && usdaData.macros.fat_g) {
-      item.macros.fat_g = usdaData.macros.fat_g;
-    }
-    // Also fill optional macros if missing
-    if (!item.macros.fiber_g && usdaData.macros.fiber_g) {
-      item.macros.fiber_g = usdaData.macros.fiber_g;
-    }
-    if (!item.macros.sugar_g && usdaData.macros.sugar_g) {
-      item.macros.sugar_g = usdaData.macros.sugar_g;
-    }
-    if (!item.macros.sodium_mg && usdaData.macros.sodium_mg) {
-      item.macros.sodium_mg = usdaData.macros.sodium_mg;
-    }
-  }
-}
-
-function selectBestUSDAMatch(results, query) {
-  const queryLower = query.toLowerCase().trim();
-  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2); // Remove stop words ("a", "an", "or")
-
-  // ========== INGREDIENT CONFLICT DETECTION (CRITICAL!) ==========
-  const mainIngredients = {
-    proteins: ['chicken', 'beef', 'pork', 'lamb', 'turkey', 'duck', 'fish', 'salmon', 'tuna', 'shrimp', 'tofu', 'tempeh', 'seitan'],
-    vegetables: ['spinach', 'broccoli', 'kale', 'lettuce', 'cabbage', 'cauliflower', 'carrot', 'potato', 'tomato', 'onion', 'pepper', 'mushroom', 'eggplant'],
-    grains: ['rice', 'wheat', 'quinoa', 'oats', 'barley', 'couscous']
-  };
-
-  // Find main ingredients in query
-  const queryIngredients = [];
-  for (const [category, ingredients] of Object.entries(mainIngredients)) {
-    for (const ingredient of ingredients) {
-      if (queryLower.includes(ingredient)) {
-        queryIngredients.push({ ingredient, category });
-      }
-    }
-  }
-
-  const scored = results.map((result) => {
-    const descLower = result.description.toLowerCase();
-    const descWords = descLower.split(/\s+/);
-
-    // ========== CRITICAL: Check for ingredient conflicts ==========
-    let ingredientMismatch = false;
-    for (const queryIng of queryIngredients) {
-      // Check if description has a DIFFERENT ingredient from the same category
-      const conflictingIngredients = mainIngredients[queryIng.category].filter(ing => ing !== queryIng.ingredient);
-      for (const conflictIng of conflictingIngredients) {
-        if (descLower.includes(conflictIng)) {
-          console.log(`[Resolve] ❌ INGREDIENT MISMATCH: Query has "${queryIng.ingredient}" but result has "${conflictIng}" - "${result.description}"`);
-          ingredientMismatch = true;
-          break;
-        }
-      }
-      if (ingredientMismatch) break;
-    }
-
-    // If there's an ingredient mismatch, return very low score
-    if (ingredientMismatch) {
-      return {
-        ...result,
-        matchScore: -1000,
-        _debug: {
-          ingredientMismatch: true,
-          reason: 'Conflicting main ingredient (e.g., spinach vs beef)'
-        }
-      };
-    }
-
-    // ========== FACTOR 1: Exact Phrase Match (100 points) ==========
-    // "chicken breast" in "Chicken, broilers, breast, meat only" gets full score
-    const exactMatch = descLower.includes(queryLower) ? 100 : 0;
-
-    // ========== FACTOR 2: Word Order Similarity (max 40 points) ==========
-    // Prefer "chicken breast" over "breast of chicken"
-    let orderScore = 0;
-    for (let i = 0; i < queryWords.length - 1; i++) {
-      const word1 = queryWords[i];
-      const word2 = queryWords[i + 1];
-      const word1Idx = descWords.indexOf(word1);
-      const word2Idx = descWords.indexOf(word2);
-
-      if (word1Idx >= 0 && word2Idx >= 0) {
-        if (word2Idx === word1Idx + 1) {
-          // Consecutive words in exact order
-          orderScore += 20;
-        } else if (word2Idx > word1Idx) {
-          // Correct order but not consecutive
-          orderScore += 10;
-        }
-      }
-    }
-
-    // ========== FACTOR 3: Word Coverage (max 50 points) ==========
-    // How many query words appear in description?
-    const matchedWords = queryWords.filter(word => descWords.includes(word)).length;
-    const coverageScore = (matchedWords / queryWords.length) * 50;
-
-    // ========== FACTOR 4: Simplicity Bonus (max 30 points) ==========
-    // Prefer shorter, simpler descriptions
-    // "Chicken, breast, raw" (4 words) better than "Chicken breast sandwich with lettuce and mayo" (8 words)
-    const wordCount = descWords.length;
-    const simplicityScore = Math.max(0, 30 - wordCount * 2); // Penalize 2 points per word
-
-    // ========== FACTOR 5: Cooking Method Alignment (max 20 points or -10 penalty) ==========
-    const cookingMethods = ['grilled', 'fried', 'baked', 'roasted', 'steamed', 'boiled', 'raw', 'cooked'];
-    const cookingSynonyms = {
-      'grilled': ['grilled', 'broiled', 'barbecued'],
-      'baked': ['baked', 'roasted', 'oven'],
-      'fried': ['fried', 'deep-fried', 'pan-fried'],
-      'steamed': ['steamed'],
-      'boiled': ['boiled', 'simmered'],
-      'raw': ['raw', 'uncooked', 'fresh'],
-      'cooked': ['cooked', 'prepared', 'dry heat', 'moist heat'],
-    };
-
-    let queryMethod = null;
-    for (const method of cookingMethods) {
-      if (queryLower.includes(method)) {
-        queryMethod = method;
-        break;
-      }
-    }
-
-    let descMethod = null;
-    for (const [method, synonyms] of Object.entries(cookingSynonyms)) {
-      if (synonyms.some(syn => descLower.includes(syn))) {
-        descMethod = method;
-        break;
-      }
-    }
-
-    let methodScore = 0;
-    if (queryMethod && descMethod) {
-      // Both have cooking method
-      if (queryMethod === descMethod || cookingSynonyms[queryMethod]?.some(syn => descLower.includes(syn))) {
-        methodScore = 20; // Perfect match or synonym
-      } else {
-        methodScore = -10; // Mismatched methods (grilled vs fried)
-      }
-    } else if (!queryMethod && !descMethod) {
-      // Neither has method - prefer raw/generic foods
-      methodScore = 15;
-    } else if (!queryMethod && descMethod === 'raw') {
-      // User didn't specify method, description is raw - good default
-      methodScore = 10;
-    } else if (!queryMethod && descMethod) {
-      // User didn't specify method but desc has one (not raw)
-      methodScore = -5; // Slight penalty (user might want raw)
-    } else if (queryMethod && !descMethod) {
-      // User specified method but desc doesn't have it
-      methodScore = -10; // Penalty for missing method
-    }
-
-    // ========== FACTOR 6: Data Type Preference (max 10 points) ==========
-    // Prefer SR Legacy (Standard Reference) over Branded for generic foods
-    let dataTypeScore = 0;
-    if (result.dataType === 'SR Legacy' || result.dataType === 'Foundation') {
-      dataTypeScore = 10; // High-quality reference data
-    } else if (result.dataType === 'Survey (FNDDS)') {
-      dataTypeScore = 5; // Survey data
-    } else {
-      dataTypeScore = 0; // Branded or other
-    }
-
-    // ========== TOTAL SCORE ==========
-    const totalScore = exactMatch + orderScore + coverageScore + simplicityScore + methodScore + dataTypeScore;
-
-    return {
-      ...result,
-      matchScore: totalScore,
-      _debug: {
-        exactMatch,
-        orderScore,
-        coverageScore,
-        simplicityScore,
-        methodScore,
-        dataTypeScore,
-        total: totalScore
-      }
-    };
-  });
-
-  // Sort by score descending
-  scored.sort((a, b) => b.matchScore - a.matchScore);
-
-  const best = scored[0];
-
-  console.log(
-    `[Resolve] Best USDA match for "${query}": "${best.description}" ` +
-    `(score: ${best.matchScore.toFixed(1)}, breakdown: exact=${best._debug.exactMatch}, ` +
-    `order=${best._debug.orderScore}, coverage=${best._debug.coverageScore.toFixed(1)}, ` +
-    `simplicity=${best._debug.simplicityScore}, method=${best._debug.methodScore}, ` +
-    `dataType=${best._debug.dataTypeScore})`
-  );
-
-  // Log runner-ups for debugging
-  if (scored.length > 1) {
-    console.log(`[Resolve] Runner-up: "${scored[1].description}" (score: ${scored[1].matchScore.toFixed(1)})`);
-  }
-
-  return best;
+// isNutrientsComplete, fillMissingNutrients, isMicrosComplete, and
+// getMissingMicroKeys now live in utils/nutrientCompleteness.js (imported
+// above) so they're unit-testable independent of this route's module graph.
+// See that file's header comment for the field-aware rationale.
+function fillMissingNutrientsWithScaling(item, usdaData, itemServingGrams) {
+  return fillMissingNutrients(item, usdaData, itemServingGrams, FoodService.scaleFromPer100g);
 }
 
 // Legacy function kept for compatibility (not used with new algorithm)
@@ -1140,39 +1126,12 @@ function calculateMatchScore(description, query) {
   return matches / queryWords.length;
 }
 
+// Thin wrapper kept for call-site compatibility: the real aggregation now
+// lives in canonicalNutrition.js so resolve.js, food.js, and voiceLog.js all
+// produce byte-identical totals shapes regardless of input mode (text,
+// photo, barcode, voice). See that module's header comment for why.
 function calculateTotals(items) {
-  const totals = {
-    macros: { calories_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-    micros: {}
-  };
-
-  items.forEach(item => {
-    totals.macros.calories_kcal += item.macros.calories_kcal || 0;
-    totals.macros.protein_g += item.macros.protein_g || 0;
-    totals.macros.carbs_g += item.macros.carbs_g || 0;
-    totals.macros.fat_g += item.macros.fat_g || 0;
-
-    if (item.micros && typeof item.micros === 'object') {
-      Object.entries(item.micros).forEach(([key, value]) => {
-        let numValue;
-        if (typeof value === 'number') {
-          numValue = value;
-        } else if (typeof value === 'string') {
-          numValue = parseFloat(value.replace(/[^0-9.]/g, ''));
-        } else if (value && typeof value === 'object' && value.value !== undefined) {
-          numValue = typeof value.value === 'number'
-            ? value.value
-            : parseFloat(String(value.value).replace(/[^0-9.]/g, ''));
-        }
-
-        if (!isNaN(numValue) && numValue > 0) {
-          totals.micros[key] = (totals.micros[key] || 0) + numValue;
-        }
-      });
-    }
-  });
-
-  return totals;
+  return aggregateCanonicalTotals(items);
 }
 
 function assessDataQuality(items) {
@@ -1377,6 +1336,12 @@ function enrichWithHealthMetrics(draft) {
     name: item.name,
     quantity: item.portion?.amount || 1,
     unit: item.portion?.unit || 'serving',
+    // item.macros is already the resolved total for this item's described
+    // portion (not a per-unit value) — without this, buildFoodItem
+    // re-multiplies it by quantity, which only affects the healthScore/
+    // nutriScore borrowed from `unified` below (draft.totals, what's
+    // actually displayed, is untouched by this call).
+    nutritionIsPerUnit: false,
     nutrition: {
       calories: item.macros?.calories_kcal || 0,
       protein: item.macros?.protein_g || 0,
@@ -1388,6 +1353,11 @@ function enrichWithHealthMetrics(draft) {
     },
     healthScore: item.scores?.healthScore,
     nutriScore: item.scores?.nutriScore?.grade,
+    // Real AI-estimated meal weight, dropped here before this fix — without
+    // it, unifiedResponseBuilder.js's calculateNutriScore() defaults to 100g
+    // and scores a whole meal's absolute totals as if they were per-100g
+    // density, producing a far harsher grade than reality.
+    gramsEquivalent: item.portion?.gramsEquivalent || 100,
     cookingMethod: item.cookingMethod || null,
     confidence: item.sourceEvidence?.[0]?.confidence || 0.7,
     source: item.sourceEvidence?.[0]?.source || 'resolve'
@@ -1430,3 +1400,4 @@ function enrichWithHealthMetrics(draft) {
 }
 
 export default router;
+export { attachSpellingReviews, flagUnrecognizedLowEstimate, flagUnidentifiedFoodName };

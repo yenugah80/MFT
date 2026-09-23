@@ -2,11 +2,11 @@ import express from 'express';
 import { checkAndAwardStreakFreeze, restoreStreak, getStreakRestorationInfo } from '../services/gamificationService.js';
 import { checkStreakBrokenPopup, clearStreakSavedFlag } from '../jobs/dailyStreakCheck.js';
 import { getUserAchievements } from '../services/achievementService.js';
-import { awardXP } from '../services/gamificationRewardService.js';
+import { awardXP, getTotalMealsLogged } from '../services/gamificationRewardService.js';
 import { requireAuth } from '../middleware/auth.js';
 import { db } from '../config/db.js';
 import { gamificationTable, foodLogTable, waterLogTable, moodLogTable, nutritionGoalsTable } from '../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, gte } from 'drizzle-orm';
 import { calculateLevel } from '../utils/levelCalculator.js';
 import { ALL_ACHIEVEMENTS } from '../constants/achievements.js';
 import { DAILY_CHALLENGES, WEEKLY_CHALLENGES } from '../constants/challenges.js';
@@ -107,6 +107,10 @@ router.get('/user', requireAuth(), async (req, res) => {
     // Calculate level info from XP
     const levelInfo = calculateLevel(gamification.xp || 0);
 
+    // gamification.total_meals_logged is never incremented after signup, so it
+    // reads 0 for every user. Count the food logs instead.
+    const totalMealsLogged = await getTotalMealsLogged(userId, db);
+
     // Check if streak can be restored (within 24 hours and has freezes)
     const previousStreak = gamification.previousStreak || 0;
     const streakResetAt = gamification.streakResetAt || null;
@@ -128,7 +132,7 @@ router.get('/user', requireAuth(), async (req, res) => {
       levelName: levelInfo.levelName || `Level ${levelInfo.level}`,
       streak: gamification.streak || 0,
       streakFreezes: gamification.streakFreezes || 0,
-      totalMealsLogged: gamification.totalMealsLogged || 0,
+      totalMealsLogged,
       badges: gamification.badges || [],
       currentLevelXp: levelInfo.currentLevelXP || 0,
       nextLevelXp: levelInfo.nextLevelXP || 100,
@@ -321,18 +325,25 @@ router.get('/challenges', requireAuth(), async (req, res) => {
     });
 
     // Weekly live progress
+    // gte(), not raw sql`` for the Date bound — a JS Date interpolated into
+    // a raw template bypasses Drizzle's column-type serialization and
+    // throws when it reaches the driver unserialized (see backend/
+    // CLAUDE.md's postgres-js note).
     const [veggieWeek] = await db.select({ count: sql`COUNT(*)` })
       .from(foodLogTable)
       .where(and(
         eq(foodLogTable.userId, userId),
-        sql`${foodLogTable.loggedDate} >= ${weekStart}`,
+        gte(foodLogTable.loggedDate, weekStart),
         sql`(LOWER(${foodLogTable.foodName}) LIKE '%vegetable%' OR LOWER(${foodLogTable.foodName}) LIKE '%salad%' OR LOWER(${foodLogTable.foodName}) LIKE '%broccoli%' OR LOWER(${foodLogTable.foodName}) LIKE '%spinach%')`
       ));
 
+    // Same fix, but this is a raw db.execute() (bypasses the query builder
+    // entirely) — the driver needs an ISO string, not a bare Date object,
+    // same as nutrition.js's activity_log query fixed earlier tonight.
     const hydrationDaysResult = await db.execute(sql`
       SELECT DATE(logged_date) as day
       FROM water_log
-      WHERE user_id = ${userId} AND logged_date >= ${weekStart}
+      WHERE user_id = ${userId} AND logged_date >= ${weekStart.toISOString()}
       GROUP BY DATE(logged_date)
       HAVING SUM(amount_liters) >= 2
     `);

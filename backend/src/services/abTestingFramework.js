@@ -162,7 +162,9 @@ export async function getExperiment(experimentId) {
     SELECT * FROM ab_test_definitions WHERE experiment_id = ${experimentId}
   `);
 
-  return result.rows[0] || null;
+  // db.execute() returns the row array directly on this driver, not
+  // { rows: [...] } — see gamificationRewardService.js.
+  return result[0] || null;
 }
 
 // ============================================================================
@@ -179,9 +181,9 @@ export async function assignUserToExperiment(userId, experimentId) {
     WHERE user_id = ${userId} AND experiment_id = ${experimentId}
   `);
 
-  if (existing.rows.length > 0) {
+  if (existing.length > 0) {
     return {
-      variantId: existing.rows[0].variant_id,
+      variantId: existing[0].variant_id,
       isNew: false,
     };
   }
@@ -248,15 +250,15 @@ export async function getUserVariant(userId, experimentId) {
     WHERE user_id = ${userId} AND experiment_id = ${experimentId}
   `);
 
-  if (result.rows.length === 0) {
+  if (result.length === 0) {
     // Auto-assign
     return assignUserToExperiment(userId, experimentId);
   }
 
   return {
-    variantId: result.rows[0].variant_id,
-    isActive: result.rows[0].is_active,
-    firstExposedAt: result.rows[0].first_exposed_at,
+    variantId: result[0].variant_id,
+    isActive: result[0].is_active,
+    firstExposedAt: result[0].first_exposed_at,
   };
 }
 
@@ -297,6 +299,11 @@ export async function recordMetricEvent(userId, experimentId, metricName, metric
     return { recorded: false, reason: 'unknown_metric' };
   }
 
+  // NOTE: ab_test_metrics does not exist in the database (no migration
+  // ever created it) — this INSERT throws today. Not fixed here, that's a
+  // real schema decision. calculateExperimentResults doesn't depend on
+  // this table (it derives stats from ab_test_assignments), so this only
+  // breaks per-event audit logging, not the actual experiment analysis.
   // Record the event
   await db.execute(sql`
     INSERT INTO ab_test_metrics (
@@ -352,16 +359,16 @@ export async function calculateExperimentResults(experimentId) {
     GROUP BY a.variant_id
   `);
 
-  if (variantStats.rows.length < 2) {
-    return { error: 'insufficient_variants', variantCount: variantStats.rows.length };
+  if (variantStats.length < 2) {
+    return { error: 'insufficient_variants', variantCount: variantStats.length };
   }
 
   // Find control and treatment(s)
   const variants = experiment.variants;
   const controlId = variants.find(v => v.id === 'control')?.id || variants[0].id;
 
-  const controlStats = variantStats.rows.find(v => v.variant_id === controlId);
-  const treatmentStats = variantStats.rows.filter(v => v.variant_id !== controlId);
+  const controlStats = variantStats.find(v => v.variant_id === controlId);
+  const treatmentStats = variantStats.filter(v => v.variant_id !== controlId);
 
   if (!controlStats) {
     return { error: 'no_control_data' };
@@ -606,11 +613,11 @@ async function checkUserEligibility(userId, targetSegment) {
       WHERE p.user_id = ${userId}
     `);
 
-    if (userInfo.rows.length === 0) {
+    if (userInfo.length === 0) {
       return { eligible: false, reason: 'user_not_found' };
     }
 
-    const user = userInfo.rows[0];
+    const user = userInfo[0];
 
     // Check segment criteria
     if (targetSegment.minDays && user.days_since_signup < targetSegment.minDays) {
@@ -733,7 +740,7 @@ export async function listExperiments(filters = {}) {
     LIMIT ${limit}
   `);
 
-  return result.rows;
+  return result;
 }
 
 export default {

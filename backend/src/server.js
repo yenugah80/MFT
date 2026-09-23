@@ -24,6 +24,7 @@ import complianceRouter from "./routes/compliance.js";
 import foodRouter from "./routes/food.js";
 import resolveRouter from "./routes/resolve.js";
 import profileRouter from "./routes/profile.js";
+import deviceDeregistrationRouter from "./routes/deviceDeregistration.js";
 import loggingRouter from "./routes/logging.js";
 import moodRouter from "./routes/mood.js";
 import waterRouter from "./routes/water.js";
@@ -60,6 +61,7 @@ import mealPlanRouter from "./routes/mealPlan.js";
 import { initStreakCronJob } from "./jobs/dailyStreakCheck.js";
 import { initSmartReminderCronJob, getSmartReminderMetrics } from "./jobs/smartReminderJob.js";
 import { initNutrientDeficitJob } from "./jobs/nutrientDeficitJob.js";
+import { initMLBatchJobs } from "./jobs/mlBatchAnalysisJob.js";
 import { premiumFeaturesService } from "./services/PremiumFeatures.js";
 import { initializeFirebase, isFirebaseReady } from "./config/firebase.js";
 import { globalLimiter, aiLimiter, burstLimiter } from "./middleware/rateLimiter.js";
@@ -755,7 +757,13 @@ app.use(
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    // X-Timezone-Offset carries a small integer (minutes from UTC, same as
+    // Date.prototype.getTimezoneOffset()) used only for local-day bucketing —
+    // streaks, meal-XP tiers, correlation hour-of-day. It's exactly as
+    // unverified/spoofable here as it already is for native clients, which
+    // bypass CORS entirely and always sent it. Allowing it here is what lets
+    // web stop being the one platform permanently stuck on UTC.
+    allowedHeaders: ["Content-Type", "Authorization", "X-Timezone-Offset"],
     credentials: true,
     maxAge: 3600,
   })
@@ -957,6 +965,10 @@ app.use("/api/food/resolve", resolveRouter);
 
 // Mount Profile Router (modularized)
 app.use("/api/profile", profileRouter);
+
+// Deliberately unauthenticated — see routes/deviceDeregistration.js for why
+// and what it can (and can't) do.
+app.use("/api/device-cleanup", deviceDeregistrationRouter);
 
 // Mount Logging Router (modularized)
 app.use("/api/log", loggingRouter);
@@ -1227,6 +1239,18 @@ app.listen(PORT, "0.0.0.0", async () => {
 
   // Initialize proactive nutrient deficit push notification job
   initNutrientDeficitJob();
+
+  // Initialize the ML batch analysis jobs (drift detection, lagged
+  // correlations, feature interactions, monthly reports). On by default; set
+  // ML_BATCH_JOBS_ENABLED=false to stop them scheduling without a code change,
+  // since these are the first scheduled runs they have ever had in production.
+  // The POST /api/ml/admin/jobs/* endpoints remain available for manual runs
+  // either way.
+  if (process.env.ML_BATCH_JOBS_ENABLED === 'false') {
+    console.log('[Server] ML batch jobs disabled via ML_BATCH_JOBS_ENABLED=false');
+  } else {
+    initMLBatchJobs();
+  }
 
   // Initialize smart reminder push notification cron job
   // Only start if Firebase is configured (FCM available)

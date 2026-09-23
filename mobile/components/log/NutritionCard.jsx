@@ -493,7 +493,8 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
   },
   scrollContent: {
-    flex: 1,
+    // No flex:1 — the `card` parent has maxHeight but no height, so it sizes to
+    // content; a flex:1 child there resolves to zero height and hides the card.
   },
   header: {
     marginBottom: 16,

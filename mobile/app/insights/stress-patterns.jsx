@@ -2,7 +2,7 @@
  * Stress Patterns Screen
  *
  * Deep-dive on stress patterns: time-of-day and day-of-week breakdowns,
- * which coping strategies are actually working, and the overall trend.
+ * coping-strategy associations, and the overall trend.
  *
  * Wired to GET /api/stress/patterns?days=30 via useStressLog().patterns.
  */
@@ -16,13 +16,15 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { TEXT, SURFACES, TYPOGRAPHY, BRAND, SPACING, RADIUS } from '../../constants/premiumTheme';
-import { useStressLog } from '../../hooks/useStressLog';
+import { useStressLog, useStressHistory } from '../../hooks/useStressLog';
+import { StressEntry } from '../../components/history/WellnessHistoryScreen';
 
 const TIME_PERIOD_ORDER = ['morning', 'afternoon', 'evening', 'night'];
 const TIME_PERIOD_LABELS = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', night: 'Night' };
@@ -42,8 +44,20 @@ const TREND_META = {
 
 export default function StressPatternsScreen() {
   const router = useRouter();
-  const { patterns, isPatternsLoading, refetchPatterns } = useStressLog();
+  const { days } = useLocalSearchParams();
+  const requestedDays = Number(Array.isArray(days) ? days[0] : days);
+  const rangeDays = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
+  const expandedRange = rangeDays < 30 ? 30 : (rangeDays < 90 ? 90 : null);
+  const { patterns, isPatternsLoading, patternsError, refetchPatterns } = useStressLog(rangeDays);
+  // Only fetched to power the raw-entries fallback below when there isn't
+  // enough data for full pattern analysis — the patterns endpoint itself
+  // already discards the raw rows it fetches once it decides there aren't
+  // enough of them (backend/src/routes/stress.js:472), so the "not enough
+  // data" screen used to have literally nothing else to show.
+  const rawHistory = useStressHistory(rangeDays);
+  const rawEntries = rawHistory.data?.stressLogs || [];
   const [refreshing, setRefreshing] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -65,6 +79,12 @@ export default function StressPatternsScreen() {
   }, [refetchPatterns]);
 
   const trendMeta = patterns?.trend ? (TREND_META[patterns.trend.direction] || TREND_META.stable) : null;
+  const eligibleCopingStrategies = (patterns?.copingStrategies || []).filter((strategy) => (
+    Number(strategy.timesUsed) >= (patterns.minimumAssociationGroupSize || 3)
+    && Number(strategy.comparisonCount) >= (patterns.minimumAssociationGroupSize || 3)
+  ));
+  const hasCopingObservations = Number(patterns?.copingObservationCount) > 0
+    || (patterns?.copingStrategies?.length || 0) > 0;
 
   return (
     <View style={styles.container}>
@@ -96,14 +116,78 @@ export default function StressPatternsScreen() {
           <ActivityIndicator size="large" color={BRAND.primary} />
           <Text style={styles.centerText}>Loading your stress patterns...</Text>
         </View>
-      ) : !patterns ? (
+      ) : patternsError ? (
+        <View style={styles.centerContainer} accessibilityRole="alert">
+          <Ionicons name="cloud-offline-outline" size={48} color={TEXT.tertiary} />
+          <Text style={styles.errorTitle}>Stress insights are unavailable</Text>
+          <Text style={styles.centerText}>Check your connection and try again.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refetchPatterns} accessibilityRole="button">
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : !patterns && rawEntries.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="pulse-outline" size={48} color={TEXT.tertiary} />
-          <Text style={styles.errorTitle}>Not enough data yet</Text>
+          <Text style={styles.errorTitle}>Not enough data in this {rangeDays}-day view</Text>
           <Text style={styles.centerText}>
-            Log at least 5 stress entries to unlock pattern analysis.
+            This range needs at least 5 stress check-ins to calculate reliable patterns.
           </Text>
+          {!!expandedRange && (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => router.replace(`/insights/stress-patterns?days=${expandedRange}`)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryButtonText}>View {expandedRange} days</Text>
+            </TouchableOpacity>
+          )}
         </View>
+      ) : !patterns ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BRAND.primary} />
+          }
+        >
+          <View style={styles.card}>
+            <Text style={styles.insufficientEvidenceText}>
+              Pattern analysis needs at least 5 check-ins in this {rangeDays}-day view — you have {rawEntries.length}
+              {' '}so far. Here's what you've logged:
+            </Text>
+          </View>
+          <View style={styles.entryList}>
+            {rawEntries.map((entry) => (
+              <StressEntry
+                key={entry.id}
+                entry={entry}
+                isDeleting={deletingId === entry.id}
+                deleteDisabled={deletingId !== null}
+                onDelete={() => Alert.alert(
+                  'Delete stress entry?',
+                  'This removes the check-in from your history and insights.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        setDeletingId(entry.id);
+                        try {
+                          await rawHistory.deleteEntry(entry.id);
+                        } finally {
+                          setDeletingId(null);
+                        }
+                      },
+                    },
+                  ]
+                )}
+              />
+            ))}
+          </View>
+          <View style={styles.bottomPadding} />
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -137,6 +221,7 @@ export default function StressPatternsScreen() {
               <Text style={styles.statLabel}>Entries</Text>
             </View>
           </View>
+          <Text style={styles.evidenceText}>Based on {patterns.entriesCount} check-ins in this {rangeDays}-day view.</Text>
 
           {/* Time of day */}
           {Object.keys(patterns.timeOfDay || {}).length > 0 && (
@@ -196,16 +281,16 @@ export default function StressPatternsScreen() {
             </View>
           )}
 
-          {/* Coping effectiveness */}
-          {patterns.copingStrategies?.length > 0 && (
+          {/* Coping associations — same-check-in data cannot establish causality. */}
+          {eligibleCopingStrategies.length > 0 && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Ionicons name="bulb-outline" size={20} color={BRAND.primary} />
-                <Text style={styles.cardTitle}>What's Actually Helping</Text>
+                <Text style={styles.cardTitle}>Stress Alongside Support</Text>
               </View>
               <View style={styles.copingList}>
-                {patterns.copingStrategies.map((strategy) => {
-                  const isHelping = strategy.effectiveness > 0;
+                {eligibleCopingStrategies.map((strategy) => {
+                  const isLower = strategy.effectiveness > 0;
                   return (
                     <View key={strategy.key} style={styles.copingRow}>
                       <View style={[styles.copingIconBg, { backgroundColor: `${strategy.color || BRAND.primary}20` }]}>
@@ -213,17 +298,31 @@ export default function StressPatternsScreen() {
                       </View>
                       <View style={styles.copingInfo}>
                         <Text style={styles.copingLabel}>{strategy.label}</Text>
-                        <Text style={styles.copingMeta}>Used {strategy.timesUsed}x</Text>
+                        <Text style={styles.copingMeta}>
+                          {strategy.timesUsed} with · {strategy.comparisonCount} without
+                        </Text>
                       </View>
-                      <Text style={[styles.copingEffect, { color: isHelping ? '#10B981' : '#EF4444' }]}>
-                        {isHelping ? '−' : '+'}{Math.abs(strategy.effectiveness)} pts
+                      <Text style={[styles.copingEffect, { color: isLower ? '#10B981' : TEXT.secondary }]}>
+                        {Math.abs(strategy.effectiveness)} pts {isLower ? 'lower' : 'higher'}
                       </Text>
                     </View>
                   );
                 })}
               </View>
               <Text style={styles.copingDisclaimer}>
-                Negative = stress level tends to be lower when you use this strategy.
+                Compares check-ins with and without each support. This is an association, not proof that a strategy caused the change.
+              </Text>
+            </View>
+          )}
+
+          {hasCopingObservations && eligibleCopingStrategies.length === 0 && (
+            <View style={styles.card} accessibilityRole="summary">
+              <View style={styles.cardHeader}>
+                <Ionicons name="bulb-outline" size={20} color={BRAND.primary} />
+                <Text style={styles.cardTitle}>Stress Alongside Support</Text>
+              </View>
+              <Text style={styles.insufficientEvidenceText}>
+                Keep logging what helped. A comparison appears after at least {patterns.minimumAssociationGroupSize || 3} check-ins with a support and {patterns.minimumAssociationGroupSize || 3} without it.
               </Text>
             </View>
           )}
@@ -268,10 +367,28 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
   },
+  retryButton: {
+    marginTop: SPACING[2],
+    paddingHorizontal: SPACING[5],
+    paddingVertical: SPACING[3],
+    borderRadius: RADIUS.full,
+    backgroundColor: BRAND.primary,
+  },
+  retryButtonText: {
+    color: TEXT.white,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    fontSize: TYPOGRAPHY.size.sm,
+  },
   statsRow: {
     flexDirection: 'row',
     gap: SPACING[3],
+    marginBottom: SPACING[2],
+  },
+  evidenceText: {
     marginBottom: SPACING[4],
+    color: TEXT.tertiary,
+    fontSize: TYPOGRAPHY.size.xs,
+    textAlign: 'center',
   },
   statCard: {
     flex: 1,
@@ -385,7 +502,16 @@ const styles = StyleSheet.create({
     color: TEXT.muted,
     marginTop: SPACING[3],
   },
+  insufficientEvidenceText: {
+    fontSize: TYPOGRAPHY.size.sm,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.secondary,
+    lineHeight: 20,
+  },
   bottomPadding: {
     height: 40,
+  },
+  entryList: {
+    gap: SPACING[3],
   },
 });

@@ -20,9 +20,40 @@ import { recommendationsHistoryTable } from '../db/schema.js';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import NodeCache from 'node-cache';
 import { inferFoodAttributes } from './foodKnowledgeGraphService.js';
+import { ensureRedisReady } from '../config/redisClient.js';
 
-// 1-hour TTL — collaborative signals change slowly
-const cfCache = new NodeCache({ stdTTL: 3600, checkperiod: 900, maxKeys: 2000 });
+// 1-hour TTL — collaborative signals change slowly. Redis-backed when
+// REDIS_URL is configured (shares candidates across server instances,
+// survives restarts); falls back to this in-memory cache otherwise —
+// same resilience pattern as rateLimiter.js's Redis usage.
+const CF_CACHE_TTL_SECONDS = 3600;
+const cfCacheFallback = new NodeCache({ stdTTL: CF_CACHE_TTL_SECONDS, checkperiod: 900, maxKeys: 2000 });
+
+async function cfCacheGet(key) {
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      const raw = await redis.get(key);
+      if (raw !== null) return JSON.parse(raw);
+    } catch (err) {
+      console.warn('[collaborativeFilteringService] Redis get failed, using in-memory fallback:', err.message);
+    }
+  }
+  return cfCacheFallback.get(key);
+}
+
+async function cfCacheSet(key, value) {
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      await redis.setEx(key, CF_CACHE_TTL_SECONDS, JSON.stringify(value));
+      return;
+    } catch (err) {
+      console.warn('[collaborativeFilteringService] Redis set failed, using in-memory fallback:', err.message);
+    }
+  }
+  cfCacheFallback.set(key, value);
+}
 
 const MIN_OVERLAP = 3;       // Minimum shared accepted foods to be "similar"
 const MAX_SIMILAR_USERS = 8; // Neighbour cap — balances recall vs query cost
@@ -67,7 +98,7 @@ export async function getCollaborativeCandidates(userId, currentUserAccepted = [
 
   // Check cache first
   const cacheKey = cfCacheKey(userId);
-  const cached = cfCache.get(cacheKey);
+  const cached = await cfCacheGet(cacheKey);
   if (cached) return cached.slice(0, limit);
 
   try {
@@ -113,7 +144,7 @@ export async function getCollaborativeCandidates(userId, currentUserAccepted = [
 
     // If no other users, skip
     if (userFoodMap.size === 0) {
-      cfCache.set(cacheKey, []);
+      await cfCacheSet(cacheKey, []);
       return [];
     }
 
@@ -187,7 +218,7 @@ export async function getCollaborativeCandidates(userId, currentUserAccepted = [
     }
 
     if (similarities.length === 0) {
-      cfCache.set(cacheKey, []);
+      await cfCacheSet(cacheKey, []);
       return [];
     }
 
@@ -207,7 +238,7 @@ export async function getCollaborativeCandidates(userId, currentUserAccepted = [
     }
 
     if (candidateFoodCounts.size === 0) {
-      cfCache.set(cacheKey, []);
+      await cfCacheSet(cacheKey, []);
       return [];
     }
 
@@ -250,7 +281,7 @@ export async function getCollaborativeCandidates(userId, currentUserAccepted = [
     }
 
     // Cache and return
-    cfCache.set(cacheKey, candidates);
+    await cfCacheSet(cacheKey, candidates);
     return candidates;
   } catch (err) {
     console.error('[collaborativeFilteringService] Error:', err.message);
@@ -264,6 +295,15 @@ export async function getCollaborativeCandidates(userId, currentUserAccepted = [
  *
  * @param {string} userId
  */
-export function invalidateCFCache(userId) {
-  cfCache.del(cfCacheKey(userId));
+export async function invalidateCFCache(userId) {
+  const key = cfCacheKey(userId);
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      await redis.del(key);
+    } catch (err) {
+      console.warn('[collaborativeFilteringService] Redis del failed:', err.message);
+    }
+  }
+  cfCacheFallback.del(key);
 }

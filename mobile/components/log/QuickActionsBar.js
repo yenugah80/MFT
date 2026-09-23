@@ -1,11 +1,18 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY } from '../../constants/premiumTheme';
 
-export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, logCount }) => {
+// Auto-width chips in a horizontal ScrollView, not flex:1 in a fixed row —
+// keeps room to add another chip later without ever squeezing labels.
+export const QuickActionsBar = ({ onMoodPress, onWaterPress, onSleepPress, onStressPress }) => {
   return (
-    <View style={styles.quickActionsBar}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.quickActionsBar}
+      contentContainerStyle={styles.quickActionsContent}
+    >
       <TouchableOpacity
         style={styles.quickActionChip}
         onPress={onMoodPress}
@@ -13,7 +20,7 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         accessibilityLabel="Log your mood"
       >
         <Ionicons name="happy-outline" size={20} color={BRAND.primary} />
-        <Text style={styles.quickActionText}>Mood</Text>
+        <Text style={styles.quickActionText} numberOfLines={1}>Mood</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -23,31 +30,46 @@ export const QuickActionsBar = ({ onMoodPress, onWaterPress, onHistoryPress, log
         accessibilityLabel="Log your water intake"
       >
         <Ionicons name="water-outline" size={20} color={BRAND.primary} />
-        <Text style={styles.quickActionText}>Water</Text>
+        <Text style={styles.quickActionText} numberOfLines={1}>Water</Text>
+      </TouchableOpacity>
+
+      {/* Sleep and Stress already had full logger modals (SleepLogger.jsx,
+          StressLogger.jsx) reachable only by drilling into a dashboard
+          summary card — no quick entry point existed here at all, unlike
+          Mood/Water which were one tap away from the primary Log tab. */}
+      <TouchableOpacity
+        style={styles.quickActionChip}
+        onPress={onSleepPress}
+        activeOpacity={0.7}
+        accessibilityLabel="Log your sleep"
+      >
+        <Ionicons name="moon-outline" size={20} color={BRAND.primary} />
+        <Text style={styles.quickActionText} numberOfLines={1}>Sleep</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.quickActionChip}
-        onPress={onHistoryPress}
+        onPress={onStressPress}
         activeOpacity={0.7}
-        accessibilityLabel="Open logged meals history"
+        accessibilityLabel="Log your stress"
       >
-        <Ionicons name="flame-outline" size={20} color={SEMANTIC_ACTIONS.primary} />
-        <Text style={styles.quickActionValue}>{logCount || 0}</Text>
-        <Text style={styles.quickActionLabel}>logged</Text>
+        <Ionicons name="pulse-outline" size={20} color={BRAND.primary} />
+        <Text style={styles.quickActionText} numberOfLines={1}>Stress</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   quickActionsBar: {
+    flexGrow: 0,
+  },
+  quickActionsContent: {
     flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
+    gap: 8,
+    paddingHorizontal: 16,
   },
   quickActionChip: {
-    flex: 1,
     backgroundColor: SURFACES.card.primary,
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -66,15 +88,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.semibold,
     color: TEXT.primary,
-  },
-  quickActionValue: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontFamily: TYPOGRAPHY.family.bold,
-    color: SEMANTIC_ACTIONS.primary,
-  },
-  quickActionLabel: {
-    fontSize: TYPOGRAPHY.size.xs,
-    fontFamily: TYPOGRAPHY.family.regular,
-    color: TEXT.secondary,
   },
 });

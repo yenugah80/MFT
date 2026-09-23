@@ -1,399 +1,66 @@
-/**
- * HydrationTab - Enhanced analytics with personalized recommendations
- *
- * Displays:
- * - Key hydration metrics (water intake, goal, streak)
- * - Personalized recommendations from AI
- * - Hydration-energy correlations
- * - Evidence-based insights
- */
-
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import MetricCard from './MetricCard';
-import RecommendationCard, { RecommendationSection } from './RecommendationCard';
-import ProgressRing from './ProgressRing';
+
 import AnalyticsEmptyState from './AnalyticsEmptyState';
-import {
-  TEXT,
-  SURFACES,
-  SPACING,
-  RADIUS,
-  TYPOGRAPHY,
-  CARD_SYSTEM,
-  SEMANTIC,
-  VIBRANT_WELLNESS,
-  BRAND,
-} from '../../constants/premiumTheme';
+import RecommendationCard from './RecommendationCard';
+import { ActionRow, InsightList, MetricRow, MetricTile, PERIOD_COPY, ProgressAction, ProgressBar, ProgressCard, ProgressHero, SectionHeader, SectionIntro } from './ProgressUI';
+import { BRAND, SEMANTIC, SPACING, VIBRANT_WELLNESS } from '../../constants/premiumTheme';
 
-export default function HydrationTab({ data, period, recommendations = [], onRefresh, refreshing = false }) {
+const COLOR = VIBRANT_WELLNESS.hydration.solid;
+
+const liters = (ml) => `${(Number(ml || 0) / 1000).toFixed(1)}L`;
+
+export default function HydrationTab({ data, period, recommendations = [], onRefresh, refreshing = false, onCompleteRecommendation, onDismissRecommendation }) {
   const router = useRouter();
+  const copy = PERIOD_COPY[period] || PERIOD_COPY.week;
+  const { todayMl = 0, goalMl = 2000, goalPercent = 0, streak = 0, avgDaily = 0, hasDataInPeriod, totalMlInPeriod = 0, daysLoggedInPeriod = 0, daysGoalMetInPeriod = 0 } = data || {};
+  const hasRealData = hasDataInPeriod ?? todayMl > 0;
+  const actionRecommendations = recommendations.filter((item) => item.type === 'action');
+  const insightRecommendations = recommendations.filter((item) => item.type !== 'action').slice(0, 3);
+  const periodDays = period === 'today' ? 1 : period === 'month' ? 30 : 7;
+  const coverage = Math.min(100, Math.round((daysLoggedInPeriod / periodDays) * 100));
+  const averagePercent = goalMl > 0 ? Math.round((avgDaily / goalMl) * 100) : 0;
+  const navigate = (route) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(route); };
+  const remaining = Math.max(0, goalMl - todayMl);
 
-  const handleViewFullAnalytics = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/analytics/hydration');
-  };
-
-  // Empty state when no data and no recommendations
-  if (!data && recommendations.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="water-outline" size={48} color={TEXT.tertiary} />
-        <Text style={styles.emptyText}>No hydration data yet</Text>
-        <Text style={styles.emptySubtext}>Log water intake to see your progress and get personalized insights</Text>
-      </View>
-    );
-  }
-
-  const { todayMl, goalMl, goalPercent, streak, avgDaily } = data || {};
-  const hasRealData = (todayMl || 0) > 0;
-
-  // Convert ml to liters for display
-  const todayL = ((todayMl || 0) / 1000).toFixed(1);
-  const goalL = ((goalMl || 2000) / 1000).toFixed(1);
-  const avgL = ((avgDaily || 0) / 1000).toFixed(1);
-
-  // Calculate glasses (250ml = 1 glass)
-  const glasses = Math.round((todayMl || 0) / 250);
-  const goalGlasses = Math.round((goalMl || 2000) / 250);
-
-  // Separate recommendations by type
-  const actionRecs = recommendations.filter(r => r.type === 'action');
-  const insightRecs = recommendations.filter(r => r.type === 'insight');
-  const patternRecs = recommendations.filter(r => r.type === 'pattern');
-  const suggestionRecs = recommendations.filter(r => r.type === 'suggestion');
+  const fallbackInsights = [
+    { icon: goalPercent >= 100 ? 'checkmark-circle-outline' : 'water-outline', color: goalPercent >= 100 ? SEMANTIC.success.base : COLOR, title: goalPercent >= 100 ? 'Today’s goal is complete' : `${remaining}ml remains today`, message: `${liters(todayMl)} logged against your ${liters(goalMl)} daily goal.` },
+    { icon: 'calendar-outline', color: '#6B82AD', title: `${daysLoggedInPeriod} day${daysLoggedInPeriod === 1 ? '' : 's'} logged ${copy.noun}`, message: `${coverage}% coverage in this selected range.` },
+    { icon: 'trophy-outline', color: '#D89B36', title: `${daysGoalMetInPeriod} goal day${daysGoalMetInPeriod === 1 ? '' : 's'}`, message: `Daily goal was met on ${daysGoalMetInPeriod} logged day${daysGoalMetInPeriod === 1 ? '' : 's'} in this range.` },
+  ];
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={BRAND.primary}
-          colors={[BRAND.primary]}
-        />
-      }
-    >
-      {/* Hydration has a dedicated analytics screen (trend, timing, beverage
-          mix, persona, forecast). This tab stays as the at-a-glance summary
-          inside the cross-domain view and hands off to it. */}
-      <TouchableOpacity
-        style={styles.fullAnalyticsLink}
-        onPress={handleViewFullAnalytics}
-        activeOpacity={0.8}
-      >
-        <View style={styles.fullAnalyticsIcon}>
-          <Ionicons name="water" size={18} color={VIBRANT_WELLNESS.hydration.solid} />
-        </View>
-        <View style={styles.fullAnalyticsText}>
-          <Text style={styles.fullAnalyticsTitle}>Full hydration analytics</Text>
-          <Text style={styles.fullAnalyticsSubtitle}>
-            Daily trend, when &amp; what you drink, your hydration type
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={TEXT.tertiary} />
-      </TouchableOpacity>
-
-      {/* Priority Actions */}
-      {actionRecs.length > 0 && (
-        <View style={styles.actionsSection}>
-          {actionRecs.map((rec, idx) => (
-            <RecommendationCard key={rec.id || idx} recommendation={rec} />
-          ))}
-        </View>
-      )}
-
-      {/* Key Metrics - Only show if we have real (non-zero) data, otherwise
-          a friendly empty state instead of a wall of "0" cards */}
-      {data && !hasRealData && (
-        <AnalyticsEmptyState
-          icon="water-outline"
-          iconColor={VIBRANT_WELLNESS.hydration.solid}
-          title="No hydration data yet"
-          subtitle="Log water intake to see your progress and get personalized insights"
-        />
-      )}
-
-      {data && hasRealData && (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND.primary} colors={[BRAND.primary]} />}>
+      {actionRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} onComplete={onCompleteRecommendation} onDismiss={onDismissRecommendation} compact />)}
+      {data && !hasRealData ? <AnalyticsEmptyState icon="water-outline" iconColor={COLOR} title="No hydration data yet" subtitle={`No water is logged ${copy.noun}. Log some to begin seeing daily averages, goal days, and consistency.`} /> : data && (
         <>
-          <View style={styles.metricsRow}>
-            <MetricCard
-              value={`${todayL}L`}
-              label="Today"
-              subtitle={`of ${goalL}L goal`}
-              icon="water"
-              iconColor={VIBRANT_WELLNESS.hydration.solid}
-            />
-            <MetricCard
-              value={`${goalPercent || 0}%`}
-              label="of Goal"
-              // A checkmark below goal reads as "done" at 15% — only show it
-              // once the goal is actually met.
-              icon={(goalPercent || 0) >= 100 ? 'checkmark-circle' : 'ellipse-outline'}
-              iconColor={(goalPercent || 0) >= 100 ? SEMANTIC.success.base : VIBRANT_WELLNESS.hydration.solid}
-            />
-            <MetricCard
-              value={streak || 0}
-              label="Day Streak"
-              subtitle="goal met"
-              icon="flame"
-              iconColor={(streak || 0) > 0 ? '#F97316' : TEXT.tertiary}
-            />
-          </View>
-
-          {/* Progress Ring */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Daily Progress</Text>
-            <View style={styles.ringContainer}>
-              <ProgressRing
-                value={todayMl || 0}
-                goal={goalMl || 2000}
-                color={getHydrationColor(goalPercent || 0)}
-                icon="water"
-                centerValue={glasses}
-                centerLabel={`of ${goalGlasses} glasses`}
-              />
-            </View>
-          </View>
-
-          {/* Water Glasses Visual */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Glasses Today</Text>
-            <View style={styles.glassesContainer}>
-              {Array.from({ length: goalGlasses }).map((_, index) => {
-                const isFilled = index < glasses;
-                return (
-                  <View
-                    key={index}
-                    style={[
-                      styles.glass,
-                      {
-                        backgroundColor: isFilled
-                          ? VIBRANT_WELLNESS.hydration.solid
-                          : SURFACES.background.tertiary,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="water"
-                      size={16}
-                      color={isFilled ? '#FFFFFF' : TEXT.muted}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-            <Text style={styles.glassesSubtext}>
-              Each glass = 250ml
-            </Text>
-          </View>
+          <ProgressHero color={COLOR} tint="#ECFEFF" eyebrow={`${copy.eyebrow} · HYDRATION SNAPSHOT`} title={period === 'today' ? `${liters(todayMl)} logged today` : `${liters(avgDaily)} daily average`} subtitle={period === 'today' ? `${Math.round(goalPercent)}% of your ${liters(goalMl)} daily goal.` : `${liters(totalMlInPeriod)} total across ${daysLoggedInPeriod} logged day${daysLoggedInPeriod === 1 ? '' : 's'}.`} badge={period === 'today' ? 'Today’s progress' : 'Selected-range average'} icon="water" value={period === 'today' ? `${Math.round(goalPercent)}%` : `${Math.round(averagePercent)}%`} valueLabel="of daily goal" />
+          <MetricRow>
+            <MetricTile icon="water-outline" color={COLOR} value={liters(todayMl)} label="Today" hint={`of ${liters(goalMl)} goal`} />
+            <MetricTile icon="stats-chart-outline" color="#6B82AD" value={liters(avgDaily)} label="Daily average" hint={copy.noun} />
+            <MetricTile icon="flame-outline" color="#D97706" value={`${streak}`} label="Day streak" hint="goal met" />
+          </MetricRow>
+          <ProgressCard>
+            <SectionHeader eyebrow="TODAY VS DAILY GOAL" title="Current-day progress" subtitle="Kept separate from the selected-range average" icon="water-outline" color={COLOR} />
+            <ProgressBar label={`${liters(todayMl)} of ${liters(goalMl)}`} value={goalPercent} displayValue={`${Math.round(goalPercent)}%`} color={goalPercent >= 100 ? SEMANTIC.success.base : COLOR} icon="water" />
+          </ProgressCard>
+          {period !== 'today' && <ProgressCard>
+            <SectionHeader eyebrow="RANGE CONSISTENCY" title={`Hydration ${copy.noun}`} subtitle="Logging coverage and days where the daily goal was reached" icon="calendar-outline" color={COLOR} />
+            <ProgressBar label="Days with hydration logged" value={coverage} displayValue={`${daysLoggedInPeriod}/${periodDays}`} color={COLOR} icon="create-outline" />
+            <ProgressBar label="Goal days among logged days" value={daysLoggedInPeriod ? (daysGoalMetInPeriod / daysLoggedInPeriod) * 100 : 0} displayValue={`${daysGoalMetInPeriod}/${daysLoggedInPeriod}`} color={SEMANTIC.success.base} icon="checkmark-circle-outline" />
+          </ProgressCard>}
+          <SectionIntro eyebrow="PERSONAL CONTEXT" title="What stands out" subtitle={insightRecommendations.length ? `Rolling ${insightRecommendations[0].windowDays || 14}-day observations from logged drinks. This is not medical advice or a diagnosis.` : `Selected-range observations from logged drinks ${copy.noun}.`} color={COLOR} />
+          {insightRecommendations.length ? <View style={styles.recommendations}>{insightRecommendations.map((item, index) => <RecommendationCard key={item.id || index} recommendation={item} onComplete={onCompleteRecommendation} onDismiss={onDismissRecommendation} compact />)}</View> : <InsightList items={fallbackInsights} />}
+          <ActionRow>
+            <ProgressAction icon="analytics-outline" label="Hydration analytics" hint="Timing, mix & trends" color={COLOR} onPress={() => navigate('/analytics/hydration')} />
+            <ProgressAction icon="add-circle-outline" label="Log water" hint="Add intake now" color={COLOR} onPress={() => navigate('/(tabs)/log?focus=hydration')} />
+          </ActionRow>
         </>
       )}
-
-      {/* AI Insights Section */}
-      {insightRecs.length > 0 && (
-        <RecommendationSection
-          title="Hydration Insights"
-          subtitle="Understanding your patterns"
-          recommendations={insightRecs}
-        />
-      )}
-
-      {/* Discovered Patterns */}
-      {patternRecs.length > 0 && (
-        <RecommendationSection
-          title="Hydration Patterns"
-          subtitle="How water affects you"
-          recommendations={patternRecs}
-        />
-      )}
-
-      {/* Smart Suggestions */}
-      {suggestionRecs.length > 0 && (
-        <RecommendationSection
-          title="Hydration Tips"
-          subtitle="Personalized guidance"
-          recommendations={suggestionRecs}
-        />
-      )}
-
-      {/* Fallback static insights */}
-      {recommendations.length === 0 && data && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Insights</Text>
-          <View style={styles.insightsList}>
-            <InsightItem
-              icon={(goalPercent || 0) >= 100 ? 'checkmark-circle' : 'alert-circle'}
-              color={(goalPercent || 0) >= 100 ? SEMANTIC.success.base : SEMANTIC.warning.base}
-              text={
-                (goalPercent || 0) >= 100
-                  ? 'You hit your hydration goal!'
-                  : `${Math.round((goalMl || 2000) - (todayMl || 0))}ml to go today`
-              }
-            />
-            {(avgDaily || 0) > 0 && (
-              <InsightItem
-                icon="stats-chart"
-                color={VIBRANT_WELLNESS.hydration.solid}
-                text={`Average daily intake: ${avgL}L`}
-              />
-            )}
-            {(streak || 0) > 2 && (
-              <InsightItem
-                icon="flame"
-                color="#F97316"
-                text={`${streak} day streak - great consistency!`}
-              />
-            )}
-            {(goalPercent || 0) < 50 && (
-              <InsightItem
-                icon="notifications"
-                color={SEMANTIC.info.base}
-                text="Tip: Set reminders to drink water throughout the day"
-              />
-            )}
-          </View>
-        </View>
-      )}
-
-      <View style={styles.bottomPadding} />
     </ScrollView>
   );
 }
 
-function InsightItem({ icon, color, text }) {
-  return (
-    <View style={styles.insightRow}>
-      <Ionicons name={icon} size={18} color={color} />
-      <Text style={styles.insightText}>{text}</Text>
-    </View>
-  );
-}
-
-function getHydrationColor(percentage) {
-  // Below 100%, these are shades of the hydration domain's own blue getting
-  // lighter the further you are from goal — not generic status colors, so
-  // SEMANTIC tokens don't apply to the middle two tiers the way they do
-  // for "goal met."
-  if (percentage >= 100) return SEMANTIC.success.base;
-  if (percentage >= 75) return VIBRANT_WELLNESS.hydration.solid;
-  if (percentage >= 50) return '#06B6D4';
-  return '#22D3EE';
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: SPACING[4],
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING[8],
-  },
-  emptyText: {
-    fontSize: TYPOGRAPHY.size.lg,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.secondary,
-    marginTop: SPACING[4],
-  },
-  emptySubtext: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.tertiary,
-    marginTop: SPACING[2],
-    textAlign: 'center',
-  },
-  actionsSection: {
-    marginBottom: SPACING[2],
-  },
-  fullAnalyticsLink: {
-    ...CARD_SYSTEM.standard,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[3],
-  },
-  fullAnalyticsIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${VIBRANT_WELLNESS.hydration.solid}15`,
-  },
-  fullAnalyticsText: {
-    flex: 1,
-  },
-  fullAnalyticsTitle: {
-    fontSize: TYPOGRAPHY.size.sm,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-  },
-  fullAnalyticsSubtitle: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    marginTop: 1,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: SPACING[3],
-    marginBottom: SPACING[4],
-  },
-  card: {
-    ...CARD_SYSTEM.standard,
-    marginBottom: SPACING[4],
-  },
-  cardTitle: {
-    fontSize: TYPOGRAPHY.size.md,
-    fontWeight: TYPOGRAPHY.weight.semibold,
-    fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
-    marginBottom: SPACING[3],
-  },
-  ringContainer: {
-    alignItems: 'center',
-    paddingVertical: SPACING[2],
-  },
-  glassesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING[2],
-    justifyContent: 'center',
-  },
-  glass: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  glassesSubtext: {
-    fontSize: TYPOGRAPHY.size.xs,
-    color: TEXT.tertiary,
-    textAlign: 'center',
-    marginTop: SPACING[3],
-  },
-  insightsList: {
-    gap: SPACING[2],
-  },
-  insightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING[2],
-  },
-  insightText: {
-    fontSize: TYPOGRAPHY.size.sm,
-    color: TEXT.secondary,
-    flex: 1,
-  },
-  bottomPadding: {
-    height: SPACING[8],
-  },
-});
+const styles = StyleSheet.create({ container: { flex: 1 }, content: { padding: SPACING[4], paddingBottom: SPACING[10] }, recommendations: { gap: SPACING[2] } });

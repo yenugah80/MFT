@@ -39,13 +39,32 @@ const buildUrlWithParams = (url, params) => {
   return resolvedUrl.toString();
 };
 
+const DEFAULT_TIMEOUT_MS = 10000;
+
+/**
+ * Default request budget, honouring EXPO_PUBLIC_API_TIMEOUT_MS.
+ *
+ * eas.json sets that variable to 30000 for production builds, and
+ * environmentValidation.js validates it — but nothing ever read it, so every
+ * production build has run on the hardcoded 10s regardless of what the build
+ * profile said. Configuration that is validated and then ignored is worse than
+ * no configuration: it reads as deliberate.
+ *
+ * Falls back to 10s when unset or unparseable, which keeps development and any
+ * build without the variable behaving exactly as before.
+ */
+const resolveDefaultTimeout = () => {
+  const parsed = parseInt(process.env.EXPO_PUBLIC_API_TIMEOUT_MS, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+};
+
 /**
  * Production-optimized retry config
  */
 const RETRY_CONFIG = {
   maxRetries: 3,
   delays: [200, 500, 1000], // Fast progressive retries
-  timeout: 10000, // 10s timeout
+  timeout: resolveDefaultTimeout(),
   retryableStatuses: [408, 429, 500, 502, 503, 504],
 };
 
@@ -95,7 +114,16 @@ class ApiClient {
   async getToken() {
     if (!this.tokenProvider) return null;
     try {
-      return await this.tokenProvider();
+      // Clerk's getToken() has no built-in timeout — a stuck session refresh
+      // hangs this forever with no error, which means buildHeaders() never
+      // resolves and the request never fires. Every caller (food/mood/water/
+      // sleep/stress logging) just spins indefinitely with no feedback. Race
+      // it so a hung refresh falls back to an unauthenticated request, which
+      // fails fast with a real 401 the caller's existing catch block can show.
+      return await Promise.race([
+        this.tokenProvider(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Token fetch timed out')), 8000)),
+      ]);
     } catch (error) {
       if (__DEV__) console.warn('[API] Token error:', error.message);
       return null;
@@ -249,6 +277,34 @@ class ApiClient {
   async get(endpoint, options = {}) {
     const headers = await this.buildHeaders(options.headers);
     return this.fetchWithRetry(endpoint, { method: 'GET', headers, ...options });
+  }
+
+  /**
+   * GET a binary response (PDF/ZIP/etc.) rather than JSON. fetchWithRetry
+   * always calls response.json(), which throws on binary bodies — exports
+   * in non-JSON formats need the raw bytes instead.
+   * @returns {Promise<Uint8Array>}
+   */
+  async getBytes(endpoint, options = {}) {
+    const headers = await this.buildHeaders(options.headers);
+    const { params, _timeout, ...fetchOptions } = options;
+    const requestUrl = endpoint.startsWith('http') ? endpoint : `${this.baseURL}${endpoint}`;
+    const fullUrl = buildUrlWithParams(requestUrl, params);
+
+    const response = await fetchWithTimeout(
+      fullUrl,
+      { method: 'GET', headers, ...fetchOptions },
+      _timeout || 60000
+    );
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}`);
+      error.response = { status: response.status, statusText: response.statusText };
+      throw error;
+    }
+
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
   }
 
   async post(endpoint, data, options = {}) {

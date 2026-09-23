@@ -25,8 +25,8 @@
  */
 
 import { db } from '../../db/index.js';
-import { profilesTable, gamificationTable } from '../../db/schema.js';
-import { eq, gte, sql } from 'drizzle-orm';
+import { profilesTable } from '../../db/schema.js';
+import { sql } from 'drizzle-orm';
 import { MultiTaskModel, createModel, MODEL_CONFIG } from './multiTaskModel.js';
 import { encodeUserDay, batchEncodeUserDays } from './featureEncoder.js';
 
@@ -82,8 +82,13 @@ async function clusterUsers() {
         activityLevel: profilesTable.activityLevel,
       })
       .from(profilesTable)
-      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
-      .where(gte(gamificationTable.totalMealsLogged, 14)); // Minimum 14 days
+      // Minimum 14 meals. Counts food_log rows rather than reading
+      // gamification.total_meals_logged, which is never incremented after signup
+      // and so held every user below any threshold — clustering always saw zero
+      // eligible users and bailed out.
+      .where(sql`(
+        SELECT count(*) FROM food_log WHERE food_log.user_id = ${profilesTable.userId}
+      ) >= 14`);
 
     if (users.length < META_CONFIG.minUsersPerCluster * META_CONFIG.numClusters) {
       console.log('[Meta-Learner] Insufficient users for clustering');
@@ -490,8 +495,10 @@ export async function metaTrain(options = {}) {
     const eligibleUsers = await db
       .select({ userId: profilesTable.userId })
       .from(profilesTable)
-      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
-      .where(gte(gamificationTable.totalMealsLogged, minDaysPerUser * 2));
+      // Real food_log count, not the never-incremented gamification counter.
+      .where(sql`(
+        SELECT count(*) FROM food_log WHERE food_log.user_id = ${profilesTable.userId}
+      ) >= ${minDaysPerUser * 2}`);
 
     if (eligibleUsers.length < META_CONFIG.metaBatchSize) {
       console.log('[Meta-Learner] Insufficient users for meta-training');
@@ -583,31 +590,64 @@ async function getUserTrainingData(userId, numDays) {
   since.setDate(since.getDate() - numDays);
 
   try {
+    // Each source is pre-aggregated to one row per day in its own CTE
+    // before joining. Joining the raw tables directly (as this used to)
+    // fans out: a day with e.g. 3 food_log rows and 2 water_log rows
+    // produces 6 rows before the outer SUM(), inflating every total by
+    // the other tables' per-day row counts.
     const rows = await db.execute(sql`
+      WITH daily_food AS (
+        SELECT DATE(logged_date) AS date,
+               SUM(calories) AS total_calories,
+               SUM(protein) AS total_protein,
+               SUM(carbs) AS total_carbs,
+               SUM(fats) AS total_fats
+        FROM food_log
+        WHERE user_id = ${userId} AND logged_date >= ${since.toISOString()}
+        GROUP BY DATE(logged_date)
+      ),
+      daily_mood AS (
+        SELECT DATE(logged_date) AS date,
+               AVG(intensity) AS avg_mood_intensity,
+               AVG(energy_level) AS avg_energy
+        FROM mood_log
+        WHERE user_id = ${userId} AND logged_date >= ${since.toISOString()}
+        GROUP BY DATE(logged_date)
+      ),
+      daily_water AS (
+        SELECT DATE(logged_date) AS date,
+               SUM(amount_liters) AS total_water_liters
+        FROM water_log
+        WHERE user_id = ${userId} AND logged_date >= ${since.toISOString()}
+        GROUP BY DATE(logged_date)
+      ),
+      daily_activity AS (
+        SELECT DATE(logged_at) AS date,
+               SUM(duration_minutes) AS activity_minutes
+        FROM activity_log
+        WHERE user_id = ${userId} AND logged_at >= ${since.toISOString()}
+        GROUP BY DATE(logged_at)
+      )
       SELECT
-        fl.logged_date                                              AS date,
-        COALESCE(SUM(fl.calories), 0)                             AS total_calories,
-        COALESCE(SUM(fl.protein), 0)                              AS total_protein,
-        COALESCE(SUM(fl.carbs), 0)                                AS total_carbs,
-        COALESCE(SUM(fl.fats), 0)                                 AS total_fats,
-        COALESCE(AVG(ml.intensity), 5)                            AS avg_mood_intensity,
-        COALESCE(AVG(ml.energy_level), 5)                         AS avg_energy,
-        COALESCE(SUM(wl.amount_liters), 0)                        AS total_water_liters,
-        COALESCE(SUM(al.duration_minutes), 0)                     AS activity_minutes
-      FROM food_log fl
-      LEFT JOIN mood_log   ml ON ml.user_id = fl.user_id
-            AND DATE(ml.logged_date)  = DATE(fl.logged_date)
-      LEFT JOIN water_log  wl ON wl.user_id = fl.user_id
-            AND DATE(wl.logged_date)  = DATE(fl.logged_date)
-      LEFT JOIN activity_log al ON al.user_id = fl.user_id
-            AND DATE(al.logged_at)    = DATE(fl.logged_date)
-      WHERE fl.user_id = ${userId}
-        AND fl.logged_date >= ${since}
-      GROUP BY DATE(fl.logged_date)
-      ORDER BY DATE(fl.logged_date) ASC
+        df.date,
+        COALESCE(df.total_calories, 0) AS total_calories,
+        COALESCE(df.total_protein, 0) AS total_protein,
+        COALESCE(df.total_carbs, 0) AS total_carbs,
+        COALESCE(df.total_fats, 0) AS total_fats,
+        COALESCE(dm.avg_mood_intensity, 5) AS avg_mood_intensity,
+        COALESCE(dm.avg_energy, 5) AS avg_energy,
+        COALESCE(dw.total_water_liters, 0) AS total_water_liters,
+        COALESCE(da.activity_minutes, 0) AS activity_minutes
+      FROM daily_food df
+      LEFT JOIN daily_mood dm ON dm.date = df.date
+      LEFT JOIN daily_water dw ON dw.date = df.date
+      LEFT JOIN daily_activity da ON da.date = df.date
+      ORDER BY df.date ASC
     `);
 
-    return (rows.rows || []).map((row) =>
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js.
+    return (rows || []).map((row) =>
       encodeUserDay({
         totalCalories:   parseFloat(row.total_calories)   || 0,
         totalProtein:    parseFloat(row.total_protein)    || 0,

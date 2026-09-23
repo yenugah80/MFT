@@ -39,7 +39,15 @@ import {
   getScheduledNotifications,
   resetDailyNotifications,
   showLocalNotification,
+  retryPendingTokenRegistration,
+  retryPendingOwnership,
+  applyRemoteDeliveryDedup,
+  savePreferencesToBackend,
+  retryPendingPreferenceSave,
+  getPendingPreferences,
+  clearPendingPreferencesForSignOut,
 } from '../services/pushNotifications';
+import { isUsableConnection } from '../utils/syncRetryPolicy';
 import {
   NOTIFICATION_CATEGORIES,
   DEFAULT_PREFERENCES,
@@ -48,8 +56,18 @@ import {
 } from '../constants/notificationTypes';
 import { router } from 'expo-router';
 import apiClient from '../services/apiClient';
+import { getOrCreateDeviceId } from '../services/deviceIdentity';
 import SmartNotificationEngine from '../services/smartNotificationEngine';
 import fcmService from '../services/fcmService';
+
+// Lazy require, same pattern as useFoodLog.js's reconnect listener — avoids an
+// import-time crash if the native module isn't available in this environment.
+let Network = null;
+try {
+  Network = require('expo-network');
+} catch {
+  Network = null;
+}
 
 const NotificationContext = createContext(null);
 
@@ -247,6 +265,18 @@ export const NotificationProvider = ({ children }) => {
             message: message.body,
             duration: 5000,
           });
+
+          // Same ack + dedup as the background handler (mobile/app/_layout.jsx)
+          // — a push received while foregrounded is just as real a delivery
+          // confirmation as one received in the background, and needs the
+          // same "don't also fire the local fallback today" check.
+          const deliveryId = message.data?.deliveryId;
+          if (deliveryId) {
+            getOrCreateDeviceId().then((deviceId) => {
+              apiClient.post('/profile/notifications/ack', { deliveryId, deviceId }).catch(() => {});
+            }).catch(() => {});
+          }
+          applyRemoteDeliveryDedup(apiClient.get.bind(apiClient)).catch(() => {});
         },
         // Cold start handler (app was killed, opened from notification)
         (initialNotification) => {
@@ -278,20 +308,35 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [isSignedIn, addToast, navigateFromNotification]);
 
-  // Sync notification schedules with user preferences
+  // Sync notification schedules with user preferences. Checks for a
+  // preference change that never made it to the backend (e.g. the app was
+  // killed right after a toggle, before the save/retry completed) BEFORE
+  // trusting a fresh GET — otherwise this would silently overwrite the
+  // user's last choice with the stale server value on every relaunch.
   const syncNotificationSchedules = useCallback(async () => {
     try {
-      // Fetch current preferences from backend
-      const data = await apiClient.get('/profile/notifications');
-      const prefs = {
-        dailyReminder: data?.dailyReminder !== false,
-        hydrationNudges: data?.hydrationNudges !== false,
-        activityReminders: data?.activityReminders !== false,
-        moodCheckins: data?.moodCheckins !== false,
-        streakProtection: data?.streakProtection !== false,
-        insightDrops: data?.insightDrops !== false,
-        streakCelebrations: data?.streakCelebrations !== false,
-      };
+      const pending = await getPendingPreferences();
+      let prefs;
+
+      if (pending) {
+        prefs = pending;
+        // Now that the app is running again (and, if this ran from the
+        // network-reconnect/foreground paths, connectivity is back), try
+        // to finish the save this same pass rather than waiting for a
+        // separate retry trigger.
+        retryPendingPreferenceSave().catch(() => {});
+      } else {
+        const data = await apiClient.get('/profile/notifications');
+        prefs = {
+          dailyReminder: data?.dailyReminder !== false,
+          hydrationNudges: data?.hydrationNudges !== false,
+          activityReminders: data?.activityReminders !== false,
+          moodCheckins: data?.moodCheckins !== false,
+          streakProtection: data?.streakProtection !== false,
+          insightDrops: data?.insightDrops !== false,
+          streakCelebrations: data?.streakCelebrations !== false,
+        };
+      }
 
       setPreferences(prefs);
 
@@ -444,11 +489,34 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [addToast]);
 
-  // Update preferences and sync schedules
+  /**
+   * Update preferences: apply locally and (re)schedule immediately — this
+   * works fully offline and is never rolled back — then save to the
+   * backend best-effort. A save failure here does NOT mean the toggle
+   * "didn't work": local scheduling is the actual source of truth for
+   * what the user experiences, and it already reflects the change. The
+   * backend save is just bookkeeping that catches up via
+   * retryPendingPreferenceSave once connectivity returns.
+   *
+   * Deliberately bypasses syncNotificationSchedules() (which does its own
+   * GET /profile/notifications first) — that GET would both fail offline
+   * (silently no-op'ing the whole sync, including local scheduling) and,
+   * even when it succeeds, could race with this save and use a stale
+   * server value instead of the preferences just chosen here.
+   */
   const updateNotificationPreferences = useCallback(async (newPrefs) => {
     setPreferences(newPrefs);
-    await syncNotificationSchedules();
-  }, [syncNotificationSchedules]);
+
+    const optimalTimes = await SmartNotificationEngine.getOptimalNotificationTimes().catch(() => ({}));
+    const scheduleResult = await syncAllNotificationSchedules(newPrefs, optimalTimes).catch((error) => {
+      console.warn('[NotificationProvider] Failed to sync local schedules:', error?.message || error);
+      return { scheduled: [], cancelled: [], error: error.message };
+    });
+
+    const savedToBackend = await savePreferencesToBackend(newPrefs);
+
+    return { ...scheduleResult, savedToBackend };
+  }, []);
 
   // Check permission status
   const checkPermissionStatus = useCallback(async () => {
@@ -550,13 +618,75 @@ export const NotificationProvider = ({ children }) => {
 
   // Handle app state changes (re-check permissions when app comes to foreground)
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
         // App has come to foreground - recheck permission status
-        checkPermissionStatus();
+        const status = await checkPermissionStatus();
+
+        // FCM and Expo notifications share the same OS-level permission on
+        // iOS. If the user denied it at first launch, initializeFCM() never
+        // registered a token — and nothing re-runs it later even if they
+        // grant permission afterward from Settings. Retry FCM setup here
+        // whenever we detect permission just became granted; initializeFCM()
+        // already tears down any stale listeners first, so re-calling it is
+        // safe even if it previously partially succeeded.
+        if (status === 'granted' && fcmStatus.permissionStatus !== 'granted') {
+          initializeFCM();
+        }
+
+        // Retry any token registration still pending after its 3 scheduled
+        // attempts exhausted (e.g. backend was briefly down, not a permission
+        // issue). Without this, a token that failed all 3 retries had no
+        // further recovery path until sign-out/sign-in or app restart —
+        // foregrounding the app is a reasonable, cheap point to try again.
+        // No-ops immediately if nothing is pending.
+        retryPendingTokenRegistration().catch(() => {});
+        fcmService.retryPendingFCMTokenRegistration().catch(() => {});
+
+        // Unconditional re-registration, not just retry-if-pending: the
+        // initial-load effect above only registers once per cold start
+        // (gated on pushStatus.initialized/fcmStatus.initialized React
+        // state, which persists across a warm background/foreground cycle
+        // rather than resetting). A user who rarely fully kills the app
+        // could go a long time without this account's token ever being
+        // re-written — which is also what makes the backend's stale-token
+        // backstop (savePushToken/saveFCMToken clearing a token from any
+        // OTHER account's row) actually self-heal promptly rather than
+        // only on the next cold start. The backend upsert is idempotent —
+        // re-sending an unchanged token is a harmless no-op write.
+        if (isSignedIn) {
+          initializePushNotifications().catch(() => {});
+          initializeFCM().catch(() => {});
+        }
+
+        // Completes an offline-at-sign-out deregistration even with no
+        // session at all (e.g. sitting on the sign-in screen after a fully
+        // offline logout) — this fires regardless of isSignedIn, since this
+        // whole effect isn't gated on it. No-ops if nothing is cached.
+        fcmService.retryDeregistrationWithToken().catch(() => {});
+
+        // Same recovery for local-ownership claims/releases that failed to
+        // reach the backend (e.g. the user toggled a reminder off mid-flight
+        // with no connectivity) — local scheduling itself was never gated on
+        // this succeeding, so this only needs to converge the backend's
+        // bookkeeping, not fix anything the user would notice missing.
+        retryPendingOwnership().catch(() => {});
+
+        // Same recovery for a notification-preference save (e.g. a toggle
+        // flipped in Settings) that failed to reach the backend while
+        // offline — local scheduling already reflects the change either way.
+        retryPendingPreferenceSave().catch(() => {});
+
+        // Local/remote de-dup: the backend cron is the primary sender for
+        // every reminder category whenever the device has connectivity —
+        // local scheduling is only the offline fallback. If the server
+        // confirms it already delivered today's version of a category,
+        // cancel today's remaining local occurrence(s) so the user isn't
+        // nudged twice. Safe no-op if the request fails or nothing's due.
+        applyRemoteDeliveryDedup(apiClient.get.bind(apiClient)).catch(() => {});
 
         // Check if it's a new day and reset daily notifications
         checkDailyReset().catch(() => {});
@@ -567,7 +697,57 @@ export const NotificationProvider = ({ children }) => {
     return () => {
       subscription.remove();
     };
-  }, [checkPermissionStatus, checkDailyReset]);
+  }, [checkPermissionStatus, checkDailyReset, fcmStatus.permissionStatus, initializeFCM, initializePushNotifications, isSignedIn]);
+
+  // Retry pending token registration on a genuine offline -> online
+  // transition, not just on app foreground — a device that stays foregrounded
+  // through a network drop (e.g. subway, elevator) would otherwise wait for
+  // the next background/foreground cycle to recover. Edge-triggered for the
+  // same reason as useFoodLog's sync-queue listener: expo-network fires on
+  // every network change (wifi<->cellular, IP reassignment), and retrying on
+  // each of those would be wasteful — only a real unusable->usable transition
+  // should trigger a retry.
+  useEffect(() => {
+    if (!Network?.addNetworkStateListener) return undefined;
+
+    let wasUsable = false;
+    let seeded = false;
+    let cancelled = false;
+
+    Network.getNetworkStateAsync?.()
+      .then((state) => {
+        if (cancelled || seeded) return;
+        wasUsable = isUsableConnection(state);
+        seeded = true;
+      })
+      .catch(() => {});
+
+    let subscription;
+    try {
+      subscription = Network.addNetworkStateListener((state) => {
+        const usable = isUsableConnection(state);
+        seeded = true;
+        const reconnected = usable && !wasUsable;
+        wasUsable = usable;
+
+        if (reconnected) {
+          console.log('[NotificationProvider] Network reconnected - retrying pending token registration');
+          retryPendingTokenRegistration().catch(() => {});
+          fcmService.retryPendingFCMTokenRegistration().catch(() => {});
+          fcmService.retryDeregistrationWithToken().catch(() => {});
+          retryPendingOwnership().catch(() => {});
+          retryPendingPreferenceSave().catch(() => {});
+        }
+      });
+    } catch (err) {
+      console.warn('[NotificationProvider] Could not attach network listener:', err?.message);
+    }
+
+    return () => {
+      cancelled = true;
+      subscription?.remove?.();
+    };
+  }, []);
 
   // ============== Notify API ==============
   const notify = {

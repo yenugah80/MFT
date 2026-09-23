@@ -54,8 +54,11 @@ export default function MealPreviewCard({
     return count + ingredientCount;
   }, 0);
 
-  // Get confidence
-  const avgConfidence = items.reduce((sum, item) => sum + (item.confidence || 0.75), 0) / items.length;
+  // Get confidence. Photo/barcode results (useFoodAnalysis.js) never set a
+  // top-level item.confidence — the real value lives in sourceEvidence[0],
+  // so reading item.confidence alone silently shows a flat 75% for every result.
+  const itemConfidence = (item) => item.confidence ?? item.sourceEvidence?.[0]?.confidence ?? 0.75;
+  const avgConfidence = items.reduce((sum, item) => sum + itemConfidence(item), 0) / items.length;
   const confidencePercent = Math.round(avgConfidence * 100);
 
   // Confidence color
@@ -79,24 +82,26 @@ export default function MealPreviewCard({
         >
           {/* Top Section: Image + Info */}
           <View style={styles.topSection}>
-            {/* Photo Thumbnail */}
-            {imageUri ? (
-              <View style={styles.thumbnailContainer}>
+            {/* Photo Thumbnail. The confidence badge sits on this container
+                regardless of branch — it's food-ID confidence, not a claim
+                about the photo, so a barcode scan (no captured photo, but
+                often the highest-confidence source of any of them) still
+                needs to show it rather than silently having none. */}
+            <View style={[styles.thumbnailContainer, !imageUri && styles.placeholderThumbnail]}>
+              {imageUri ? (
                 <Image
                   source={{ uri: imageUri }}
                   style={styles.thumbnail}
                   resizeMode="cover"
                 />
-                {/* Confidence Badge - clarifies this is food ID confidence, not nutrition accuracy */}
-                <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor() }]}>
-                  <Text style={styles.confidenceText}>ID {confidencePercent}%</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={[styles.thumbnailContainer, styles.placeholderThumbnail]}>
+              ) : (
                 <Ionicons name="restaurant" size={32} color={TEXT.tertiary} />
+              )}
+              {/* Confidence Badge - clarifies this is food ID confidence, not nutrition accuracy */}
+              <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor() }]}>
+                <Text style={styles.confidenceText}>ID {confidencePercent}%</Text>
               </View>
-            )}
+            </View>
 
             {/* Food Info */}
             <View style={styles.infoSection}>

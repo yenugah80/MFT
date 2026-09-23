@@ -30,6 +30,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -88,7 +89,7 @@ export default function DailyIntelligenceBehaviorSection({
     if (onViewProgress) {
       onViewProgress();
     } else {
-      router.push('/insights');
+      router.push('/analytics');
     }
   }, [onViewProgress, router]);
 
@@ -116,7 +117,7 @@ export default function DailyIntelligenceBehaviorSection({
   const streak = gamification?.streak || 0;
   const level = gamification?.level || 1;
   const xp = gamification?.xp || 0;
-  const waterGoal = parseFloat(goals?.waterLiters || '2.0');
+  const waterGoal = parseFloat(goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS);
   const hydrationProgress = waterGoal > 0
     ? ((todayData?.waterIntakeLiters || 0) / waterGoal) * 100
     : 0;
@@ -178,7 +179,7 @@ export default function DailyIntelligenceBehaviorSection({
               style={componentStyles.viewAllButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/insights');
+                router.push('/analytics');
               }}
               accessibilityRole="button"
               accessibilityLabel="View all pattern insights"

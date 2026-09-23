@@ -566,7 +566,7 @@ export const FOOD_CATALOGUE = [
  * @param {object} signals
  * @returns {number}
  */
-function scoreCandidate(food, signals) {
+export function scoreCandidate(food, signals) {
   const allergenRisk = detectAllergenRisk(food, signals.allergies ?? []);
   if (allergenRisk.hasRisk) return Number.NEGATIVE_INFINITY;
 
@@ -971,6 +971,24 @@ function dedupeKey(name) {
  * @param {string}   mealType
  * @returns {object[]} deduplicated candidates
  */
+/**
+ * Keep only catalogue items valid for this meal type — an item with no
+ * mealTypes at all is exempted (nothing to check against), but a
+ * breakfast-only item must not surface for a dinner request. Extracted as
+ * its own function so this can be unit-tested directly: it was previously
+ * inline and, despite a comment claiming otherwise, didn't actually filter
+ * anything — the only signal against a wrong-meal recommendation was
+ * scoreCandidate()'s +10 soft bonus for a match, not nearly enough to stop
+ * one from winning on other signals.
+ *
+ * @param {Array<{mealTypes?: string[]}>} catalogue
+ * @param {string} mealType
+ * @returns {Array}
+ */
+export function filterCatalogueByMealType(catalogue, mealType) {
+  return catalogue.filter((f) => !f.mealTypes?.length || f.mealTypes.includes(mealType));
+}
+
 function mergeCandidates(historyFoods, acceptedFoods, catalogueFoods, mealType, cfCandidates = []) {
   /** @type {Map<string, {food: object, weight: number}>} */
   const seen = new Map();
@@ -1070,12 +1088,12 @@ export async function generateCandidates(userId, context = {}) {
       return [];
     });
 
-  // Filter catalogue to relevant meal type first for efficiency
-  const catalogueFoods = FOOD_CATALOGUE.map((f) => ({
-    ...f,
-    source: 'catalogue',
-    portion: '1 serving',
-  }));
+  const catalogueFoods = filterCatalogueByMealType(FOOD_CATALOGUE, enrichedSignals.mealType)
+    .map((f) => ({
+      ...f,
+      source: 'catalogue',
+      portion: '1 serving',
+    }));
 
   const [cfCandidates, usdaCandidates] = await Promise.all([
     cfCandidatesPromise,

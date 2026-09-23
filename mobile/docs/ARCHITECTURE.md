@@ -80,8 +80,7 @@ mobile/
 │   ├── errorHandler.js          # Global error handling
 │   ├── storage.js               # AsyncStorage wrapper
 │   ├── queryPersistence.js      # React Query persistence
-│   ├── preferences.js           # Preference management
-│   └── offlineQueue.js          # Offline request queue
+│   └── preferences.js           # Preference management
 │
 ├── types/                       # TypeScript definitions
 │   └── api.ts                   # API response types
@@ -264,37 +263,35 @@ await setItem('user-prefs', {
 });
 ```
 
-### 6. Offline Queue
+### 6. Offline Sync Queue
 
-**Location**: `utils/offlineQueue.js`
+**Location**: SQLite `sync_queue` table, managed by `hooks/useFoodLog.js`
 
-**Purpose**: Queue API mutations when offline, replay when online
+There is no `utils/offlineQueue.js` — an earlier AsyncStorage-backed queue
+lived there but had a real data-loss bug (draining the queue could overwrite
+all of storage with only the in-flight batch) and was dead code (nothing
+imported it) by the time it was removed. The queue below is the only one.
+
+**Purpose**: Queue food-log mutations when offline, replay when online
 
 **Features**:
-- Automatic queuing on network failure
-- Retry with backoff
-- User notifications
-- Action prioritization
-- Queue persistence
+- Every `addLog()` writes to local SQLite immediately, online or not
+- A `sync_queue` table tracks which rows still need to reach the server
+- A NetInfo reconnect listener drains it automatically — no manual "process
+  the queue" call needed from a screen
+- Retry with backoff; entries that keep failing move to a `blocked` state
+  rather than retrying forever, surfaced via `hasSyncFailure`/
+  `getBlockedSyncs()` and cleared with `retryFailedSyncs()` or
+  `discardBlockedSync(clientEventId)`
 
 **Usage**:
 ```javascript
-import { enqueue, processQueue } from '@/utils/offlineQueue';
+import { useFoodLog } from '@/hooks/useFoodLog';
 
-// Queue action when offline
-await enqueue('LOG_FOOD', {
-  foodName: 'Apple',
-  calories: 95,
-});
+const { addLog, pendingSyncCount, hasSyncFailure, retryFailedSyncs } = useFoodLog();
 
-// Process queue when back online
-const handlers = {
-  LOG_FOOD: async (payload) => {
-    await apiClient.post('/nutrition/log', payload);
-  },
-};
-
-await processQueue(handlers);
+// Works the same whether the device is online or not — the hook decides.
+await addLog({ foodName: 'Apple', calories: 95 });
 ```
 
 ## Data Flow

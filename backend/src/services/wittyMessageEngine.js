@@ -1198,10 +1198,16 @@ export function getHydrationMessage(context) {
     hasCaffeine = false,
     temperature = null,
     notificationCount = 1, // For meta message interpolation
+    hour: hourOverride,
   } = context;
 
   const remaining = goalMl - currentMl;
-  const hour = new Date().getHours();
+  // hour should always come from the caller now — computing it here with
+  // new Date().getHours() reads the SERVER's hour (UTC in production),
+  // not the user's. This has caused midday-phrased copy ("It's past noon
+  // and still no water?") to fire during a user's actual early morning.
+  // The fallback exists only for a caller that genuinely can't supply one.
+  const hour = Number.isFinite(hourOverride) ? hourOverride : new Date().getHours();
   const timeOfDay = getTimeOfDay(hour);
   const hoursLeft = Math.max(1, 22 - hour); // Assume day ends at 10pm
 
@@ -1293,9 +1299,10 @@ export function getFoodMessage(context) {
     streak = 0,
     lastMealHours = null,
     mealsToday = 0,
+    hour: hourOverride,
   } = context;
 
-  const hour = new Date().getHours();
+  const hour = Number.isFinite(hourOverride) ? hourOverride : new Date().getHours();
   const mealTime = getMealTime(hour);
   const caloriesRemaining = calorieGoal - totalCalories;
 
@@ -1409,8 +1416,10 @@ export function getActivityMessage(context) {
     stepGoal = 10000,
     justWorkedOut = false,
     sedentaryHours = 0,
+    hour: hourOverride,
   } = context;
 
+  const hour = Number.isFinite(hourOverride) ? hourOverride : new Date().getHours();
   const percentage = Math.round((steps / stepGoal) * 100);
   const remaining = stepGoal - steps;
 
@@ -1446,7 +1455,7 @@ export function getActivityMessage(context) {
       return pickRandom(ACTIVITY_MESSAGES.sedentaryNudge);
     }
 
-    if (percentage < 30 && new Date().getHours() >= 14) {
+    if (percentage < 30 && hour >= 14) {
       return interpolate(pickRandom(ACTIVITY_MESSAGES.stepGoal.behindPace), {
         steps: steps.toLocaleString(),
       });

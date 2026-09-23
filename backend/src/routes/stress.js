@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Stress Tracking Routes
  *
  * Dedicated stress logging with triggers, symptoms, and coping strategies.
@@ -14,12 +14,22 @@
 
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { eq, and, gte, desc, sql, count } from 'drizzle-orm';
+import { eq, and, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { stressLogTable } from '../db/schema.js';
 import { updateStreak, awardXP } from '../services/gamificationRewardService.js';
 import { parseTimezoneOffsetMinutes, getDayKey } from '../utils/timezone.js';
 import { clearPatternCache } from '../services/patternMiningService.js';
+import {
+  buildStressDailySummaries,
+  normalizeHistoryQuery,
+  summarizeStressHistory,
+} from '../utils/wellnessHistory.js';
+import { compareBinaryGroups, MIN_PATTERN_GROUP_SIZE } from '../utils/patternEvidence.js';
+import {
+  getTrackedDaySnapshot,
+  reconcileStreakAfterDeletion,
+} from '../services/streakReconciliationService.js';
 
 const router = express.Router();
 
@@ -77,6 +87,67 @@ export const COPING_STRATEGIES = [
   { key: 'hobby', label: 'Hobby/Activity', icon: 'color-palette' },
 ];
 
+const TRIGGER_KEYS = new Set(STRESS_TRIGGERS.map(({ key }) => key));
+const SYMPTOM_KEYS = new Set(PHYSICAL_SYMPTOMS.map(({ key }) => key));
+const COPING_KEYS = new Set(COPING_STRATEGIES.map(({ key }) => key));
+
+export function normalizeStressLogInput(body = {}) {
+  const {
+    level,
+    triggers = [],
+    physicalSymptoms = {},
+    copingUsed = [],
+    notes = null,
+    loggedAt,
+    clientEventId = null,
+  } = body || {};
+
+  if (!Number.isInteger(level) || level < 1 || level > 10) {
+    return { error: 'Stress level must be an integer between 1 and 10' };
+  }
+  if (!Array.isArray(triggers) || !Array.isArray(copingUsed)) {
+    return { error: 'Triggers and coping strategies must be arrays' };
+  }
+  if (!physicalSymptoms || Array.isArray(physicalSymptoms) || typeof physicalSymptoms !== 'object') {
+    return { error: 'Physical symptoms must be an object' };
+  }
+  if (notes !== null && typeof notes !== 'string') {
+    return { error: 'Notes must be text' };
+  }
+  if (typeof notes === 'string' && notes.length > 200) {
+    return { error: 'Notes must be 200 characters or fewer' };
+  }
+  if (clientEventId !== null && (typeof clientEventId !== 'string' || clientEventId.length < 1 || clientEventId.length > 200)) {
+    return { error: 'Invalid client event ID' };
+  }
+
+  const parsedLoggedAt = loggedAt === undefined ? new Date() : new Date(loggedAt);
+  if (Number.isNaN(parsedLoggedAt.getTime())) {
+    return { error: 'Invalid loggedAt timestamp' };
+  }
+
+  const normalizedSymptoms = {};
+  for (const key of SYMPTOM_KEYS) {
+    const value = physicalSymptoms[key];
+    if (value !== undefined && typeof value !== 'boolean') {
+      return { error: `Physical symptom ${key} must be true or false` };
+    }
+    normalizedSymptoms[key] = value === true;
+  }
+
+  return {
+    value: {
+      level,
+      triggers: [...new Set(triggers.filter((key) => typeof key === 'string' && TRIGGER_KEYS.has(key)))],
+      physicalSymptoms: normalizedSymptoms,
+      copingUsed: [...new Set(copingUsed.filter((key) => typeof key === 'string' && COPING_KEYS.has(key)))],
+      notes: typeof notes === 'string' ? notes.trim() || null : null,
+      loggedAt: parsedLoggedAt,
+      clientEventId,
+    },
+  };
+}
+
 router.get('/constants', (req, res) => {
   res.json({
     stressLevels: STRESS_LEVELS,
@@ -94,24 +165,12 @@ router.post('/log', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
     const offsetMinutes = parseTimezoneOffsetMinutes(req);
-    const {
-      level,
-      triggers = [],
-      physicalSymptoms = {},
-      copingUsed = [],
-      notes,
-      loggedAt,
-      clientEventId,
-    } = req.body;
-
-    // Validation. level is an integer column with a DB CHECK (1-10) — reject
-    // non-numbers/fractional values here so a bad request gets a clean 400
-    // instead of a raw constraint-violation 500.
-    if (!level || typeof level !== 'number' || !Number.isFinite(level) || level < 1 || level > 10) {
-      return res.status(400).json({ error: 'Stress level must be a number between 1 and 10' });
+    const normalized = normalizeStressLogInput(req.body);
+    if (normalized.error) {
+      return res.status(400).json({ error: normalized.error });
     }
+    const { level, triggers, physicalSymptoms, copingUsed, notes, loggedAt: loggedDate, clientEventId } = normalized.value;
 
-    const loggedDate = loggedAt ? new Date(loggedAt) : new Date();
     const dayKey = getDayKey(loggedDate, offsetMinutes);
     const loggedDateStr = dayKey;
 
@@ -144,7 +203,7 @@ router.post('/log', async (req, res) => {
       .insert(stressLogTable)
       .values({
         userId,
-        level: Math.round(level),
+        level,
         triggers,
         physicalSymptoms,
         copingUsed,
@@ -168,8 +227,8 @@ router.post('/log', async (req, res) => {
 
     // Award XP: 8 base + 5 coping bonus (if coping strategies logged)
     let xpResult = null;
+    let xpToAward = 8;
     try {
-      let xpToAward = 8; // Base XP
       if (copingUsed && copingUsed.length > 0) {
         xpToAward += 5; // Coping bonus
       }
@@ -188,11 +247,23 @@ router.post('/log', async (req, res) => {
       success: true,
       log: newLog,
       levelInfo,
-      xp: xpResult ? { awarded: xpResult.xpAwarded || 8, total: xpResult.newXP } : null,
+      xp: xpResult ? { awarded: xpToAward, total: xpResult.newXP } : null,
       streak: streakResult ? { current: streakResult.streak } : null,
       message: `Logged stress level: ${levelInfo.label}`,
     });
   } catch (error) {
+    const clientEventId = req.body?.clientEventId;
+    if ((error?.code === '23505' || error?.cause?.code === '23505') && typeof clientEventId === 'string') {
+      const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
+      const [existing] = await db
+        .select()
+        .from(stressLogTable)
+        .where(and(eq(stressLogTable.userId, userId), eq(stressLogTable.clientEventId, clientEventId)))
+        .limit(1);
+      if (existing) {
+        return res.json({ success: true, log: existing, idempotent: true, message: 'Stress entry already logged' });
+      }
+    }
     console.error('[Stress] POST /log error:', error);
     res.status(500).json({ error: 'Failed to log stress' });
   }
@@ -257,61 +328,44 @@ router.get('/today', async (req, res) => {
 router.get('/history', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const { days = 30, limit = 100, offset = 0 } = req.query;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const { days, limit, offset } = normalizeHistoryQuery(req.query);
 
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-    const startDateStr = startDate.toISOString().split('T')[0];
+    startDate.setDate(startDate.getDate() - days + 1);
+    const startDateStr = getDayKey(startDate, offsetMinutes);
 
-    // Get stress logs
+    const historyFilter = and(
+      eq(stressLogTable.userId, userId),
+      gte(stressLogTable.loggedDate, startDateStr)
+    );
+
+    const rangeLogs = await db
+      .select()
+      .from(stressLogTable)
+      .where(historyFilter)
+      .orderBy(desc(stressLogTable.loggedAt));
+
     const stressLogs = await db
       .select()
       .from(stressLogTable)
-      .where(
-        and(
-          eq(stressLogTable.userId, userId),
-          gte(stressLogTable.loggedDate, startDateStr)
-        )
-      )
+      .where(historyFilter)
       .orderBy(desc(stressLogTable.loggedAt))
-      .limit(parseInt(limit))
-      .offset(parseInt(offset));
+      .limit(limit)
+      .offset(offset);
 
-    // Get total count
-    const [countResult] = await db
-      .select({ count: count() })
-      .from(stressLogTable)
-      .where(
-        and(
-          eq(stressLogTable.userId, userId),
-          gte(stressLogTable.loggedDate, startDateStr)
-        )
-      );
-
-    // Calculate summary
-    const avgLevel = stressLogs.length > 0
-      ? Math.round((stressLogs.reduce((sum, log) => sum + log.level, 0) / stressLogs.length) * 10) / 10
-      : 0;
-
-    // Count high stress days (level >= 7)
-    const highStressDays = new Set(
-      stressLogs.filter(log => log.level >= 7).map(log => log.loggedDate)
-    ).size;
+    const total = rangeLogs.length;
 
     res.json({
       success: true,
       stressLogs,
-      total: countResult?.count || 0,
-      summary: {
-        avgLevel,
-        entriesCount: stressLogs.length,
-        highStressDays,
-        daysWithData: new Set(stressLogs.map(log => log.loggedDate)).size,
-      },
+      total,
+      summary: summarizeStressHistory(rangeLogs),
+      dailySummaries: buildStressDailySummaries(rangeLogs),
       pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: (parseInt(offset) + stressLogs.length) < (countResult?.count || 0),
+        limit,
+        offset,
+        hasMore: offset + stressLogs.length < total,
       },
     });
   } catch (error) {
@@ -327,11 +381,12 @@ router.get('/history', async (req, res) => {
 router.get('/triggers', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const { days = 30 } = req.query;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const { days } = normalizeHistoryQuery(req.query);
 
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-    const startDateStr = startDate.toISOString().split('T')[0];
+    startDate.setDate(startDate.getDate() - days + 1);
+    const startDateStr = getDayKey(startDate, offsetMinutes);
 
     // Get stress logs
     const stressLogs = await db
@@ -395,11 +450,12 @@ router.get('/triggers', async (req, res) => {
 router.get('/patterns', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const { days = 30 } = req.query;
+    const offsetMinutes = parseTimezoneOffsetMinutes(req);
+    const { days } = normalizeHistoryQuery(req.query);
 
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-    const startDateStr = startDate.toISOString().split('T')[0];
+    startDate.setDate(startDate.getDate() - days + 1);
+    const startDateStr = getDayKey(startDate, offsetMinutes);
 
     // Get stress logs
     const stressLogs = await db
@@ -425,7 +481,9 @@ router.get('/patterns', async (req, res) => {
     // Time of day analysis
     const timeOfDay = { morning: [], afternoon: [], evening: [], night: [] };
     stressLogs.forEach(log => {
-      const hour = new Date(log.loggedAt).getHours();
+      const entryOffset = Number.isFinite(log.timezoneOffset) ? log.timezoneOffset : offsetMinutes;
+      const localDate = new Date(new Date(log.loggedAt).getTime() - (entryOffset || 0) * 60000);
+      const hour = localDate.getUTCHours();
       if (hour >= 5 && hour < 12) timeOfDay.morning.push(log.level);
       else if (hour >= 12 && hour < 17) timeOfDay.afternoon.push(log.level);
       else if (hour >= 17 && hour < 21) timeOfDay.evening.push(log.level);
@@ -446,7 +504,9 @@ router.get('/patterns', async (req, res) => {
     const dayOfWeek = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     stressLogs.forEach(log => {
-      const day = new Date(log.loggedAt).getDay();
+      const entryOffset = Number.isFinite(log.timezoneOffset) ? log.timezoneOffset : offsetMinutes;
+      const localDate = new Date(new Date(log.loggedAt).getTime() - (entryOffset || 0) * 60000);
+      const day = localDate.getUTCDay();
       dayOfWeek[day].push(log.level);
     });
 
@@ -463,18 +523,19 @@ router.get('/patterns', async (req, res) => {
     // Coping effectiveness
     const copingEffectiveness = {};
     COPING_STRATEGIES.forEach(strategy => {
-      const withCoping = stressLogs.filter(log =>
-        Array.isArray(log.copingUsed) && log.copingUsed.includes(strategy.key)
+      const comparison = compareBinaryGroups(
+        stressLogs,
+        (log) => Array.isArray(log.copingUsed) && log.copingUsed.includes(strategy.key),
+        (log) => log.level
       );
-
-      if (withCoping.length >= 2) {
-        const avgLevel = withCoping.reduce((sum, log) => sum + log.level, 0) / withCoping.length;
-        const overallAvg = stressLogs.reduce((sum, log) => sum + log.level, 0) / stressLogs.length;
+      if (comparison) {
         copingEffectiveness[strategy.key] = {
           ...strategy,
-          timesUsed: withCoping.length,
-          avgLevelWhenUsed: Math.round(avgLevel * 10) / 10,
-          effectiveness: Math.round((overallAvg - avgLevel) * 10) / 10, // Positive = helps reduce stress
+          timesUsed: comparison.countWith,
+          comparisonCount: comparison.countWithout,
+          avgLevelWhenUsed: comparison.averageWith,
+          avgLevelWithout: comparison.averageWithout,
+          effectiveness: Math.round(-comparison.difference * 10) / 10,
         };
       }
     });
@@ -509,6 +570,10 @@ router.get('/patterns', async (req, res) => {
         },
         overallAvg: Math.round((stressLogs.reduce((sum, log) => sum + log.level, 0) / stressLogs.length) * 10) / 10,
         entriesCount: stressLogs.length,
+        copingObservationCount: stressLogs.filter(
+          (log) => Array.isArray(log.copingUsed) && log.copingUsed.length > 0
+        ).length,
+        minimumAssociationGroupSize: MIN_PATTERN_GROUP_SIZE,
       },
     });
   } catch (error) {
@@ -524,30 +589,54 @@ router.get('/patterns', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const userId = (typeof req.auth === 'function' ? req.auth() : req.auth)?.userId;
-    const stressId = parseInt(req.params.id);
+    const stressId = Number(req.params.id);
+    const offsetMinutes = parseTimezoneOffsetMinutes(req) ?? 0;
 
-    if (!stressId || isNaN(stressId)) {
+    if (!Number.isSafeInteger(stressId) || stressId <= 0) {
       return res.status(400).json({ error: 'Invalid stress ID' });
     }
 
-    // Verify ownership and delete
-    const deleted = await db
-      .delete(stressLogTable)
-      .where(
-        and(
-          eq(stressLogTable.id, stressId),
-          eq(stressLogTable.userId, userId)
-        )
-      )
-      .returning();
+    // Delete + streak reconciliation as one transaction: if reconciliation
+    // throws, the delete rolls back too, instead of leaving the entry gone
+    // with an un-reconciled streak.
+    const txResult = await db.transaction(async (tx) => {
+      const beforeStreak = await getTrackedDaySnapshot(userId, tx, offsetMinutes);
 
-    if (deleted.length === 0) {
+      // Verify ownership and delete
+      const deleted = await tx
+        .delete(stressLogTable)
+        .where(
+          and(
+            eq(stressLogTable.id, stressId),
+            eq(stressLogTable.userId, userId)
+          )
+        )
+        .returning();
+
+      if (deleted.length === 0) {
+        return { found: false };
+      }
+
+      const streakReconciliation = await reconcileStreakAfterDeletion({
+        userId,
+        beforeSnapshot: beforeStreak,
+        dbConn: tx,
+        timezoneOffset: offsetMinutes,
+      });
+
+      return { found: true, deleted, streakReconciliation };
+    });
+
+    if (!txResult.found) {
       return res.status(404).json({ error: 'Stress entry not found or not owned by user' });
     }
 
+    clearPatternCache(userId);
+
     res.json({
       success: true,
-      deleted: deleted[0],
+      deleted: txResult.deleted[0],
+      streak: txResult.streakReconciliation.streak,
       message: 'Stress entry deleted successfully',
     });
   } catch (error) {

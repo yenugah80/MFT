@@ -1,13 +1,18 @@
 /**
  * AIConsentPrompt
  *
- * One-time prompt for users who signed up before the bundled Terms/Privacy/AI
- * checkbox existed on sign-up and therefore have never been asked.
+ * The one place AI-assisted analysis consent (voice/photo food logging via
+ * OpenAI) is ever asked for. Sign-up deliberately does NOT grant this —
+ * sign-up's "by continuing" clickwrap only covers Terms of Service/Privacy
+ * Policy, since GDPR Art. 9 requires *explicit, un-pre-ticked* consent for
+ * health-adjacent data specifically, which a bundled clickwrap doesn't
+ * provide. Every user, new or existing, gets the same real Agree/Not now
+ * choice here instead.
  *
- * Without this they meet a consent request at whichever AI feature they happen
- * to touch first — voice, photo, or recommendations — which is both confusing
- * and repetitive. Asking once, on open, means every user ends up in the same
- * state as a new user and the question never appears mid-task again.
+ * Without this they'd meet a consent request at whichever AI feature they
+ * happen to touch first — voice, photo, or recommendations — which is both
+ * confusing and repetitive. Asking once, on open, means the question never
+ * appears mid-task.
  *
  * Shows only when the server reports `hasBeenAsked: false`. Someone who
  * actively declined has been asked, so they are never prompted again — re-asking
@@ -66,7 +71,7 @@ export default function AIConsentPrompt() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await apiClient.post('/consent/give-openai-consent', {
         understand: true,
-        purpose: 'signup-terms-privacy-ai',
+        purpose: 'ai-consent-prompt',
       });
       await dismiss();
     } catch (err) {
@@ -96,11 +101,11 @@ export default function AIConsentPrompt() {
             <Ionicons name="sparkles" size={26} color={BRAND.primary} />
           </View>
 
-          <Text style={styles.title}>Terms, Privacy &amp; Smart Analysis</Text>
+          <Text style={styles.title}>Turn On Smart Analysis</Text>
           <Text style={styles.body}>
-            Our Terms of Service and Privacy Policy now cover AI-assisted meal
-            analysis — snap or describe a meal and let MFT fill in the
-            nutrition for you.
+            Snap a photo or describe a meal by voice, and AI fills in the
+            nutrition for you. Enabling this sends that photo or recording
+            to OpenAI for analysis.
           </Text>
 
           {/* Brief by design — the detail is a tap away, not on the card. */}

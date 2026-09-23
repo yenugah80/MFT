@@ -17,6 +17,7 @@ import {
   Alert,
   Platform,
   InteractionManager,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -32,15 +33,17 @@ import { useDashboard } from '../../hooks/useDashboard';
 import { useNotification } from '../../providers/NotificationProvider';
 import { useWaterLog } from '../../hooks/useWaterLog';
 import { usePreferences } from '../../hooks/usePreferences';
+import useModalNavigation from '../../hooks/useModalNavigation';
 import { announceFoodLogged, announceMealLogged } from '../../services/audioFeedback';
-import { calculateCaffeine } from '../../constants/beverageConstants';
+import { calculateCaffeine, DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient';
 import { useTheme } from '../../providers/ThemeProvider';
 import useProfileForm from '../../hooks/useProfileForm';
 import { useUser } from '@clerk/clerk-expo';
 import { calculateDailyTargets } from '../../utils/nutritionTargets';
-import { hydrationMessages, moodMessages, foodMessages, generalMessages, insightMessages } from '../../utils/wittyMessages';
+import { resolveMacroField, normalizeItemMacros, aggregateNormalizedMacroTotals } from '../../utils/macroFieldResolver';
+import { moodMessages, foodMessages, generalMessages, insightMessages } from '../../utils/wittyMessages';
 import { getAllergenSeverity } from '../../utils/allergenDetection';
 
 // Components
@@ -54,6 +57,8 @@ import { MealTotalsCard } from '../../components/log/MealTotalsCard';
 import { VoiceModal } from '../../components/log/VoiceModal';
 import LogInputSection from '../../components/log/LogInputSection';
 import MoodLogger from '../../components/MoodLogger';
+import SleepLogger from '../../components/SleepLogger';
+import StressLogger from '../../components/StressLogger';
 import MealPreviewCard from '../../components/log/MealPreviewCard';
 import MealLoggedCard from '../../components/log/MealLoggedCard';
 import UnifiedMealAnalysis from '../../components/log/UnifiedMealAnalysis';
@@ -67,6 +72,55 @@ import { NutrientTrendsModal } from '../../components/log/NutrientTrendsModal';
 
 // Import centralized typography from premium theme
 import { TYPOGRAPHY, TEXT, SURFACES, BRAND, SEMANTIC_ACTIONS } from '../../constants/premiumTheme';
+import { countDistinctMeals } from '../../utils/mealGrouping';
+import { aggregateMicros } from '../../utils/micronutrients';
+import { replaceIngredientTerm, unresolvedItems } from '../../utils/foodResolution';
+
+/**
+ * Maps a VoiceModal analysis result (backend items shape, from /voice/process)
+ * into the { items, totals } shape the rest of the screen expects. Shared by
+ * handleVoiceComplete (stages a result for review) and handleSaveVoiceResult
+ * (saves one directly from inside VoiceModal) so the two never drift apart.
+ * Returns null when there is nothing to log.
+ */
+export function mapVoiceResultToAnalysis(voiceResult) {
+  const { items } = voiceResult || {};
+  if (!items || items.length === 0) return null;
+
+  const mappedItems = items.map((item, idx) => ({
+    itemId: item.itemId || `voice-${idx}`,
+    name: item.name || item.foodName,
+    portion: item.portion || { amount: 1, unit: 'serving' },
+    macros: normalizeItemMacros(item),
+    micros: item.micros || {},
+    confidence: item.confidence || 0.9,
+    source: item.source || 'voice',
+  }));
+
+  const micros = {};
+  mappedItems.forEach((item) => {
+    if (item.micros) {
+      Object.entries(item.micros).forEach(([key, value]) => {
+        if (!micros[key]) {
+          micros[key] = { value: 0, unit: value?.unit || '' };
+        }
+        micros[key].value += value?.value || 0;
+      });
+    }
+  });
+
+  // Totals are always reconciled from these same normalized items — never a
+  // separately-sourced server total that could silently diverge from what's
+  // actually displayed per item and then saved. That exact divergence (an
+  // item correctly showing 95 kcal while a competing, unreconciled total
+  // showed 0) is the reported bug; a single source of truth for both the
+  // per-item values and the sum structurally rules it out, rather than
+  // guessing which of two sums to trust by whether it happens to be
+  // positive. The backend's own totals are intentionally not read here.
+  const totals = { macros: aggregateNormalizedMacroTotals(mappedItems), micros };
+
+  return { items: mappedItems, totals, source: 'voice' };
+}
 
 export default function LogScreen() {
   // Hooks - Get user profile for personalized nutrition targets
@@ -85,13 +139,20 @@ export default function LogScreen() {
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showMoodModal, setShowMoodModal] = useState(false);
+  const [showSleepModal, setShowSleepModal] = useState(false);
+  const [showStressModal, setShowStressModal] = useState(false);
   const [isSavingLog, setIsSavingLog] = useState(false);
+  const [isEnablingConsent, setIsEnablingConsent] = useState(false);
   const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
   const [inputMode, setInputMode] = useState('text'); // 'text', 'photo', 'voice', 'recent'
   const [analysisSource, setAnalysisSource] = useState('text');
   const [isTextFocused, setIsTextFocused] = useState(false);
   const [showMealLogged, setShowMealLogged] = useState(false);
   const [loggedMeal, setLoggedMeal] = useState(null);
+  // Snapshot of the just-saved day's totals. The dashboard query invalidates
+  // after sync, but its previous cache can remain visible for a render; the
+  // confirmation must never show the pre-save 0% state during that gap.
+  const [loggedDailyTotals, setLoggedDailyTotals] = useState(null);
   const [showHydrationModal, setShowHydrationModal] = useState(false);
   const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
   const [hasManuallyClosedDetails, setHasManuallyClosedDetails] = useState(false);
@@ -99,9 +160,16 @@ export default function LogScreen() {
   const [healthModalData, setHealthModalData] = useState(null);
   const [showTrendsModal, setShowTrendsModal] = useState(false);
   const [selectedTrendNutrient, setSelectedTrendNutrient] = useState(null);
+  // Meals whose upload can never succeed as-is, so the user can discard them
+  const [blockedSyncs, setBlockedSyncs] = useState([]);
+  const [showBlockedSyncs, setShowBlockedSyncs] = useState(false);
 
   // Hooks
   const router = useRouter();
+  const {
+    navigateAfterModalClose,
+    handleModalDismiss,
+  } = useModalNavigation(router);
   const { focus, mealType, prefill } = useLocalSearchParams();
   const foodAnalysis = useFoodAnalysis();
   const voiceHook = useServerVoice({ mealType, voiceLanguage: preferences?.voiceLanguage || 'en' });
@@ -128,12 +196,14 @@ export default function LogScreen() {
       const response = await apiClient.get('/nutrition/micronutrient-trends?days=30');
       return response;
     },
-    staleTime: 15 * 60 * 1000, // 15 min — micros change slowly
+    staleTime: 15 * 60 * 1000, // 15 min because micros change slowly
     enabled: showTrendsModal,   // only fetch when modal is open
   });
 
   const closeAllModals = useCallback(() => {
     setShowMoodModal(false);
+    setShowSleepModal(false);
+    setShowStressModal(false);
     setShowHydrationModal(false);
     setShowVoiceModal(false);
     setShowCameraModal(false);
@@ -142,6 +212,51 @@ export default function LogScreen() {
     setShowHealthModal(false);
     setShowTrendsModal(false);
   }, []);
+
+  // Pulled out of foodLog so the effect below can depend on stable values.
+  // the hook returns a fresh object every render.
+  const { blockedSyncCount, getBlockedSyncs, discardBlockedSync } = foodLog;
+
+  // Load the details of permanently-stuck meals whenever that set changes.
+  // Only the count lives in the hook's state; the rows are read on demand.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (blockedSyncCount === 0) {
+      setBlockedSyncs([]);
+      setShowBlockedSyncs(false);
+      return;
+    }
+
+    (async () => {
+      const rows = await getBlockedSyncs();
+      if (!cancelled) setBlockedSyncs(rows);
+    })();
+
+    return () => { cancelled = true; };
+  }, [blockedSyncCount, getBlockedSyncs]);
+
+  /**
+   * Discard a meal that can never sync. Destructive and unrecoverable, so it
+   * always confirms first.
+   */
+  const handleDiscardBlockedSync = useCallback((item) => {
+    Alert.alert(
+      'Discard this meal?',
+      `"${item.foodName}" couldn't be saved and will be removed from your log. This can't be undone.`,
+      [
+        { text: 'Keep trying', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            await discardBlockedSync(item.clientEventId);
+            notify.info(`Removed "${item.foodName}"`, { domain: 'food' });
+          },
+        },
+      ]
+    );
+  }, [discardBlockedSync, notify]);
 
   useEffect(() => {
     if (!focus) return;
@@ -158,6 +273,14 @@ export default function LogScreen() {
       case 'hydration':
         closeAllModals();
         setShowHydrationModal(true);
+        break;
+      case 'sleep':
+        closeAllModals();
+        setShowSleepModal(true);
+        break;
+      case 'stress':
+        closeAllModals();
+        setShowStressModal(true);
         break;
       case 'meal':
         closeAllModals();
@@ -235,10 +358,10 @@ export default function LogScreen() {
     setAnalysisSource('photo');
 
     try {
-      // barcode/voiceTranscript come from CameraModal's onPhotoTaken(uri, barcode, voiceTranscript) —
+      // barcode/voiceTranscript come from CameraModal's onPhotoTaken(uri, barcode, voiceTranscript).
       // previously dropped here, which silently meant the multimodal (photo+voice) path never fired.
       // skipCompression: true because CameraModal already resized/recompressed the image before
-      // calling onPhotoTaken — re-running the same resize here would just waste CPU.
+      // calling onPhotoTaken. Re-running the same resize here would just waste CPU.
       await foodAnalysis.analyzePhoto(imageUri, barcode, voiceTranscript, { skipCompression: true });
       // Success - analysisResult will be set by the hook
     } catch (error) {
@@ -324,75 +447,13 @@ export default function LogScreen() {
 
       // Use the nutrition result directly from VoiceModal
       // No need to re-analyze - VoiceModal already did it!
-      if (items && items.length > 0) {
-        // Map items to expected format (backend items already have correct structure)
-        const mappedItems = items.map((item, idx) => ({
-          itemId: item.itemId || `voice-${idx}`,
-          name: item.name || item.foodName,
-          portion: item.portion || { amount: 1, unit: 'serving' },
-          macros: item.macros || {
-            calories_kcal: item.calories || 0,
-            protein_g: item.protein || 0,
-            carbs_g: item.carbs || 0,
-            fat_g: item.fat || item.fats || 0,
-            fiber_g: item.fiber || 0,
-            sugar_g: item.sugar || 0,
-            sodium_mg: item.sodium || 0,
-          },
-          micros: item.micros || {},
-          confidence: item.confidence || 0.9,
-          source: item.source || 'voice',
-        }));
-
-        // Calculate totals from items (backend returns empty totals)
-        const calculatedTotals = {
-          macros: {
-            calories_kcal: 0,
-            protein_g: 0,
-            carbs_g: 0,
-            fat_g: 0,
-            fiber_g: 0,
-            sugar_g: 0,
-            sodium_mg: 0,
-          },
-          micros: {},
-        };
-
-        mappedItems.forEach((item) => {
-          const m = item.macros || {};
-          calculatedTotals.macros.calories_kcal += m.calories_kcal || 0;
-          calculatedTotals.macros.protein_g += m.protein_g || 0;
-          calculatedTotals.macros.carbs_g += m.carbs_g || 0;
-          calculatedTotals.macros.fat_g += m.fat_g || 0;
-          calculatedTotals.macros.fiber_g += m.fiber_g || 0;
-          calculatedTotals.macros.sugar_g += m.sugar_g || 0;
-          calculatedTotals.macros.sodium_mg += m.sodium_mg || 0;
-
-          // Aggregate micros
-          if (item.micros) {
-            Object.entries(item.micros).forEach(([key, value]) => {
-              if (!calculatedTotals.micros[key]) {
-                calculatedTotals.micros[key] = { value: 0, unit: value?.unit || '' };
-              }
-              calculatedTotals.micros[key].value += value?.value || 0;
-            });
-          }
-        });
-
-        // Use provided totals if they have data, otherwise use calculated
-        const finalTotals = (totals?.macros && Object.keys(totals.macros).length > 0)
-          ? totals
-          : calculatedTotals;
-
-        foodAnalysis.setAnalysisResult({
-          items: mappedItems,
-          totals: finalTotals,
-          source: 'voice',
-        });
+      const mapped = mapVoiceResultToAnalysis({ items, totals });
+      if (mapped) {
+        foodAnalysis.setAnalysisResult(mapped);
 
         console.log('[log] Voice analysis result set:', {
-          itemCount: mappedItems.length,
-          totalCalories: finalTotals.macros.calories_kcal,
+          itemCount: mapped.items.length,
+          totalCalories: mapped.totals.macros.calories_kcal,
         });
       } else if (nutrition?.data) {
         // Handle legacy format where nutrition data is nested
@@ -412,28 +473,29 @@ export default function LogScreen() {
   /**
    * Apply a "Did you mean?" suggestion
    */
-  const handleApplySuggestion = (itemId, suggestion) => {
-    if (!foodAnalysis.analysisResult) return;
+  const handleApplySuggestion = async (itemId, suggestion) => {
+    if (!foodAnalysis.analysisResult || foodAnalysis.isAnalyzing) return;
 
-    const updatedItems = foodAnalysis.analysisResult.items.map(item => {
-      if (item.itemId === itemId) {
-        return {
-          ...item,
-          name: suggestion.canonical,
-          // Update portion unit if the suggestion has a specific default
-          portion: {
-            ...item.portion,
-            unit: suggestion.portion?.unit || item.portion.unit
-          },
-          suggestions: [], // Clear suggestions after applying
-          confidence: 1.0, // User manually selected this, so high confidence
-          manualOverride: true // Flag for learning loop
-        };
-      }
-      return item;
-    });
+    const item = foodAnalysis.analysisResult.items.find(candidate => candidate.itemId === itemId);
+    const original = suggestion.original || item?.name;
+    const correctedInput = replaceIngredientTerm(
+      foodAnalysis.inputText,
+      original,
+      suggestion.canonical
+    );
 
-    foodAnalysis.setAnalysisResult({ ...foodAnalysis.analysisResult, items: updatedItems });
+    if (!correctedInput) {
+      notify.error('Could not apply that correction. Update the meal description and analyze again.');
+      return;
+    }
+
+    notify.info(`Rechecking ${suggestion.canonical} nutrition`);
+    try {
+      await foodAnalysis.analyzeCorrectedText(correctedInput);
+    } catch (error) {
+      console.error('[LogScreen] Ingredient correction failed:', error);
+      notify.error('Could not recheck that ingredient. Please try again.');
+    }
   };
 
   /**
@@ -507,7 +569,7 @@ export default function LogScreen() {
   };
 
   /**
-   * Core save logic — called after allergen check passes (or user overrides)
+   * Core save logic, called after allergen check passes (or user overrides)
    */
   const _doSaveLog = async (foodData) => {
     const clientEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -517,9 +579,18 @@ export default function LogScreen() {
       source: foodData.source || analysisSource,
       mealType: effectiveMealType,
       clientEventId,
+      // Stage 8a: forward whatever resolution signal is already on
+      // foodData (populated by buildLegacyFoodLog, or already present on
+      // a multi-item's individual item object) instead of the bare
+      // {source, timestamp} this used to send unconditionally.
       sourceMeta: {
         source: analysisSource,
         timestamp: new Date().toISOString(),
+        confidenceTier: foodData.confidenceTier ?? null,
+        resolutionSource: foodData.resolutionSource ?? null,
+        nutritionPlausible: foodData.nutritionPlausible ?? null,
+        plausibilityCheck: foodData.plausibilityCheck ?? null,
+        macroReconciled: foodData.macroReconciled ?? false,
       },
     };
 
@@ -532,9 +603,33 @@ export default function LogScreen() {
     setAnalyzedFood(null);
     setSelectedImage(null);
 
+    // Top-level nutriScore/healthScore/healthAnalysis come from the backend's
+    // enrichWithHealthMetrics on the overall analysisResult, not per-item.
+    // buildLegacyFoodLog's item.nutriscore/item.healthScore reads were
+    // reading fields that don't exist there, so MealLoggedCard's score chip
+    // row (meal.nutriScore / meal.healthScore) silently never rendered post-log
+    // even though the pre-log analysis screen shows them correctly.
+    const matchingAnalysis = foodAnalysis.analysisResult?.items?.length === 1 ? foodAnalysis.analysisResult : null;
+
     setLoggedMeal({
       ...foodDataWithId,
-      originalAnalysis: analyzedFood || (foodAnalysis.analysisResult?.items?.length === 1 ? foodAnalysis.analysisResult : null)
+      // SmartMealInsights' late-night timing check needs the moment this
+      // meal was actually logged, not whenever that card next renders —
+      // reuse the same timestamp already captured in sourceMeta above.
+      loggedAt: foodDataWithId.sourceMeta.timestamp,
+      nutriScore: matchingAnalysis?.nutriScore ?? foodData.nutriscore ?? null,
+      healthScore: foodDataWithId.healthScore ?? matchingAnalysis?.healthScore ?? null,
+      healthAnalysis: matchingAnalysis?.healthAnalysis ?? null,
+      originalAnalysis: analyzedFood || matchingAnalysis
+    });
+    const current = dashboardData?.today?.nutrition || {};
+    setLoggedDailyTotals({
+      ...current,
+      totalCalories: (Number(current.totalCalories) || 0) + (Number(foodData.macros?.calories_kcal ?? foodData.calories) || 0),
+      totalProtein: (Number(current.totalProtein) || 0) + (Number(foodData.macros?.protein_g ?? foodData.protein) || 0),
+      totalCarbs: (Number(current.totalCarbs) || 0) + (Number(foodData.macros?.carbs_g ?? foodData.carbs) || 0),
+      totalFats: (Number(current.totalFats) || 0) + (Number(foodData.macros?.fat_g ?? foodData.fats ?? foodData.fat) || 0),
+      totalFiber: (Number(current.totalFiber) || 0) + (Number(foodData.macros?.fiber_g ?? foodData.fiber) || 0),
     });
 
     InteractionManager.runAfterInteractions(() => {
@@ -543,10 +638,15 @@ export default function LogScreen() {
   };
 
   /**
-   * Save analyzed food to log — checks allergens BEFORE saving
+   * Save analyzed food to log. Checks allergens BEFORE saving.
    */
   const handleSaveLog = async (foodData) => {
     if (isSavingLog) return;
+
+    if (unresolvedItems([foodData]).length > 0) {
+      notify.error('Confirm or correct unresolved ingredients before logging this meal.');
+      return;
+    }
 
     const foodName = foodData.name || foodData.food || 'Food';
     const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
@@ -586,14 +686,31 @@ export default function LogScreen() {
   /**
    * Save multi-item meal
    */
-  const handleSaveMeal = async () => {
-    if (isSavingLog || !foodAnalysis.analysisResult) return;
+  /**
+   * Persists every item in an analysis result and shows the MealLoggedCard
+   * confirmation. Takes the result as a parameter (rather than reading
+   * foodAnalysis.analysisResult directly) so it can be called either from the
+   * existing inline "Save" button (which has staged the result into that
+   * state already) or directly from inside VoiceModal with a result that was
+   * never staged there, for example because the user saved without leaving the
+   * modal. Reading from a parameter avoids relying on state having propagated
+   * into this closure by the time the caller runs.
+   */
+  const saveMealItems = async (analysisResult) => {
+    if (isSavingLog || !analysisResult?.items?.length) return;
+
+    const itemsNeedingReview = unresolvedItems(analysisResult.items);
+    if (itemsNeedingReview.length > 0) {
+      const names = itemsNeedingReview.map(item => item.name).filter(Boolean).join(', ');
+      notify.error(`Review ${names || 'the unresolved ingredients'} before logging this meal.`);
+      return false;
+    }
 
     // ALLERGEN GATE: scan all items before saving anything
     const userAllergies = profileState?.savedProfile?.dietary?.allergies || [];
     if (userAllergies.length > 0) {
       const allAllergens = new Set();
-      foodAnalysis.analysisResult.items.forEach(item => {
+      analysisResult.items.forEach(item => {
         const check = getAllergenSeverity(item.allergens || [], userAllergies, item.name || '');
         if (check?.hasAllergen) check.allergens.forEach(a => allAllergens.add(a));
       });
@@ -622,8 +739,22 @@ export default function LogScreen() {
       let totalProtein = 0;
       let totalCarbs = 0;
       let totalFat = 0;
+      let totalFiber = 0;
+      let totalSugar = 0;
+      let totalSodium = 0;
+      // Same "missing vs. zero" distinction as macroFieldResolver's
+      // aggregateNormalizedMacroTotals, tracked separately here since this
+      // is a plain accumulator, not that function — a meal where no item
+      // ever reports fat (real case: an AI estimate that never mentioned
+      // it) must save/display as unknown, not a fabricated 0.0g that looks
+      // identical to a genuinely fat-free meal.
+      const totalReported = { calories: false, protein: false, carbs: false, fat: false, fiber: false, sugar: false, sodium: false };
+      // Summed across items so the post-log MealLoggedCard's fiber/sugar
+      // tile and micronutrient section are not empty for multi-item meals.
+      // each item.micros is per-item, MealLoggedCard needs the meal total.
+      const aggregatedMicros = aggregateMicros(analysisResult.items);
 
-      const savePromises = foodAnalysis.analysisResult.items.map((item, index) => {
+      const savePromises = analysisResult.items.map((item, index) => {
         const servingText = item.portion?.amount && item.portion?.unit
           ? `${item.portion.amount}${item.portion.unit}`
           : '1 serving';
@@ -632,67 +763,144 @@ export default function LogScreen() {
           id: `${mealEventId}-${index}`,
           timestamp: baseTimestamp + index,
           status: 'pending',
-          source: 'text',
+          source: analysisResult.source || 'text',
           mealType: effectiveMealType,
+          // Stage 8a: forward the per-item resolution signal the backend
+          // already computed (confidenceTier/resolutionSource/plausibility)
+          // instead of the bare {source, type, timestamp} this used to send
+          // — previously this data existed only for the lifetime of the
+          // pre-save analysis screen and was silently dropped at save time.
           sourceMeta: {
-            source: 'text',
+            source: analysisResult.source || 'text',
             type: 'multi',
             timestamp: new Date().toISOString(),
+            confidenceTier: item.confidenceTier ?? null,
+            resolutionSource: item.resolutionSource ?? item.source ?? null,
+            nutritionPlausible: item.nutritionPlausible ?? null,
+            plausibilityCheck: item.plausibilityCheck ?? null,
+            macroReconciled: item.macroReconciled ?? false,
           },
           clientEventId: `${mealEventId}-${item.itemId}`,
           mealId: mealEventId,
           foodName: item.name,
           servingSize: servingText,
-          calories: item.macros?.calories_kcal || 0,
-          protein: item.macros?.protein_g || 0,
-          carbs: item.macros?.carbs_g || 0,
-          fats: item.macros?.fat_g || 0,
-          fiber: item.macros?.fiber_g || 0,
-          sugar: item.macros?.sugar_g || 0,
-          sodium: item.macros?.sodium_mg || 0,
+          // resolveMacroField preserves missing-vs-zero (null vs 0) and
+          // checks legacy unsuffixed keys — a bare `item.macros?.calories_kcal
+          // || 0` here previously turned any item whose macros used the
+          // alternate shape into a silent, saved 0, even though the same
+          // item displayed its real value throughout review.
+          calories: resolveMacroField(item, 'calories_kcal'),
+          protein: resolveMacroField(item, 'protein_g'),
+          carbs: resolveMacroField(item, 'carbs_g'),
+          fats: resolveMacroField(item, 'fat_g'),
+          fiber: resolveMacroField(item, 'fiber_g'),
+          sugar: resolveMacroField(item, 'sugar_g'),
+          sodium: resolveMacroField(item, 'sodium_mg'),
           micros: item.micros || {},
+          // Stage 8d: same silent-drop pattern Stage 8a already fixed once
+          // for sourceMeta on this exact code path, never extended to
+          // ingredients — the single-item save path (buildLegacyFoodLog)
+          // already forwards this, so a multi-item meal's per-item
+          // ingredient breakdown was the one case that never survived past
+          // the pre-save analysis screen.
+          ingredients: item.ingredients || [],
           sourceEvidence: item.sourceEvidence,
           confidence: item.sourceEvidence?.[0]?.confidence || 0.5,
         };
 
-        totalCalories += foodLogData.calories || 0;
-        totalProtein += foodLogData.protein || 0;
-        totalCarbs += foodLogData.carbs || 0;
-        totalFat += foodLogData.fats || 0;
+        if (foodLogData.calories !== null) { totalCalories += foodLogData.calories; totalReported.calories = true; }
+        if (foodLogData.protein !== null) { totalProtein += foodLogData.protein; totalReported.protein = true; }
+        if (foodLogData.carbs !== null) { totalCarbs += foodLogData.carbs; totalReported.carbs = true; }
+        if (foodLogData.fats !== null) { totalFat += foodLogData.fats; totalReported.fat = true; }
+        if (foodLogData.fiber !== null) { totalFiber += foodLogData.fiber; totalReported.fiber = true; }
+        if (foodLogData.sugar !== null) { totalSugar += foodLogData.sugar; totalReported.sugar = true; }
+        if (foodLogData.sodium !== null) { totalSodium += foodLogData.sodium; totalReported.sodium = true; }
 
         return foodLog.addLog(foodLogData);
       });
 
       await Promise.all(savePromises);
 
-      const itemCount = foodAnalysis.analysisResult.items.length;
+      const itemCount = analysisResult.items.length;
       announceMealLogged(itemCount, totalCalories, effectiveMealType);
-
-      const capturedResult = foodAnalysis.analysisResult;
-      const capturedItemCount = capturedResult.items.length;
 
       foodAnalysis.setInputText('');
       foodAnalysis.setAnalysisResult(null);
 
       setLoggedMeal({
-        foodName: `Meal (${capturedItemCount} items)`,
-        calories: totalCalories,
-        protein: totalProtein,
-        carbs: totalCarbs,
-        fats: totalFat,
+        foodName: `Meal (${itemCount} item${itemCount === 1 ? '' : 's'})`,
+        // See the single-item save path above for why this is captured
+        // here rather than left to SmartMealInsights to infer from "now".
+        loggedAt: new Date().toISOString(),
+        calories: totalReported.calories ? totalCalories : null,
+        protein: totalReported.protein ? totalProtein : null,
+        carbs: totalReported.carbs ? totalCarbs : null,
+        fats: totalReported.fat ? totalFat : null,
+        fiber: totalReported.fiber ? totalFiber : null,
+        sugar: totalReported.sugar ? totalSugar : null,
+        sodium: totalReported.sodium ? totalSodium : null,
+        micros: aggregatedMicros,
+        // Top-level fields from enrichWithHealthMetrics, from the same source
+        // _doSaveLog now reads for the single-item flow (see above).
+        nutriScore: analysisResult.nutriScore ?? null,
+        healthScore: analysisResult.healthScore ?? null,
+        healthAnalysis: analysisResult.healthAnalysis ?? null,
         mealId: mealEventId,
-        originalAnalysis: capturedResult
+        source: analysisResult.source || 'text',
+        mealType: effectiveMealType,
+        originalAnalysis: analysisResult
+      });
+      const current = dashboardData?.today?.nutrition || {};
+      setLoggedDailyTotals({
+        ...current,
+        totalCalories: (Number(current.totalCalories) || 0) + totalCalories,
+        totalProtein: (Number(current.totalProtein) || 0) + totalProtein,
+        totalCarbs: (Number(current.totalCarbs) || 0) + totalCarbs,
+        totalFats: (Number(current.totalFats) || 0) + totalFat,
+        totalFiber: (Number(current.totalFiber) || 0) + totalFiber,
       });
 
       InteractionManager.runAfterInteractions(() => {
         setTimeout(() => setShowMealLogged(true), 100);
       });
+      return true;
     } catch (error) {
       console.error('[LogScreen] Multi-item save error:', error);
       notify.error(generalMessages.error());
+      return false;
     } finally {
       setIsSavingLog(false);
     }
+  };
+
+  const handleSaveMeal = () => saveMealItems(foodAnalysis.analysisResult);
+
+  // UnifiedMealAnalysis computes activeItems/calculatedTotals locally
+  // whenever the user excludes an item or ingredient, but previously never
+  // reported that back — handleSaveMeal read the original,
+  // pre-exclusion foodAnalysis.analysisResult regardless, so an excluded
+  // ingredient changed what the review screen displayed but not what got
+  // saved. This keeps the canonical analysisResult in sync with the
+  // screen's own post-exclusion numbers, using the same functional-updater
+  // pattern updateItemQuantity/removeIngredient already use.
+  const handleItemsChange = useCallback((activeItems, calculatedTotals) => {
+    foodAnalysis.setAnalysisResult((prev) => {
+      if (!prev) return prev;
+      return { ...prev, items: activeItems, totals: calculatedTotals };
+    });
+  }, [foodAnalysis.setAnalysisResult]);
+
+  /**
+   * Saves a voice analysis result directly from inside VoiceModal, without
+   * requiring the user to close the modal and tap Save again on a separate
+   * screen. Returns false (rather than throwing, unlike a version that would
+   * affect the two existing callers above) so VoiceModal's own review screen
+   * can show an error instead of silently closing.
+   */
+  const handleSaveVoiceResult = async (voiceResult) => {
+    const mapped = mapVoiceResultToAnalysis(voiceResult);
+    if (!mapped) return false;
+    return saveMealItems(mapped);
   };
 
   /**
@@ -709,12 +917,12 @@ export default function LogScreen() {
       servingSize: item.portion?.amount && item.portion?.unit
         ? `${item.portion.amount}${item.portion.unit}`
         : null,
-      calories: item.macros?.calories_kcal ?? null,
-      protein: item.macros?.protein_g ?? null,
-      carbs: item.macros?.carbs_g ?? null,
-      fats: item.macros?.fat_g ?? null,
-      fiber: item.macros?.fiber_g ?? null,
-      sugar: item.macros?.sugar_g ?? null,
+      calories: resolveMacroField(item, 'calories_kcal'),
+      protein: resolveMacroField(item, 'protein_g'),
+      carbs: resolveMacroField(item, 'carbs_g'),
+      fats: resolveMacroField(item, 'fat_g'),
+      fiber: resolveMacroField(item, 'fiber_g'),
+      sugar: resolveMacroField(item, 'sugar_g'),
       sugarAlcohols: item.macros?.sugarAlcohols_g ?? null,
       netCarbs: item.netCarbs ?? null,
       micronutrients: item.micros ? Object.entries(item.micros).map(([key, value]) => ({
@@ -731,6 +939,15 @@ export default function LogScreen() {
       novaScore: item.novaScore ?? null,
       dietLabels: item.dietLabels || [],
       allergens: item.allergens || [],
+      // Stage 8a: carried through to _doSaveLog's sourceMeta below — was
+      // previously dropped here entirely, even though it's already on
+      // `item` by the time this runs (attachConfidenceTiers/
+      // computeConfidenceTier on the backend).
+      confidenceTier: item.confidenceTier ?? null,
+      resolutionSource: item.resolutionSource ?? item.source ?? null,
+      nutritionPlausible: item.nutritionPlausible ?? null,
+      plausibilityCheck: item.plausibilityCheck ?? null,
+      macroReconciled: item.macroReconciled ?? false,
     };
   };
 
@@ -776,7 +993,7 @@ export default function LogScreen() {
 
   const handleRetry = async () => {
     foodAnalysis.clearError();
-    
+
     if (analysisSource === 'photo' && selectedImage) {
       try {
         await foodAnalysis.analyzePhoto(selectedImage);
@@ -791,6 +1008,26 @@ export default function LogScreen() {
       }
     } else {
       notify.info('Cannot retry: input missing');
+    }
+  };
+
+  /**
+   * Grants OpenAI consent, then re-runs the photo analysis that was blocked on
+   * it with one tap, photo still in hand, and no trip through Settings.
+   */
+  const handleEnablePhotoConsent = async () => {
+    setIsEnablingConsent(true);
+    try {
+      await apiClient.post('/consent/give-openai-consent', {
+        understand: true,
+        purpose: 'photo-analysis',
+      });
+      await handleRetry();
+    } catch (err) {
+      console.error('[LogScreen] Enabling AI consent failed:', err);
+      notify.error('Could not enable AI. Please try again.');
+    } finally {
+      setIsEnablingConsent(false);
     }
   };
 
@@ -942,11 +1179,14 @@ export default function LogScreen() {
       // FIX: Use entry.amount (raw ml), not entry.effectiveAmount (already factor-adjusted)
       // Backend water.js applies hydration factor: hydrationLiters = amountLiters * factor
       const amountLiters = entry.amount / 1000; // Convert raw ml to liters
-      await logWater(amountLiters, entry.type);
-      notify.success(hydrationMessages.logged(entry.amount, entry.type), { domain: 'hydration' });
+      // Return the persisted server record so HydrationTracker can undo this
+      // exact write. The compact inline confirmation is the single success
+      // surface for this action; a second global toast would be duplicate UI.
+      return await logWater(amountLiters, entry.type);
     } catch (error) {
       console.error('[LogScreen] Failed to log water:', error);
       notify.error(generalMessages.error());
+      throw error;
     }
   };
 
@@ -955,11 +1195,11 @@ export default function LogScreen() {
    */
   const handleRemoveWater = async (entryId, amountLiters, hydrationLiters) => {
     try {
-      await removeWater(entryId, amountLiters, hydrationLiters);
-      notify.success(hydrationMessages.removed(), { domain: 'hydration' });
+      return await removeWater(entryId, amountLiters, hydrationLiters);
     } catch (error) {
       console.error('[LogScreen] Failed to remove water:', error);
       notify.error(generalMessages.error());
+      throw error;
     }
   };
 
@@ -998,6 +1238,14 @@ export default function LogScreen() {
 
   const isAnalyzing = foodAnalysis.isAnalyzing;
 
+  // Server truth (today's distinct MEALS, not food_log rows; a 3-item meal
+  // is one meal, see utils/mealGrouping.js), not the local offline-sync
+  // queue. That queue only ever grows when a meal is logged through this
+  // app on this device, so a fresh install or a meal logged another way
+  // (voice, another device) always read as 0 there even with a rich real
+  // history. Falls back to a client-computed grouped count only while
+  // dashboardData hasn't loaded yet (e.g. offline).
+  const logCount = dashboardData?.today?.mealCount ?? countDistinctMeals(foodLog.logs);
   // P0-4 FIX: Wrap entire screen with ErrorBoundary to prevent data loss
   return (
     <AnimatedMeshGradient
@@ -1038,16 +1286,23 @@ export default function LogScreen() {
             </TouchableOpacity>
             <Ionicons name="restaurant" size={28} color="#FFFFFF" />
             <View style={styles.headerText}>
-              <Text style={styles.title}>LOG Meal</Text>
-              <Text style={styles.subtitle}>At your convenient way</Text>
+              <Text style={styles.title}>LOG</Text>
+              <Text style={styles.subtitle}>Track your Day</Text>
             </View>
           </View>
           <TouchableOpacity
             style={styles.historyButton}
             onPress={() => router.push({ pathname: '/history', params: { from: 'log' } })}
-            accessibilityLabel="Open food history"
+            accessibilityLabel={`Open food history, ${logCount} meals logged today`}
           >
             <Ionicons name="time-outline" size={24} color="#FFFFFF" />
+            {logCount > 0 && (
+              <View style={styles.mealCountBadge}>
+                <Text style={styles.mealCountBadgeText}>
+                  {logCount > 9 ? '9+' : logCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -1061,8 +1316,14 @@ export default function LogScreen() {
             closeAllModals();
             setShowHydrationModal(true);
           }}
-          onHistoryPress={() => router.push({ pathname: '/history', params: { from: 'log' } })}
-          logCount={foodLog.logs?.length || 0}
+          onSleepPress={() => {
+            closeAllModals();
+            setShowSleepModal(true);
+          }}
+          onStressPress={() => {
+            closeAllModals();
+            setShowStressModal(true);
+          }}
         />
       </LinearGradient>
 
@@ -1114,74 +1375,110 @@ export default function LogScreen() {
           </View>
         ) : foodAnalysis.analysisResult?.items && foodAnalysis.analysisResult.items.length > 0 && !showAnalysisDetails ? (
           <View style={styles.resultsContainer}>
-            {/* UNIFIED DISPLAY: Same component for ALL input modes (text, photo, voice, barcode) */}
-            {/* Hidden when MealSummaryScreen modal is open to avoid duplicate displays */}
-            <UnifiedMealAnalysis
-              items={foodAnalysis.analysisResult.items}
-              totals={foodAnalysis.analysisResult.totals}
-              mealSummary={foodAnalysis.analysisResult.mealSummary}
-              onSave={handleSaveMeal}
-              onEdit={handleCancel}
-              saving={isSavingLog}
-              analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
-              analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
-              analysisMacroReconciled={foodAnalysis.analysisResult.macroReconciled}
-            />
-
-            {/* "Did you mean?" Suggestions - Only for text input */}
-            {analysisSource === 'text' && foodAnalysis.analysisResult.items.some(item => item.suggestions?.length > 0) && (
-              <View style={styles.suggestionsContainer}>
-                <View style={styles.suggestionsHeader}>
-                  <Ionicons name="help-buoy-outline" size={18} color="#F59E0B" />
-                  <Text style={styles.suggestionsTitle}>Did you mean?</Text>
-                </View>
-                {foodAnalysis.analysisResult.items.map(item => (
-                  item.suggestions?.length > 0 && (
-                    <View key={item.itemId} style={styles.suggestionGroup}>
-                      <Text style={styles.suggestionLabel}>For &quot;{item.name}&quot;:</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChips}>
-                        {item.suggestions.map((suggestion, idx) => (
-                          <TouchableOpacity
-                            key={idx}
-                            style={styles.suggestionChip}
-                            onPress={() => handleApplySuggestion(item.itemId, suggestion)}
-                          >
-                            <Text style={styles.suggestionChipText}>{suggestion.canonical}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )
-                ))}
-              </View>
-            )}
-
-            {/* View Details Button - Manual trigger for text input only (photo/barcode use MealPreviewCard) */}
-            {foodAnalysis.analysisResult && analysisSource === 'text' && (
-              <TouchableOpacity
-                style={styles.viewDetailsButton}
-                onPress={() => {
-                  setHasManuallyClosedDetails(false); // Reset flag
-                  setShowAnalysisDetails(true); // Show details screen
+            {(analysisSource === 'photo' || analysisSource === 'barcode') ? (
+              /* Compact confirmation card, not the full editor: thumbnail, macro
+                 breakdown, and a food-ID confidence badge (explicitly not a
+                 nutrition-accuracy claim). Tap through for the full item-by-item
+                 editor, or log directly. Matches how MyFitnessPal/Cronometer
+                 confirm a photo scan before it's built into a full editor. */
+              <MealPreviewCard
+                analysisResult={foodAnalysis.analysisResult}
+                imageUri={selectedImage}
+                onTapDetails={() => {
+                  setHasManuallyClosedDetails(false);
+                  setShowAnalysisDetails(true);
                 }}
-                activeOpacity={0.8}
-                accessibilityLabel="View detailed nutrition analysis"
-              >
-                <LinearGradient
-                  colors={['#6B4EFF', '#8B6EFF']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.viewDetailsGradient}
-                >
-                  <Ionicons name="analytics" size={20} color="#FFFFFF" />
-                  <Text style={styles.viewDetailsText}>View Detailed Analysis</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
+                onQuickSave={handleSaveMeal}
+                isSaving={isSavingLog}
+              />
+            ) : (
+              <>
+                {/* UNIFIED DISPLAY: text and voice (manually-closed-details case) */}
+                {/* Hidden when MealSummaryScreen modal is open to avoid duplicate displays */}
+                <UnifiedMealAnalysis
+                  items={foodAnalysis.analysisResult.items}
+                  totals={foodAnalysis.analysisResult.totals}
+                  mealSummary={foodAnalysis.analysisResult.mealSummary}
+                  onSave={handleSaveMeal}
+                  onEdit={handleCancel}
+                  onItemsChange={handleItemsChange}
+                  saving={isSavingLog}
+                  saveBlocked={unresolvedItems(foodAnalysis.analysisResult.items).length > 0}
+                  analysisPlausible={foodAnalysis.analysisResult.nutritionPlausible}
+                  analysisPlausibilityCheck={foodAnalysis.analysisResult.plausibilityCheck}
+                  analysisMacroReconciled={foodAnalysis.analysisResult.macroReconciled}
+                  userAllergies={profileState?.savedProfile?.dietary?.allergies || []}
+                  onUpdateItemQuantity={foodAnalysis.updateItemQuantity}
+                />
 
-            {/* Actions Footer - Only for text input (photo/barcode have actions in MealPreviewCard) */}
-            {foodAnalysis.analysisResult && analysisSource === 'text' && (
+                {/* "Did you mean?" Suggestions - Only for text input */}
+                {analysisSource === 'text' && foodAnalysis.analysisResult.items.some(item => item.suggestions?.length > 0) && (
+                  <View style={styles.suggestionsContainer}>
+                    <View style={styles.suggestionsHeader}>
+                      <Ionicons name="help-buoy-outline" size={18} color="#F59E0B" />
+                      <Text style={styles.suggestionsTitle}>Did you mean?</Text>
+                    </View>
+                    <Text style={styles.suggestionReviewText}>
+                      Confirm the ingredient below, or keep what you typed if it&apos;s already correct.
+                    </Text>
+                    {foodAnalysis.analysisResult.items.map(item => (
+                      item.suggestions?.length > 0 && (
+                        <View key={item.itemId} style={styles.suggestionGroup}>
+                          <Text style={styles.suggestionLabel}>
+                            For &quot;{item.suggestions[0]?.original || item.name}&quot;:
+                          </Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChips}>
+                            {item.suggestions.map((suggestion, idx) => (
+                              <TouchableOpacity
+                                key={idx}
+                                style={styles.suggestionChip}
+                                onPress={() => handleApplySuggestion(item.itemId, suggestion)}
+                              >
+                                <Text style={styles.suggestionChipText}>{suggestion.canonical}</Text>
+                              </TouchableOpacity>
+                            ))}
+                            <TouchableOpacity
+                              style={styles.suggestionKeepChip}
+                              onPress={() => foodAnalysis.confirmItemSpelling(item.itemId)}
+                              accessibilityLabel={`Keep "${item.suggestions[0]?.original || item.name}" as typed`}
+                            >
+                              <Text style={styles.suggestionKeepChipText}>
+                                Keep &quot;{item.suggestions[0]?.original || item.name}&quot;
+                              </Text>
+                            </TouchableOpacity>
+                          </ScrollView>
+                        </View>
+                      )
+                    ))}
+                  </View>
+                )}
+
+                {/* View Details Button - Manual trigger for text input only (photo/barcode use MealPreviewCard) */}
+                {foodAnalysis.analysisResult && analysisSource === 'text' && (
+                  <TouchableOpacity
+                    style={styles.viewDetailsButton}
+                    onPress={() => {
+                      setHasManuallyClosedDetails(false); // Reset flag
+                      setShowAnalysisDetails(true); // Show details screen
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityLabel="View detailed nutrition analysis"
+                  >
+                    <LinearGradient
+                      colors={['#6B4EFF', '#8B6EFF']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.viewDetailsGradient}
+                    >
+                      <Ionicons name="analytics" size={20} color="#FFFFFF" />
+                      <Text style={styles.viewDetailsText}>View Detailed Analysis</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+
+                {/* Actions Footer - Only for text input (photo/barcode have actions in MealPreviewCard) */}
+                {foodAnalysis.analysisResult && analysisSource === 'text' && (
               <View style={styles.resultsActions}>
                 <TouchableOpacity
                   style={styles.shareButton}
@@ -1203,13 +1500,60 @@ export default function LogScreen() {
                   <Text style={styles.reportButtonText}>Report Issue</Text>
                 </TouchableOpacity>
               </View>
+                )}
+              </>
             )}
           </View>
         ) : null}
 
 
-        {/* Error Display */}
-        {(foodAnalysis.error || foodLog.error) && (
+        {/* Consent Display is blocked pending AI opt-in, not a failure. Neutral
+            tone on purpose: a routine privacy toggle shouldn't read like an error. */}
+        {foodAnalysis.needsConsent ? (
+          <View style={styles.consentCard}>
+            <View style={styles.errorHeader}>
+              <Ionicons name="sparkles" size={28} color={BRAND.primary} />
+              <Text style={styles.consentTitle}>Turn on AI photo analysis</Text>
+            </View>
+            <Text style={styles.consentMessage}>
+              Uses AI to identify food and estimate nutrition from your photo. Your photos are never used for training.
+              This turns on the same "AI Food Analysis" setting found in Profile → Privacy & Security — it applies to
+              photo and voice logging until you turn it off there.
+            </Text>
+
+            <View style={styles.errorActions}>
+              <TouchableOpacity
+                style={styles.consentDismiss}
+                onPress={() => foodAnalysis.clearError()}
+                disabled={isEnablingConsent}
+              >
+                <Text style={styles.consentDismissText}>Not now</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.consentEnable}
+                onPress={handleEnablePhotoConsent}
+                disabled={isEnablingConsent}
+              >
+                {isEnablingConsent ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                )}
+                <Text style={styles.errorRetryText}>
+                  {isEnablingConsent ? 'Enabling…' : 'Enable & Analyze'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.consentLearnMore}
+              onPress={() => router.push('/profile/privacy')}
+            >
+              <Text style={styles.consentLearnMoreText}>Learn more in Privacy &amp; Data</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (foodAnalysis.error || foodLog.error) && (
           <View style={styles.errorCard}>
             <View style={styles.errorHeader}>
               <Ionicons name="warning" size={28} color="#DC2626" />
@@ -1218,7 +1562,7 @@ export default function LogScreen() {
               </Text>
             </View>
             <Text style={styles.errorMessage}>{foodAnalysis.error || foodLog.error}</Text>
-            
+
             <View style={styles.errorActions}>
               <TouchableOpacity
                 style={styles.errorDismiss}
@@ -1244,28 +1588,86 @@ export default function LogScreen() {
           </View>
         )}
 
-        {/* Sync Status Footer */}
-        {foodLog.pendingSyncCount > 0 && (
-          <View style={styles.syncCard}>
-            <View style={styles.syncIconWrapper}>
-              <Ionicons name="cloud-upload-outline" size={24} color="#6B4EFF" />
+        {/* Sync Status Footer
+            Only shown once a sync has actually failed. A meal that is merely
+            queued syncs within a second, so surfacing that would be noise. */}
+        {foodLog.hasSyncFailure && (
+          <View style={styles.syncBlock}>
+            <View style={styles.syncCard}>
+              <View style={styles.syncIconWrapper}>
+                <Ionicons
+                  name={foodLog.blockedSyncCount > 0 ? 'alert-circle-outline' : 'cloud-offline-outline'}
+                  size={24}
+                  color="#6B4EFF"
+                />
+              </View>
+              <View style={styles.syncContent}>
+                <Text style={styles.syncTitle}>
+                  {foodLog.isSyncing
+                    ? 'Saving...'
+                    : foodLog.blockedSyncCount > 0
+                      ? "Couldn't save some meals"
+                      : 'Waiting to save'}
+                </Text>
+                <Text style={styles.syncSubtitle}>
+                  {foodLog.blockedSyncCount > 0
+                    ? `${foodLog.blockedSyncCount} ${foodLog.blockedSyncCount === 1 ? 'meal needs' : 'meals need'} your attention`
+                    : `${foodLog.pendingSyncCount} ${foodLog.pendingSyncCount === 1 ? 'meal' : 'meals'} will save automatically`}
+                </Text>
+              </View>
+              {!foodLog.isSyncing && (
+                <TouchableOpacity
+                  style={styles.syncRetry}
+                  onPress={foodLog.retryFailedSyncs}
+                >
+                  <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                  <Text style={styles.syncRetryText}>Retry</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={styles.syncContent}>
-              <Text style={styles.syncTitle}>
-                {foodLog.isSyncing ? 'Syncing...' : 'Pending Sync'}
-              </Text>
-              <Text style={styles.syncSubtitle}>
-                {foodLog.pendingSyncCount} items waiting
-              </Text>
-            </View>
-            {!foodLog.isSyncing && (
-              <TouchableOpacity
-                style={styles.syncRetry}
-                onPress={foodLog.retryFailedSyncs}
-              >
-                <Ionicons name="refresh" size={18} color="#FFFFFF" />
-                <Text style={styles.syncRetryText}>Retry All</Text>
-              </TouchableOpacity>
+
+            {/* Stuck meals are listed individually so the user has a way out:
+                retry above revives them, discard removes them for good. */}
+            {foodLog.blockedSyncCount > 0 && (
+              <>
+                <TouchableOpacity
+                  style={styles.blockedToggle}
+                  onPress={() => setShowBlockedSyncs(prev => !prev)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.blockedToggleText}>
+                    {showBlockedSyncs ? 'Hide details' : 'Review meals'}
+                  </Text>
+                  <Ionicons
+                    name={showBlockedSyncs ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color="#4F46E5"
+                  />
+                </TouchableOpacity>
+
+                {showBlockedSyncs && blockedSyncs.map(item => (
+                  <View key={item.clientEventId} style={styles.blockedRow}>
+                    <View style={styles.blockedRowContent}>
+                      <Text style={styles.blockedName} numberOfLines={1}>
+                        {item.foodName}
+                      </Text>
+                      {!!item.lastError && (
+                        <Text style={styles.blockedError} numberOfLines={2}>
+                          {item.lastError}
+                        </Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.blockedDiscard}
+                      onPress={() => handleDiscardBlockedSync(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                      <Text style={styles.blockedDiscardText}>Discard</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </>
             )}
           </View>
         )}
@@ -1276,6 +1678,7 @@ export default function LogScreen() {
         visible={showVoiceModal}
         onClose={() => setShowVoiceModal(false)}
         onComplete={handleVoiceComplete}
+        onSaveNow={handleSaveVoiceResult}
         voiceHook={voiceHook}
         accessibilityMode={preferences?.accessibility?.assistedVoiceMode ? 'elderly' : 'standard'}
         voiceLanguage={preferences?.voiceLanguage || 'en'}
@@ -1302,6 +1705,21 @@ export default function LogScreen() {
         visible={showMoodModal}
         onClose={() => setShowMoodModal(false)}
         onSuccess={(mood) => notify.success(moodMessages.logged(mood), { domain: 'mood' })}
+        onViewHistory={() => navigateAfterModalClose(
+          () => setShowMoodModal(false),
+          '/history/mood',
+        )}
+        onDismiss={handleModalDismiss}
+      />
+
+      <SleepLogger
+        visible={showSleepModal}
+        onClose={() => setShowSleepModal(false)}
+      />
+
+      <StressLogger
+        visible={showStressModal}
+        onClose={() => setShowStressModal(false)}
       />
 
       <HealthAnalysisModal
@@ -1325,6 +1743,7 @@ export default function LogScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setShowHydrationModal(false)}
+        onDismiss={handleModalDismiss}
       >
         <View style={styles.hydrationModalContainer}>
           <View style={styles.hydrationModalHeader}>
@@ -1340,18 +1759,18 @@ export default function LogScreen() {
           </View>
           <HydrationTracker
             currentIntake={waterTodayData?.totalLiters || 0}
-            dailyGoal={dashboardData?.goals?.waterLiters || 2.0}
+            dailyGoal={dashboardData?.goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS}
             onLogWater={handleLogWater}
             onRemoveWater={handleRemoveWater}
             beverageHistory={beverageHistory}
             totalCaffeine={totalCaffeine}
-            onViewHistory={() => {
-              setShowHydrationModal(false);
-              // Hydration has its own analytics screen — the unified /analytics
+            onViewHistory={() => navigateAfterModalClose(
+              () => setShowHydrationModal(false),
+              // Hydration has its own analytics screen. The unified /analytics
               // screen opens on the Nutrition tab and buries hydration behind a
               // tab bar, which isn't where a "History" tap should land.
-              router.push('/analytics/hydration');
-            }}
+              '/analytics/hydration',
+            )}
           />
         </View>
       </Modal>
@@ -1359,12 +1778,15 @@ export default function LogScreen() {
       <Modal
         visible={showMealLogged}
         animationType="none"
-        onRequestClose={() => setShowMealLogged(false)}
+        onRequestClose={() => {
+          setShowMealLogged(false);
+          setLoggedDailyTotals(null);
+        }}
       >
         {loggedMeal && (
           <MealLoggedCard
             meal={loggedMeal}
-            dailyTotals={dashboardData?.today?.nutrition}
+            dailyTotals={loggedDailyTotals || dashboardData?.today?.nutrition}
             dailyGoals={{
               dailyCalories: dashboardData?.goals?.dailyCalories || 2000,
               proteinG: dashboardData?.goals?.proteinG || 150,
@@ -1394,6 +1816,7 @@ export default function LogScreen() {
             onClose={() => {
               setShowMealLogged(false);
               setLoggedMeal(null);
+              setLoggedDailyTotals(null);
               notify.success(foodMessages.logged(), { domain: 'food' });
             }}
           />
@@ -1422,6 +1845,8 @@ export default function LogScreen() {
         }}
         onShare={handleShare}
         isSaving={isSavingLog}
+        onUpdateItemQuantity={foodAnalysis.updateItemQuantity}
+        onUpdateItemMacros={foodAnalysis.updateItemMacros}
       />
     </KeyboardAvoidingView>
         </ErrorBoundary>
@@ -1496,6 +1921,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  // Same badge pattern as the dashboard's notification bell
+  // (MinimalDashboardHeader.jsx), reused here rather than a distinct new
+  // style, plus SEMANTIC_ACTIONS.primary (warm orange) instead of that
+  // badge's red, matching the flame/streak color this "meals logged" count
+  // used before it was a standalone pill.
+  mealCountBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: SEMANTIC_ACTIONS.primary,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  mealCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   /* Scroll View */
@@ -2019,6 +2469,13 @@ const styles = StyleSheet.create({
     color: '#B45309',
     fontFamily: TYPOGRAPHY.family.semibold,
   },
+  suggestionReviewText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#92400E',
+    marginBottom: 12,
+    fontFamily: TYPOGRAPHY.family.regular,
+  },
   suggestionGroup: {
     marginBottom: 8,
   },
@@ -2043,6 +2500,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#D97706',
+    fontFamily: TYPOGRAPHY.family.semibold,
+  },
+  suggestionKeepChip: {
+    backgroundColor: 'transparent',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#9CA3AF',
+  },
+  suggestionKeepChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
     fontFamily: TYPOGRAPHY.family.semibold,
   },
 
@@ -2108,6 +2579,61 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.bold,
   },
 
+  /* Consent Card uses the errorCard layout with a neutral brand tone instead of danger red */
+  consentCard: {
+    backgroundColor: SURFACES.card.primary,
+    borderRadius: 18,
+    padding: 22,
+    marginTop: 20,
+    borderWidth: 2,
+    borderColor: SURFACES.divider,
+  },
+  consentTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT.primary,
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  consentMessage: {
+    fontSize: 14,
+    color: TEXT.secondary,
+    marginBottom: 14,
+    lineHeight: 21,
+    fontFamily: TYPOGRAPHY.family.regular,
+  },
+  consentEnable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: BRAND.primary,
+    borderRadius: 10,
+  },
+  consentDismiss: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: SURFACES.background.primary,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: SURFACES.divider,
+  },
+  consentDismissText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: TEXT.secondary,
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  consentLearnMore: {
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+  consentLearnMoreText: {
+    fontSize: 13,
+    color: BRAND.primary,
+    fontFamily: TYPOGRAPHY.family.medium,
+  },
+
   /* Sync Card */
   syncCard: {
     flexDirection: 'row',
@@ -2154,6 +2680,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+
+  /* Blocked (permanently stuck) meals */
+  syncBlock: {
+    marginBottom: 8,
+  },
+  blockedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+  },
+  blockedToggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4F46E5',
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  blockedRowContent: {
+    flex: 1,
+  },
+  blockedName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: TEXT.primary,
+    fontFamily: TYPOGRAPHY.family.bold,
+  },
+  blockedError: {
+    fontSize: 12,
+    color: TEXT.tertiary,
+    marginTop: 3,
+    fontFamily: TYPOGRAPHY.family.regular,
+  },
+  blockedDiscard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+  },
+  blockedDiscardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
     fontFamily: TYPOGRAPHY.family.bold,
   },
 

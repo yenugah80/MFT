@@ -10,7 +10,9 @@
  */
 
 import { eq, and, isNotNull } from 'drizzle-orm';
-import { accountSettingsTable } from '../db/schema.js';
+import { accountSettingsTable, devicesTable } from '../db/schema.js';
+import { getDevicesForUser } from '../utils/deviceRegistry.js';
+import { isCurrentTokenOwner } from '../utils/pushTokenOwnership.js';
 
 // Expo Push Notification API endpoint
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -35,6 +37,8 @@ function getExpoHeaders() {
 export const NOTIFICATION_TYPES = {
   DAILY_REMINDER: 'dailyReminder',
   HYDRATION_NUDGE: 'hydrationNudges',
+  MOOD_CHECKIN: 'moodCheckins',
+  ACTIVITY_REMINDER: 'activityReminders',
   INSIGHT_DROP: 'insightDrops',
   STREAK_CELEBRATION: 'streakCelebrations',
   GOAL_ACHIEVED: 'goalAchieved',
@@ -153,15 +157,21 @@ export async function sendBatchPushNotifications(messages) {
 }
 
 /**
- * Send a notification to a user if they have the preference enabled
+ * Send a notification to a user if they have the preference enabled.
+ *
+ * Device routing mirrors sendUserFCMNotification in fcmPushService.js:
+ * an explicit `options.deviceId` targets exactly that `devices` row; no
+ * `deviceId` fans out to every real device row, falling back to the legacy
+ * single-token accountSettingsTable column only if none exist.
+ *
  * @param {object} db - Database instance
  * @param {string} userId - The user ID
  * @param {string} notificationType - The type from NOTIFICATION_TYPES
  * @param {object} notification - The notification content
+ * @param {{deviceId?: number}} [options]
  */
-export async function sendUserNotification(db, userId, notificationType, notification) {
+export async function sendUserNotification(db, userId, notificationType, notification, options = {}) {
   try {
-    // Get user's push token and notification preferences
     const [settings] = await db
       .select({
         expoPushToken: accountSettingsTable.expoPushToken,
@@ -170,27 +180,54 @@ export async function sendUserNotification(db, userId, notificationType, notific
       .from(accountSettingsTable)
       .where(eq(accountSettingsTable.userId, userId));
 
-    if (!settings?.expoPushToken) {
-      console.log(`[PushService] User ${userId} has no push token`);
-      return { success: false, reason: 'no_token' };
-    }
-
-    // Check if user has this notification type enabled
-    const preferences = settings.notifications || {};
+    const preferences = settings?.notifications || {};
     const isEnabled = preferences[notificationType] !== false; // Default to true
-
     if (!isEnabled) {
       console.log(`[PushService] User ${userId} has ${notificationType} disabled`);
       return { success: false, reason: 'preference_disabled' };
     }
 
-    // Send the notification
-    const result = await sendPushNotification(settings.expoPushToken, notification);
-    return result;
+    const resolvedTargets = await resolveExpoSendTargets(db, userId, options.deviceId, settings);
+
+    // Authoritative delivery gate — see sendUserFCMNotification in
+    // fcmPushService.js for the full rationale. Checked fresh right before
+    // dispatch, since the resolved targets above are per-account
+    // bookkeeping that can be transiently stale.
+    const ownershipChecks = await Promise.all(
+      resolvedTargets.map((t) => isCurrentTokenOwner(db, t.expoPushToken, userId))
+    );
+    const targets = resolvedTargets.filter((_, i) => ownershipChecks[i]);
+    const skipped = resolvedTargets.length - targets.length;
+    if (skipped > 0) {
+      console.log(`[PushService] Skipped ${skipped} target(s) for user ${userId} — token no longer owned by this account`);
+    }
+
+    if (targets.length === 0) {
+      console.log(`[PushService] User ${userId} has no push token`);
+      return { success: false, reason: 'no_token' };
+    }
+
+    const results = await Promise.all(targets.map((target) => sendPushNotification(target.expoPushToken, notification)));
+    return targets.length === 1 ? results[0] : { success: results.some((r) => r?.success), results };
   } catch (error) {
     console.error(`[PushService] Error sending to user ${userId}:`, error);
     return { success: false, error: error.message };
   }
+}
+
+export async function resolveExpoSendTargets(db, userId, explicitDeviceId, legacySettings) {
+  if (explicitDeviceId != null) {
+    const [device] = await db.select().from(devicesTable).where(eq(devicesTable.id, explicitDeviceId));
+    return device?.expoPushToken ? [{ expoPushToken: device.expoPushToken }] : [];
+  }
+
+  const devices = await getDevicesForUser(db, userId);
+  const withToken = devices.filter((d) => d.expoPushToken);
+  if (withToken.length > 0) {
+    return withToken.map((d) => ({ expoPushToken: d.expoPushToken }));
+  }
+
+  return legacySettings?.expoPushToken ? [{ expoPushToken: legacySettings.expoPushToken }] : [];
 }
 
 /**

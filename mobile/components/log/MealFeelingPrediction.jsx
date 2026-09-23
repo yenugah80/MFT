@@ -21,9 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useMealFeelingPrediction } from '../../hooks/usePredictions';
-import { TEXT, SURFACES, BRAND } from '../../constants/premiumTheme';
-import { DEPTH_SHADOWS } from '../../constants/modernColorPalette';
-import { TYPOGRAPHY, SPACING, RADIUS } from '../../constants/designTokens';
+import { TEXT, SURFACES, BRAND, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../constants/premiumTheme';
 
 // Timeline item component
 function TimelineItem({ item, isLast }) {
@@ -308,7 +306,11 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: RADIUS.xl,
     padding: SPACING.md,
-    ...DEPTH_SHADOWS.medium,
+    // Was `...DEPTH_SHADOWS.medium` — that key never existed in
+    // modernColorPalette.js's DEPTH_SHADOWS (only float/floatHigh/nutrition/
+    // mood/hydration/etc.), so the spread silently contributed nothing and
+    // this card had no shadow at all. SHADOWS.md is a real token.
+    ...SHADOWS.md,
   },
   loadingCard: {
     borderRadius: RADIUS.xl,

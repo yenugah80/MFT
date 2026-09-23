@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../../constants/premiumTheme';
+import { DEFAULT_WATER_GOAL_LITERS } from '../../constants/beverageConstants';
 
 /**
  * Generate smart hydration nudge based on patterns
@@ -23,7 +24,7 @@ import { BRAND, TEXT, SURFACES, SPACING, RADIUS, SHADOWS, TYPOGRAPHY } from '../
 function generateHydrationNudge({ today, goals, trends, hydrationAnalytics }) {
   const currentHour = new Date().getHours();
   const waterIntake = Number(today?.waterIntakeLiters) || 0;
-  const waterGoal = Number(goals?.waterLiters) || 2.5;
+  const waterGoal = Number(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
   const remaining = waterGoal - waterIntake;
 
   // Check if behind schedule
@@ -77,7 +78,7 @@ export default function HydrationIntelligenceCard({
   const [expanded, setExpanded] = useState(false);
 
   const waterIntake = Number(today?.waterIntakeLiters) || 0;
-  const waterGoal = Number(goals?.waterLiters) || 2.5;
+  const waterGoal = Number(goals?.waterLiters) || DEFAULT_WATER_GOAL_LITERS;
   const progress = Math.min((waterIntake / waterGoal) * 100, 100);
   const remaining = Math.max(waterGoal - waterIntake, 0);
 

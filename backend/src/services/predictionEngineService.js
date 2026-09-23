@@ -28,6 +28,7 @@ import {
 } from '../db/schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { getUserPlattParams, getUserThresholds } from './outcomeVerificationService.js';
+import { computeMealCharacteristics, getCrashRisk, isLikelyCrashWindow } from './mealFeelingCharacteristics.js';
 import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 
 // ============================================================================
@@ -1137,17 +1138,7 @@ export async function predictMealFeeling(userId, mealData) {
     ]);
 
     // Analyze meal characteristics
-    const mealCharacteristics = {
-      isHighSugar: sugar > 25,
-      isHighCarb: carbs > 60,
-      isHighProtein: protein > 25,
-      isHighCalorie: calories > 600,
-      isLowProtein: protein < 10,
-      isProcessed: novaScore >= 3,
-      hasGoodFiber: fiber >= 5,
-      carbToFiberRatio: fiber > 0 ? carbs / fiber : carbs,
-      proteinToCalorieRatio: calories > 0 ? (protein * 4) / calories : 0,
-    };
+    const mealCharacteristics = computeMealCharacteristics({ calories, protein, carbs, sugar, fiber, novaScore });
 
     // Generate timeline predictions
     const timeline = generateFeelingTimeline(mealCharacteristics, currentHour, correlations);
@@ -1556,8 +1547,10 @@ function generateFeelingTimeline(characteristics, currentHour, correlations) {
     });
   }
 
-  // 3-4 hours
-  if (characteristics.isHighSugar || (characteristics.isHighCarb && !characteristics.isHighProtein)) {
+  // 3-4 hours — fiber-aware (see isLikelyCrashWindow's doc comment): a
+  // high-carb meal with a good fiber-to-carb ratio no longer shows the same
+  // "crash likely" entry a low-fiber meal of the same carb load would.
+  if (isLikelyCrashWindow(characteristics)) {
     timeline.push({
       timeLabel: 'In 3-4 hours',
       minutes: 210,
@@ -1638,15 +1631,8 @@ function getSustainabilityScore(characteristics) {
   return Math.max(0, Math.min(100, score));
 }
 
-function getCrashRisk(characteristics) {
-  if (characteristics.isHighSugar && !characteristics.hasGoodFiber) {
-    return { level: 'high', label: 'High crash risk', color: '#EF4444' };
-  }
-  if (characteristics.isHighCarb && !characteristics.isHighProtein) {
-    return { level: 'medium', label: 'Moderate crash risk', color: '#F59E0B' };
-  }
-  return { level: 'low', label: 'Low crash risk', color: '#22C55E' };
-}
+// getCrashRisk now lives in mealFeelingCharacteristics.js (imported above)
+// so it's unit-testable independent of this file's DB-heavy module graph.
 
 function generateMealInsights(characteristics, correlations, similarMealCount) {
   const insights = [];

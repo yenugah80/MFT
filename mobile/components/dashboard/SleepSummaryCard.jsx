@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -26,17 +26,8 @@ import SleepLogger from '../SleepLogger';
 
 export default function SleepSummaryCard({ compact = true }) {
   const router = useRouter();
-  const { lastSleep, isLoading } = useSleepLog();
+  const { lastSleep, isLastSleepLoading } = useSleepLog();
   const [showLogger, setShowLogger] = useState(false);
-
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!lastSleep) {
-      setShowLogger(true);
-    } else {
-      router.push('/insights/sleep-analytics');
-    }
-  };
 
   const handleLogSleep = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -56,8 +47,26 @@ export default function SleepSummaryCard({ compact = true }) {
     return `${hours}h ${mins}m`;
   };
 
+  // Loading state — never render placeholder numbers as if they were logged data
+  if (isLastSleepLoading && !lastSleep) {
+    return (
+      <View style={styles.card} accessibilityLabel="Sleep summary loading">
+        <View style={styles.header}>
+          <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
+            <Ionicons name="moon" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
+          </View>
+          <ActivityIndicator size="small" color={VIBRANT_WELLNESS.sleep.solid} />
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Sleep</Text>
+          <Text style={styles.subtitle}>Loading…</Text>
+        </View>
+      </View>
+    );
+  }
+
   // No data state
-  if (!lastSleep && !isLoading) {
+  if (!lastSleep && !isLastSleepLoading) {
     return (
       <>
         <TouchableOpacity
@@ -69,13 +78,13 @@ export default function SleepSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
               <Ionicons name="moon" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Sleep</Text>
-              <Text style={styles.subtitle}>Track your rest</Text>
-            </View>
             <View style={styles.logButton}>
               <Ionicons name="add" size={20} color={VIBRANT_WELLNESS.sleep.solid} />
             </View>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Sleep</Text>
+            <Text style={styles.subtitle}>Track your rest</Text>
           </View>
           <Text style={styles.emptyText}>
             Log last night's sleep to see how it affects your day
@@ -110,13 +119,13 @@ export default function SleepSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}20` }]}>
               <Ionicons name="moon" size={24} color={VIBRANT_WELLNESS.sleep.solid} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Sleep</Text>
-              <Text style={styles.subtitle}>Last night</Text>
-            </View>
             <TouchableOpacity onPress={handleLogSleep} style={styles.logButton}>
               <Ionicons name="add" size={20} color={VIBRANT_WELLNESS.sleep.solid} />
             </TouchableOpacity>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Sleep</Text>
+            <Text style={styles.subtitle}>Last night</Text>
           </View>
 
           {/* Stats Row */}
@@ -146,24 +155,32 @@ export default function SleepSummaryCard({ compact = true }) {
           {/* Action Buttons */}
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[styles.actionButton, styles.secondaryActionButton]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/history/sleep');
+              }}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open sleep history"
+              accessibilityHint="Shows your previous sleep records"
+            >
+              <Ionicons name="time-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
+              <Text style={[styles.actionButtonText, styles.secondaryActionText]} numberOfLines={1}>History</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.primaryActionButton]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push('/insights/sleep-analytics');
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open sleep insights"
+              accessibilityHint="Shows trends and patterns from your sleep records"
             >
-              <Ionicons name="analytics-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
-              <Text style={styles.actionButtonText}>Insights</Text>
-              <Ionicons name="chevron-forward" size={12} color={TEXT.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleLogSleep}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add-circle-outline" size={14} color={VIBRANT_WELLNESS.sleep.solid} />
-              <Text style={styles.actionButtonText}>Log</Text>
+              <Ionicons name="analytics" size={14} color={SURFACES.card.primary} />
+              <Text style={[styles.actionButtonText, styles.primaryActionText]} numberOfLines={1}>Insights</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -177,16 +194,23 @@ export default function SleepSummaryCard({ compact = true }) {
 
 const styles = StyleSheet.create({
   card: {
+    // Fills its grid cell so the Sleep and Stress cards are the same height
+    // regardless of which state each is in.
+    flex: 1,
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.lg,
     padding: SPACING[4],
     ...SHADOWS.sm,
   },
+  // Icon and action only. In the half-width dashboard grid the card is ~139pt
+  // wide inside its padding; a 44pt icon plus a 32pt button and gaps left the
+  // title about 39pt, which broke "Sleep" mid-word. The text sits on its own
+  // full-width row below so it never competes with the controls.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[3],
-    marginBottom: SPACING[3],
+    justifyContent: 'space-between',
+    marginBottom: SPACING[2],
   },
   iconBg: {
     width: 44,
@@ -196,7 +220,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerText: {
-    flex: 1,
+    marginBottom: SPACING[3],
   },
   title: {
     fontSize: TYPOGRAPHY.size.base,
@@ -278,7 +302,7 @@ const styles = StyleSheet.create({
   // Action Buttons
   actionButtonsRow: {
     flexDirection: 'row',
-    gap: SPACING[2],
+    gap: 6,
     marginTop: SPACING[3],
   },
   actionButton: {
@@ -286,19 +310,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING[1],
-    backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}10`,
+    gap: 4,
+    minHeight: 44,
     paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[2],
-    borderRadius: RADIUS.md,
+    paddingHorizontal: 6,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
+  },
+  secondaryActionButton: {
+    backgroundColor: `${VIBRANT_WELLNESS.sleep.solid}0A`,
     borderColor: `${VIBRANT_WELLNESS.sleep.solid}20`,
   },
+  primaryActionButton: {
+    backgroundColor: VIBRANT_WELLNESS.sleep.solid,
+    borderColor: VIBRANT_WELLNESS.sleep.solid,
+    shadowColor: VIBRANT_WELLNESS.sleep.solid,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   actionButtonText: {
-    flex: 1,
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: TEXT.primary,
+  },
+  secondaryActionText: {
+    color: VIBRANT_WELLNESS.sleep.solid,
+  },
+  primaryActionText: {
+    color: SURFACES.card.primary,
   },
 });

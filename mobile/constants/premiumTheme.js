@@ -3,6 +3,7 @@
  * Glossy, trendy, user-centric theme
  * Consistent across Log, Dashboard, and Profile
  */
+import { SPACING_SCALE } from './spacingScale.js';
 
 // PRIMARY BRAND COLORS - Vibrant Modern Style
 export const BRAND = {
@@ -553,24 +554,7 @@ export const TEXT_STYLES = {
 };
 
 // SPACING (4pt grid)
-export const SPACING = {
-  0: 0,
-  0.5: 2,    // Half-step for fine adjustments
-  1: 4,
-  1.5: 6,    // 1.5x step
-  2: 8,
-  2.5: 10,   // 2.5x step
-  3: 12,
-  4: 16,
-  5: 20,
-  6: 24,
-  7: 28,
-  8: 32,
-  10: 40,
-  12: 48,
-  16: 64,
-  20: 80,
-};
+export const SPACING = { ...SPACING_SCALE };
 
 // BORDER RADIUS
 export const RADIUS = {

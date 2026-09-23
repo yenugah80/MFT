@@ -91,8 +91,14 @@ const QuantityAdjuster = ({
     ? Math.round(caloriesPerUnit * quantity)
     : null;
 
-  // Don't render if not countable
-  if (!isCountable) return null;
+  // Previously this whole component returned null for any non-countable
+  // food (curry, dal, rice — most real meals), even though the
+  // "suggested options" section below already existed and already handles
+  // exactly this case (serving-fraction picks, from server-computed
+  // portion.adjustmentOptions). Only bail out when there's truly nothing
+  // to offer: not countable AND no suggested options either.
+  const hasOptions = adjustmentOptions?.suggestedOptions?.length > 0;
+  if (!isCountable && !hasOptions) return null;
 
   // Format quantity for display (remove .0 for whole numbers)
   const formatQuantity = (q) => (q % 1 === 0 ? q.toString() : q.toFixed(1));
@@ -118,6 +124,11 @@ const QuantityAdjuster = ({
         )}
       </View>
 
+      {/* Stepper + quick-count buttons only make sense for discrete,
+          countable units (roti/egg/idli) — non-countable foods (curry,
+          dal, rice) rely on the serving-fraction "Quick select" section
+          below instead. */}
+      {isCountable && (
       <View style={styles.controlsRow}>
         {/* Stepper Control */}
         <View style={styles.stepper}>
@@ -185,6 +196,7 @@ const QuantityAdjuster = ({
           ))}
         </View>
       </View>
+      )}
 
       {/* Per-unit info */}
       {caloriesPerUnit && (

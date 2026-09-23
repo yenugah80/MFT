@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { getAuth, clerkClient } from "@clerk/express";
 import {
   profilesTable,
@@ -6,12 +6,30 @@ import {
   nutritionGoalsTable,
   gamificationTable,
   accountSettingsTable,
-  foodLogTable,
-  waterLogTable,
-  moodLogTable,
-  activityLogTable,
+  privacyConsentAuditTable,
 } from "../db/schema.js";
 import { sendDevError } from "../utils/sendDevError.js";
+import {
+  buildPrivacyAuditChanges,
+  buildStoredPrivacyPatch,
+  normalizePrivacySettings,
+  parsePrivacyPatch,
+  resolvePrivacyDependencies,
+} from "../utils/privacySettings.js";
+import {
+  buildProfileExportPayload,
+  CORE_WELLNESS_EXPORT_COLLECTIONS,
+} from "../utils/profileDataExport.js";
+import { buildExportZip, buildExportPDF } from "../utils/exportFormatters.js";
+import { getDeliveredTodayForUser, acknowledgeDelivery } from "../utils/deliveryAck.js";
+import {
+  registerDevice,
+  deregisterDevice,
+  resolveDeviceRowId,
+  setOwnership,
+  issueDeregisterToken,
+} from "../utils/deviceRegistry.js";
+import { claimTokenOwnership, releaseTokenOwnership } from "../utils/pushTokenOwnership.js";
 // Utility to ensure table shape (imported from server.js)
 import { ensureProfilesTableShape } from "../server.js";
 
@@ -37,7 +55,7 @@ const VALID_CUISINE_PREFERENCES = [
 // --- Push Token Management ---
 export async function savePushToken(req, res) {
   try {
-    const { userId } = getAuth(req);
+    const { userId, sessionClaims } = getAuth(req);
     const { expoPushToken } = req.body;
 
     if (!expoPushToken || typeof expoPushToken !== 'string') {
@@ -71,29 +89,67 @@ export async function savePushToken(req, res) {
       });
     }
 
-    const updated = await req.db
+    // now() is the DATABASE's clock, not the API server's — with a single
+    // Postgres instance this also means a single source of truth for
+    // registration ordering regardless of which (or how many) app server
+    // processes handle concurrent requests; two Railway instances with
+    // clocks that had drifted relative to each other would otherwise be
+    // able to disagree about which registration was actually "later."
+    // .returning() captures the exact value Postgres assigned, rather than
+    // guessing what now() evaluated to.
+    const [updated] = await req.db
       .insert(accountSettingsTable)
       .values({
         userId,
         expoPushToken,
-        pushTokenUpdatedAt: new Date(),
-        updatedAt: new Date(),
+        pushTokenUpdatedAt: sql`now()`,
+        updatedAt: sql`now()`,
       })
       .onConflictDoUpdate({
         target: accountSettingsTable.userId,
         set: {
           expoPushToken,
-          pushTokenUpdatedAt: new Date(),
-          updatedAt: new Date()
+          pushTokenUpdatedAt: sql`now()`,
+          updatedAt: sql`now()`
         },
       })
-      .returning({ expoPushToken: accountSettingsTable.expoPushToken });
+      .returning({ expoPushToken: accountSettingsTable.expoPushToken, pushTokenUpdatedAt: accountSettingsTable.pushTokenUpdatedAt });
+    const now = updated.pushTokenUpdatedAt;
+
+    // accountSettingsTable above is per-account bookkeeping only — it does
+    // not, by itself, decide who may actually receive a push to this
+    // token. That decision is atomic and lives in push_token_ownership,
+    // enforced by its UNIQUE(token) constraint (structurally impossible for
+    // two accounts to both hold the winning row) and ordered by this
+    // request's JWT issued-at, not by when it happens to reach the
+    // database — see claimTokenOwnership's docstring for why that
+    // specifically defeats a registration request still in flight from an
+    // account that has since signed out. Live incident this whole feature
+    // traces back to: a 10-month-old account and an app-review account
+    // both still held this exact token and both kept sending hydration
+    // reminders to one phone.
+    const issuedAtSeconds = sessionClaims?.iat;
+    if (Number.isFinite(issuedAtSeconds)) {
+      const claim = await claimTokenOwnership(req.db, {
+        token: expoPushToken,
+        tokenType: 'expo',
+        userId,
+        issuedAtSeconds,
+      });
+      if (!claim.claimed) {
+        console.log(`[savePushToken] Ownership claim lost to a newer registration (current owner: ${claim.ownerUserId}) — this account's own token bookkeeping was still saved.`);
+      }
+    } else {
+      // No iat on the auth claims is not expected for a real Clerk-signed
+      // request, but fail safe rather than skip the atomic claim silently.
+      console.warn(`[savePushToken] No sessionClaims.iat available for user ${userId} — skipping atomic ownership claim this call.`);
+    }
 
     console.log(`[savePushToken] Saved push token for user ${userId}`);
     res.status(200).json({
       success: true,
       tokenRegistered: true,
-      expoPushToken: updated[0]?.expoPushToken
+      expoPushToken: updated?.expoPushToken
     });
   } catch (error) {
     // Handle foreign key constraint violation gracefully
@@ -115,6 +171,12 @@ export async function deletePushToken(req, res) {
   try {
     const { userId } = getAuth(req);
 
+    const [existing] = await req.db
+      .select({ expoPushToken: accountSettingsTable.expoPushToken })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId))
+      .limit(1);
+
     await req.db
       .update(accountSettingsTable)
       .set({
@@ -123,6 +185,13 @@ export async function deletePushToken(req, res) {
         updatedAt: new Date()
       })
       .where(eq(accountSettingsTable.userId, userId));
+
+    // Scoped to (token, this userId) — a safe no-op if ownership was
+    // already reclaimed by a different account since this token was
+    // registered (see releaseTokenOwnership's docstring).
+    if (existing?.expoPushToken) {
+      await releaseTokenOwnership(req.db, existing.expoPushToken, userId);
+    }
 
     console.log(`[deletePushToken] Removed push token for user ${userId}`);
     res.status(200).json({ success: true, tokenRegistered: false });
@@ -154,10 +223,220 @@ export async function getPushTokenStatus(req, res) {
   }
 }
 
+// --- Local/remote reminder de-duplication ---
+//
+// Ownership model: the backend's smart-reminder cron (smartReminderJob.js) is
+// the PRIMARY sender for every local reminder category whenever the device
+// has connectivity — it has real-time server data (today's actual logs,
+// current streak) that an on-device schedule fixed hours in advance cannot.
+// The device's local expo-notifications schedule (pushNotifications.js)
+// exists ONLY as an offline fallback, for the case where connectivity isn't
+// available when the remote send would have happened.
+//
+// notification_delivery_log's "sent" status means Firebase/APNs ACCEPTED the
+// send request — it is NOT confirmation the device received anything.
+// Cancelling the user's only remaining reminder based on a merely-accepted
+// send risks a silent miss, which is worse than an occasional duplicate.
+//
+// Confirmation is message-specific, not a timestamp window: each send gets
+// a unique deliveryId (generated in smartReminderJob.js's
+// deliverNotification, embedded in the push's own data payload), stored on
+// its own notification_delivery_log row. The receiving device acknowledges
+// that exact ID; acked_at is only ever set once per row (first ack wins —
+// see acknowledgePushReceived), so repeated acks from one device, or acks
+// from a second device signed into the same account, are all safely
+// idempotent instead of each counting as a fresh confirmation. An earlier
+// version of this correlated by "any ack within 10 minutes of any send" at
+// the account level — that could incorrectly confirm an unrelated send in
+// the same window and had no way to validate the acker owns this specific
+// delivery. Replaced outright before this was ever deployed.
+export async function getDeliveredToday(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const deliveredToday = await getDeliveredTodayForUser(req.db, userId);
+    res.status(200).json({ deliveredToday });
+  } catch (error) {
+    console.error('[getDeliveredToday] Error:', error);
+    // Fail toward "nothing confirmed delivered" — the local reminder stays
+    // scheduled and fires. A missed dedup means at most one redundant
+    // notification; a false "already delivered" would suppress the only
+    // reminder the user gets that day. Same asymmetry the consent gate
+    // resolves the same way (fail toward the safer redundant outcome).
+    res.status(200).json({ deliveredToday: [] });
+  }
+}
+
+/**
+ * Called by the client whenever its JS runtime actually processes a push
+ * (foreground onMessage, or the background message handler — which can run
+ * even while the app is fully closed, given `content-available: 1` on iOS).
+ * This is the real "device receipt" signal getDeliveredToday requires before
+ * treating a category as safe to cancel locally. See acknowledgeDelivery for
+ * the ownership + idempotency logic.
+ */
+export async function acknowledgePushReceived(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deliveryId, deviceId } = req.body || {};
+
+    if (!deliveryId || typeof deliveryId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deliveryId is required' });
+    }
+
+    // deviceId here is the client's own string id (SecureStore) — resolve it
+    // to the real devices.id row so acknowledgeDelivery can check it against
+    // the delivery log's numeric deviceId. Absent for pre-device-model
+    // clients, which keeps today's userId-only ack check for them.
+    const ackingDeviceRowId = deviceId ? await resolveDeviceRowId(req.db, userId, deviceId) : null;
+
+    const result = await acknowledgeDelivery(req.db, userId, deliveryId, ackingDeviceRowId);
+
+    if (result.ownershipViolation) {
+      console.warn(`[acknowledgePushReceived] Ownership mismatch: user ${userId} tried to ack a delivery belonging to another device/account`);
+      return res.status(403).json({ success: false, error: 'Not your delivery' });
+    }
+
+    return res.status(200).json({ success: result.ok, alreadyAcked: result.alreadyAcked });
+  } catch (error) {
+    console.error('[acknowledgePushReceived] Error:', error);
+    // Non-critical: worst case, this send is treated as unconfirmed and the
+    // local fallback stays scheduled — the safe direction to fail in.
+    res.status(200).json({ success: false });
+  }
+}
+
+// --- Device Registry & Per-Device Notification Ownership ---
+//
+// Additive alongside the legacy FCM/Expo token endpoints below, which stay
+// untouched for app builds that haven't adopted this flow yet. See
+// deviceRegistry.js and docs/architecture for the backward-compat design.
+
+export async function registerDeviceEndpoint(req, res) {
+  try {
+    const { userId, sessionClaims } = getAuth(req);
+    const { deviceId, fcmToken, expoPushToken, platform } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+    if (!fcmToken && !expoPushToken) {
+      return res.status(400).json({ success: false, error: 'fcmToken or expoPushToken is required' });
+    }
+
+    // Same profile-not-ready race saveFCMToken already guards against.
+    const [profile] = await req.db
+      .select({ userId: profilesTable.userId })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+
+    if (!profile) {
+      return res.status(202).json({
+        success: false,
+        registered: false,
+        message: 'Profile not ready yet, device will be registered after profile creation',
+        retryAfterProfileCreation: true,
+      });
+    }
+
+    await registerDevice(req.db, userId, { deviceId, fcmToken, expoPushToken, platform, issuedAtSeconds: sessionClaims?.iat });
+    console.log(`[registerDeviceEndpoint] Registered device ${deviceId} for user ${userId} (${platform || 'unknown platform'})`);
+    res.status(200).json({ success: true, registered: true });
+  } catch (error) {
+    if (error.code === '23503') {
+      return res.status(202).json({ success: false, registered: false, retryAfterProfileCreation: true });
+    }
+    console.error('[registerDeviceEndpoint] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+export async function deregisterDeviceEndpoint(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deviceId } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+
+    const result = await deregisterDevice(req.db, userId, deviceId);
+    console.log(`[deregisterDeviceEndpoint] Deregistered device ${deviceId} for user ${userId}: ${result.removed}`);
+    res.status(200).json({ success: true, removed: result.removed });
+  } catch (error) {
+    console.error('[deregisterDeviceEndpoint] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+/**
+ * Issues a fresh cleanup token for this device while the caller is still
+ * authenticated. Called on every successful FCM/Expo token registration
+ * (mobile side), not just at sign-out time — by the time a sign-out ever
+ * needs it, it must already be cached client-side, since a fresh one can't
+ * be requested from an offline sign-out with no session either. See
+ * deviceRegistry.js's issueDeregisterToken and routes/deviceDeregistration.js
+ * (the unauthenticated endpoint that consumes it) for the full mechanism.
+ */
+export async function issueDeregisterTokenEndpoint(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deviceId } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+
+    const result = await issueDeregisterToken(req.db, userId, deviceId);
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Device not registered' });
+    }
+
+    res.status(200).json({ success: true, token: result.token, expiresAt: result.expiresAt });
+  } catch (error) {
+    console.error('[issueDeregisterTokenEndpoint] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
+const VALID_OWNABLE_CATEGORIES = ['hydration_nudge', 'daily_reminder', 'mood_checkin', 'activity_reminder'];
+const VALID_OWNERS = ['local', 'backend'];
+
+export async function setNotificationOwnershipEndpoint(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const { deviceId, category, owner } = req.body || {};
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+    if (!VALID_OWNABLE_CATEGORIES.includes(category)) {
+      return res.status(400).json({ success: false, error: 'Invalid category' });
+    }
+    if (!VALID_OWNERS.includes(owner)) {
+      return res.status(400).json({ success: false, error: 'Invalid owner' });
+    }
+
+    const deviceRowId = await resolveDeviceRowId(req.db, userId, deviceId);
+    if (!deviceRowId) {
+      // The device must register itself before claiming ownership — this
+      // ordering (register, confirm local scheduling succeeded, THEN claim
+      // ownership) is what mobile's syncAllNotificationSchedules follows.
+      return res.status(404).json({ success: false, error: 'Device not registered' });
+    }
+
+    await setOwnership(req.db, deviceRowId, category, owner);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('[setNotificationOwnershipEndpoint] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
 // --- FCM Token Management (Firebase Cloud Messaging) ---
 export async function saveFCMToken(req, res) {
   try {
-    const { userId } = getAuth(req);
+    const { userId, sessionClaims } = getAuth(req);
     const { fcmToken, platform } = req.body;
 
     if (!fcmToken || typeof fcmToken !== 'string') {
@@ -189,25 +468,48 @@ export async function saveFCMToken(req, res) {
       });
     }
 
-    const updated = await req.db
+    // See savePushToken for why this uses the database's now() rather than
+    // the API server's own clock — a single source of truth for
+    // registration ordering regardless of which app server instance
+    // handles the request.
+    const [updated] = await req.db
       .insert(accountSettingsTable)
       .values({
         userId,
         fcmToken,
-        fcmTokenUpdatedAt: new Date(),
+        fcmTokenUpdatedAt: sql`now()`,
         fcmTokenPlatform: platform || null,
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .onConflictDoUpdate({
         target: accountSettingsTable.userId,
         set: {
           fcmToken,
-          fcmTokenUpdatedAt: new Date(),
+          fcmTokenUpdatedAt: sql`now()`,
           fcmTokenPlatform: platform || null,
-          updatedAt: new Date()
+          updatedAt: sql`now()`
         },
       })
       .returning({ fcmToken: accountSettingsTable.fcmToken });
+
+    // See savePushToken for the full rationale — accountSettingsTable is
+    // per-account bookkeeping only; push_token_ownership's atomic,
+    // iat-ordered claim is what actually decides who may receive a push to
+    // this token.
+    const issuedAtSeconds = sessionClaims?.iat;
+    if (Number.isFinite(issuedAtSeconds)) {
+      const claim = await claimTokenOwnership(req.db, {
+        token: fcmToken,
+        tokenType: 'fcm',
+        userId,
+        issuedAtSeconds,
+      });
+      if (!claim.claimed) {
+        console.log(`[saveFCMToken] Ownership claim lost to a newer registration (current owner: ${claim.ownerUserId}) — this account's own token bookkeeping was still saved.`);
+      }
+    } else {
+      console.warn(`[saveFCMToken] No sessionClaims.iat available for user ${userId} — skipping atomic ownership claim this call.`);
+    }
 
     console.log(`[saveFCMToken] Saved FCM token for user ${userId} (${platform || 'unknown platform'})`);
     res.status(200).json({
@@ -234,6 +536,12 @@ export async function deleteFCMToken(req, res) {
   try {
     const { userId } = getAuth(req);
 
+    const [existing] = await req.db
+      .select({ fcmToken: accountSettingsTable.fcmToken })
+      .from(accountSettingsTable)
+      .where(eq(accountSettingsTable.userId, userId))
+      .limit(1);
+
     await req.db
       .update(accountSettingsTable)
       .set({
@@ -243,6 +551,10 @@ export async function deleteFCMToken(req, res) {
         updatedAt: new Date()
       })
       .where(eq(accountSettingsTable.userId, userId));
+
+    if (existing?.fcmToken) {
+      await releaseTokenOwnership(req.db, existing.fcmToken, userId);
+    }
 
     console.log(`[deleteFCMToken] Removed FCM token for user ${userId}`);
     res.status(200).json({ success: true, tokenRegistered: false });
@@ -434,16 +746,47 @@ export async function getPrivacySettings(req, res) {
       .where(eq(accountSettingsTable.userId, userId));
 
     if (!settings) {
-      return res.status(200).json({
-        shareInsights: false,
-        analytics: true,
-        biometricLock: false,
-      });
+      return res.status(200).json(normalizePrivacySettings(null));
     }
-    res.status(200).json(settings.privacy || {});
+    res.status(200).json(normalizePrivacySettings(settings.privacy));
   } catch (error) {
     console.log("Error fetching privacy settings", error);
     sendDevError(res, error);
+  }
+}
+
+const PRIVACY_SOURCE_SCREENS = new Set(["privacy-security", "onboarding", "unknown"]);
+const PRIVACY_DEVICE_PLATFORMS = new Set(["ios", "android", "web", "unknown"]);
+
+function parsePrivacyRequestMetadata(body) {
+  const sourceScreen = body?.sourceScreen ?? "unknown";
+  const devicePlatform = body?.devicePlatform ?? "unknown";
+
+  if (!PRIVACY_SOURCE_SCREENS.has(sourceScreen)) {
+    return { success: false, field: "sourceScreen" };
+  }
+  if (!PRIVACY_DEVICE_PLATFORMS.has(devicePlatform)) {
+    return { success: false, field: "devicePlatform" };
+  }
+  return { success: true, sourceScreen, devicePlatform };
+}
+
+function encodePrivacyAuditCursor(row) {
+  return Buffer.from(JSON.stringify({
+    changedAt: row.changedAt.toISOString(),
+    id: row.id,
+  })).toString("base64url");
+}
+
+function decodePrivacyAuditCursor(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    const changedAt = new Date(parsed.changedAt);
+    if (!Number.isInteger(parsed.id) || Number.isNaN(changedAt.getTime())) return null;
+    return { changedAt, id: parsed.id };
+  } catch {
+    return null;
   }
 }
 
@@ -451,27 +794,157 @@ export async function savePrivacySettings(req, res) {
   try {
     const { userId } = getAuth(req);
     const { privacy } = req.body;
-    if (typeof privacy !== "object" || privacy === null) {
-      return res.status(400).json({ error: "Invalid privacy object" });
+    const parsed = parsePrivacyPatch(privacy);
+    if (!parsed.success) {
+      return res.status(400).json({
+        code: "INVALID_PRIVACY_SETTINGS",
+        error: "Invalid privacy settings",
+        issues: parsed.issues,
+      });
     }
 
-    const updated = await req.db
-      .insert(accountSettingsTable)
-      .values({
-        userId,
-        privacy,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: accountSettingsTable.userId,
-        set: { privacy, updatedAt: new Date() },
-      })
-      .returning({ privacy: accountSettingsTable.privacy });
+    const requestedPrivacyPatch = parsed.data;
+    const metadata = parsePrivacyRequestMetadata(req.body);
+    if (!metadata.success) {
+      return res.status(400).json({
+        code: "INVALID_PRIVACY_METADATA",
+        error: `Invalid ${metadata.field}`,
+      });
+    }
+
+    const changedAt = new Date();
+    const result = await req.db.transaction(async (tx) => {
+      await tx
+        .insert(accountSettingsTable)
+        .values({
+          userId,
+          privacy: normalizePrivacySettings(null),
+          updatedAt: changedAt,
+        })
+        .onConflictDoNothing({ target: accountSettingsTable.userId });
+
+      const lockedRows = await tx.execute(sql`
+        SELECT privacy
+        FROM account_settings
+        WHERE user_id = ${userId}
+        FOR UPDATE
+      `);
+      const currentPrivacy = lockedRows?.[0]?.privacy || {};
+      const resolved = resolvePrivacyDependencies(currentPrivacy, requestedPrivacyPatch);
+      if (!resolved.success) {
+        return { dependencyIssues: resolved.issues, rows: [] };
+      }
+
+      const privacyPatch = resolved.data;
+      const storedPatch = buildStoredPrivacyPatch(privacyPatch);
+      const auditChanges = buildPrivacyAuditChanges(currentPrivacy, privacyPatch, changedAt);
+
+      const rows = await tx
+        .update(accountSettingsTable)
+        .set({
+          // The column is genuinely jsonb (confirmed against the live schema
+          // after this exact mismatch broke every save with "COALESCE could
+          // not convert type json to jsonb" — json/jsonb only have an
+          // assignment cast between them, not an implicit one, so COALESCE's
+          // type unification rejects mixing them even though a plain
+          // assignment would have silently coerced). Keep this all jsonb.
+          privacy: sql`(
+            COALESCE(${accountSettingsTable.privacy}, '{}'::jsonb)
+            || ${JSON.stringify(storedPatch)}::jsonb
+          )`,
+          updatedAt: changedAt,
+        })
+        .where(eq(accountSettingsTable.userId, userId))
+        .returning({ privacy: accountSettingsTable.privacy });
+
+      if (auditChanges.length > 0) {
+        await tx.insert(privacyConsentAuditTable).values(
+          auditChanges.map((change) => ({
+            ...change,
+            userId,
+            sourceScreen: metadata.sourceScreen,
+            devicePlatform: metadata.devicePlatform,
+          }))
+        );
+      }
+
+      return { dependencyIssues: null, rows };
+    });
+
+    if (result.dependencyIssues) {
+      return res.status(409).json({
+        code: "PRIVACY_DEPENDENCY_REQUIRED",
+        error: "A required privacy purpose is disabled",
+        issues: result.dependencyIssues,
+      });
+    }
+
+    const updated = result.rows;
 
     if (!updated[0]) return res.status(404).json({ error: "Settings not found" });
-    res.status(200).json(updated[0].privacy || {});
+    res.status(200).json(normalizePrivacySettings(updated[0].privacy));
   } catch (error) {
     console.log("Error saving privacy settings", error);
+    sendDevError(res, error);
+  }
+}
+
+export async function getPrivacyAudit(req, res) {
+  try {
+    const { userId } = getAuth(req);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 100)
+      : 20;
+    const cursor = decodePrivacyAuditCursor(req.query.cursor);
+
+    if (req.query.cursor && !cursor) {
+      return res.status(400).json({
+        code: "INVALID_CURSOR",
+        error: "Invalid privacy history cursor",
+      });
+    }
+
+    const cursorCondition = cursor
+      ? or(
+          lt(privacyConsentAuditTable.changedAt, cursor.changedAt),
+          and(
+            eq(privacyConsentAuditTable.changedAt, cursor.changedAt),
+            lt(privacyConsentAuditTable.id, cursor.id)
+          )
+        )
+      : undefined;
+
+    const rows = await req.db
+      .select({
+        id: privacyConsentAuditTable.id,
+        purposeKey: privacyConsentAuditTable.purposeKey,
+        previousState: privacyConsentAuditTable.previousState,
+        newState: privacyConsentAuditTable.newState,
+        policyVersion: privacyConsentAuditTable.policyVersion,
+        sourceScreen: privacyConsentAuditTable.sourceScreen,
+        devicePlatform: privacyConsentAuditTable.devicePlatform,
+        changedAt: privacyConsentAuditTable.changedAt,
+        revokedAt: privacyConsentAuditTable.revokedAt,
+      })
+      .from(privacyConsentAuditTable)
+      .where(cursorCondition
+        ? and(eq(privacyConsentAuditTable.userId, userId), cursorCondition)
+        : eq(privacyConsentAuditTable.userId, userId))
+      .orderBy(desc(privacyConsentAuditTable.changedAt), desc(privacyConsentAuditTable.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const events = hasMore ? rows.slice(0, limit) : rows;
+    const lastEvent = events.at(-1);
+
+    return res.status(200).json({
+      schemaVersion: 1,
+      events,
+      nextCursor: hasMore && lastEvent ? encodePrivacyAuditCursor(lastEvent) : null,
+    });
+  } catch (error) {
+    console.log("Error fetching privacy history", error);
     sendDevError(res, error);
   }
 }
@@ -1270,6 +1743,37 @@ export async function completeOnboarding(req, res) {
   }
 }
 
+/**
+ * Dev-only: un-sets onboardingCompletedAt so a test account replays the
+ * full opening sequence (auth screen's first-time copy + onboarding
+ * steps 1-4) on next sign-in, without deleting and recreating the account.
+ * Refuses outright unless NODE_ENV is explicitly 'development' — fails
+ * closed, not just "not production," so a misconfigured or unset
+ * environment variable can never accidentally leave this reachable. There
+ * is no equivalent of this endpoint reachable against the real production
+ * backend regardless of what any client build sends.
+ */
+export async function devResetOnboarding(req, res) {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ success: false, error: 'Not available' });
+  }
+
+  try {
+    const { userId } = getAuth(req);
+
+    await req.db
+      .update(profilesTable)
+      .set({ onboardingCompletedAt: null, updatedAt: new Date() })
+      .where(eq(profilesTable.userId, userId));
+
+    console.log(`[devResetOnboarding] Reset onboarding for ${userId} (dev only)`);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('[devResetOnboarding] Error:', error);
+    sendDevError(res, error);
+  }
+}
+
 // --- GDPR Data Export ---
 export async function exportUserData(req, res) {
   try {
@@ -1277,47 +1781,55 @@ export async function exportUserData(req, res) {
     console.log(`[exportUserData] Exporting data for user ${userId}`);
 
     // Load all user data in parallel
-    const [profile, dietary, goals, gamification, settings, foodLogs, waterLogs, moodLogs, activityLogs] = await Promise.all([
+    const [
+      profile,
+      dietary,
+      goals,
+      gamification,
+      settings,
+      collectionEntries,
+    ] = await Promise.all([
       req.db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).then(r => r[0]),
       req.db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).then(r => r[0]),
       req.db.select().from(nutritionGoalsTable).where(eq(nutritionGoalsTable.userId, userId)).then(r => r[0]),
       req.db.select().from(gamificationTable).where(eq(gamificationTable.userId, userId)).then(r => r[0]),
       req.db.select().from(accountSettingsTable).where(eq(accountSettingsTable.userId, userId)).then(r => r[0]),
-      req.db.select().from(foodLogTable).where(eq(foodLogTable.userId, userId)),
-      req.db.select().from(waterLogTable).where(eq(waterLogTable.userId, userId)).catch(() => []),
-      req.db.select().from(moodLogTable).where(eq(moodLogTable.userId, userId)).catch(() => []),
-      req.db.select().from(activityLogTable).where(eq(activityLogTable.userId, userId)).catch(() => []),
+      Promise.all(CORE_WELLNESS_EXPORT_COLLECTIONS.map(async ({ key, table }) => [
+        key,
+        await req.db.select().from(table).where(eq(table.userId, userId)),
+      ])),
     ]);
+    const collections = Object.fromEntries(collectionEntries);
 
-    // Sanitize profile data (remove internal IDs)
-    const sanitizeRecord = (record) => {
-      if (!record) return null;
-      const { id, ...rest } = record;
-      return rest;
-    };
-
-    const exportData = {
-      exportedAt: new Date().toISOString(),
+    const exportData = buildProfileExportPayload({
       userId,
-      profile: sanitizeRecord(profile),
-      dietaryPreferences: sanitizeRecord(dietary),
-      nutritionGoals: sanitizeRecord(goals),
-      gamification: sanitizeRecord(gamification),
-      accountSettings: sanitizeRecord(settings),
-      foodLogs: foodLogs.map(sanitizeRecord),
-      waterLogs: waterLogs.map(sanitizeRecord),
-      moodLogs: moodLogs.map(sanitizeRecord),
-      activityLogs: activityLogs.map(sanitizeRecord),
-      summary: {
-        totalFoodLogs: foodLogs.length,
-        totalWaterLogs: waterLogs.length,
-        totalMoodLogs: moodLogs.length,
-        totalActivityLogs: activityLogs.length,
-        accountCreated: profile?.createdAt || null,
-      }
-    };
+      profile,
+      dietaryPreferences: dietary,
+      nutritionGoals: goals,
+      gamification,
+      accountSettings: settings,
+      collections,
+    });
 
-    console.log(`[exportUserData] ✅ Exported ${foodLogs.length} food logs, ${waterLogs.length} water logs for user ${userId}`);
+    console.log(`[exportUserData] Exported core wellness data for user ${userId}`);
+
+    const format = String(req.query.format || "json").toLowerCase();
+    const dateStamp = new Date().toISOString().slice(0, 10);
+
+    if (format === "csv") {
+      const zipBuffer = await buildExportZip(exportData);
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="mft-export-${dateStamp}.zip"`);
+      return res.status(200).send(zipBuffer);
+    }
+
+    if (format === "pdf") {
+      const pdfBuffer = await buildExportPDF(exportData);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="mft-export-${dateStamp}.pdf"`);
+      return res.status(200).send(pdfBuffer);
+    }
+
     res.status(200).json(exportData);
   } catch (error) {
     console.error("[exportUserData] ❌ Error exporting user data:", error);

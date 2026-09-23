@@ -18,6 +18,61 @@
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { db } from '../config/db.js';
 import { openaiClient } from './apiClients/OpenAIClient.js';
+import NodeCache from 'node-cache';
+import { ensureRedisReady } from '../config/redisClient.js';
+
+// AI recommendations are generated from 30-day patterns that don't shift
+// meaningfully within a day, but getDashboardAnalytics awaited this OpenAI
+// call synchronously on every single dashboard load for established users
+// — measured 7-9s response times in production. Same Redis-backed /
+// in-memory-fallback cache pattern as Phase 3's CF/signal caches.
+const AI_RECS_CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours
+const aiRecsCacheFallback = new NodeCache({ stdTTL: AI_RECS_CACHE_TTL_SECONDS, checkperiod: 900 });
+
+async function getCachedAIRecommendations(userId) {
+  const key = `activity-ai-recs:${userId}`;
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      const raw = await redis.get(key);
+      if (raw !== null) return JSON.parse(raw);
+    } catch (err) {
+      console.warn('[ActivityAnalytics] Redis get failed for AI recs cache:', err.message);
+    }
+  }
+  return aiRecsCacheFallback.get(key);
+}
+
+async function setCachedAIRecommendations(userId, recommendations) {
+  const key = `activity-ai-recs:${userId}`;
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      await redis.setEx(key, AI_RECS_CACHE_TTL_SECONDS, JSON.stringify(recommendations));
+      return;
+    } catch (err) {
+      console.warn('[ActivityAnalytics] Redis set failed for AI recs cache:', err.message);
+    }
+  }
+  aiRecsCacheFallback.set(key, recommendations);
+}
+
+// Called on new/deleted activity logs so recommendations reflect the change
+// immediately instead of waiting out the 6h TTL (which remains as a backstop
+// in case this invalidation is ever missed — same defense-in-depth pattern
+// as invalidateCFCache/invalidateSignalCache).
+export async function invalidateActivityAIRecsCache(userId) {
+  const key = `activity-ai-recs:${userId}`;
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      await redis.del(key);
+    } catch (err) {
+      console.warn('[ActivityAnalytics] Redis del failed for AI recs cache:', err.message);
+    }
+  }
+  aiRecsCacheFallback.del(key);
+}
 
 // ============================================================================
 // SCIENTIFIC EVIDENCE BASE
@@ -165,7 +220,9 @@ class ActivityAnalyticsService {
           AND logged_at >= NOW() - INTERVAL '30 days'
       `);
 
-      const stats = result.rows?.[0] || { total_logs: 0, distinct_days: 0 };
+      // db.execute() returns the row array directly on this driver, not
+      // { rows: [...] } — see gamificationRewardService.js.
+      const stats = result[0] || { total_logs: 0, distinct_days: 0 };
       const distinctDays = parseInt(stats.distinct_days) || 0;
       const totalLogs = parseInt(stats.total_logs) || 0;
 
@@ -228,7 +285,7 @@ class ActivityAnalyticsService {
         ORDER BY logged_at DESC
       `);
 
-      const logs = logsResult.rows || [];
+      const logs = logsResult || [];
 
       if (logs.length === 0) {
         return null;
@@ -411,7 +468,7 @@ class ActivityAnalyticsService {
           AND logged_at >= ${startDate.toISOString()}
           AND logged_at <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -425,7 +482,7 @@ class ActivityAnalyticsService {
           AND logged_date >= ${startDate.toISOString()}
           AND logged_date <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -439,7 +496,7 @@ class ActivityAnalyticsService {
           AND logged_date >= ${startDate.toISOString()}
           AND logged_date <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -453,7 +510,7 @@ class ActivityAnalyticsService {
           AND logged_date >= ${startDate.toISOString()}
           AND logged_date <= ${endDate.toISOString()}
       `);
-      return result.rows || [];
+      return result || [];
     } catch {
       return [];
     }
@@ -586,6 +643,9 @@ class ActivityAnalyticsService {
   // ==========================================================================
 
   async generateAIRecommendations(userId, patterns, correlations, moodData) {
+    const cached = await getCachedAIRecommendations(userId);
+    if (cached) return cached;
+
     try {
       const prompt = this.buildRecommendationPrompt(patterns, correlations, moodData);
 
@@ -626,11 +686,12 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
 
       // Parse JSON from response
       const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-
-      return this.getFallbackRecommendations(patterns);
+      const recommendations = jsonMatch ? JSON.parse(jsonMatch[0]) : this.getFallbackRecommendations(patterns);
+      // Don't cache the fallback — if OpenAI is degraded right now, the
+      // next request should retry rather than being stuck with the
+      // generic fallback for the full TTL.
+      if (jsonMatch) await setCachedAIRecommendations(userId, recommendations);
+      return recommendations;
     } catch (error) {
       console.error('[ActivityAnalytics] generateAIRecommendations error:', error);
       return this.getFallbackRecommendations(patterns);
@@ -776,11 +837,16 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
   // WEEK DATA FOR CHARTS
   // ==========================================================================
 
-  async getWeekData(userId) {
+  // `days` was hardcoded to 7 with no parameter at all — the Activity tab's
+  // Day/Week/Month toggle changed nothing here, so "This Week" was the only
+  // window it could ever show. Default 7 preserves exact prior behavior for
+  // any caller that doesn't pass it (this function's name stays getWeekData
+  // since that's still its default/most common shape).
+  async getWeekData(userId, days = 7) {
     try {
       const today = new Date();
-      const weekAgo = new Date();
-      weekAgo.setDate(today.getDate() - 6);
+      const rangeStart = new Date();
+      rangeStart.setDate(today.getDate() - (days - 1));
 
       const result = await db.execute(sql`
         SELECT
@@ -789,23 +855,23 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
           STRING_AGG(DISTINCT type, ', ') as types
         FROM activity_log
         WHERE user_id = ${userId}
-          AND logged_at >= ${weekAgo.toISOString()}
+          AND logged_at >= ${rangeStart.toISOString()}
           AND logged_at <= ${today.toISOString()}
         GROUP BY DATE(logged_at)
         ORDER BY date ASC
       `);
 
       const logsByDate = {};
-      (result.rows || []).forEach(row => {
+      (result || []).forEach(row => {
         logsByDate[row.date] = {
           minutes: parseInt(row.minutes) || 0,
           types: row.types,
         };
       });
 
-      // Build week array
+      // Build the day array
       const weekData = [];
-      for (let i = 6; i >= 0; i--) {
+      for (let i = days - 1; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(today.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
@@ -821,15 +887,15 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
       return weekData;
     } catch (error) {
       console.error('[ActivityAnalytics] getWeekData error:', error);
-      return this.generateEmptyWeekData();
+      return this.generateEmptyWeekData(days);
     }
   }
 
-  generateEmptyWeekData() {
+  generateEmptyWeekData(days = 7) {
     const weekData = [];
     const today = new Date();
 
-    for (let i = 6; i >= 0; i--) {
+    for (let i = days - 1; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
 
@@ -848,11 +914,11 @@ Respond with a JSON array of 3-5 personalized recommendations. Each recommendati
   // MAIN DASHBOARD AGGREGATION
   // ==========================================================================
 
-  async getDashboardAnalytics(userId) {
+  async getDashboardAnalytics(userId, days = 7) {
     const [coldStart, patterns, weekData] = await Promise.all([
       this.getColdStartStage(userId),
       this.analyzeActivityPatterns(userId, 30),
-      this.getWeekData(userId),
+      this.getWeekData(userId, days),
     ]);
 
     // Only run heavy analysis for established users

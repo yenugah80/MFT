@@ -5,6 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { TEXT, TYPOGRAPHY } from '../constants/premiumTheme';
+import { DEFAULT_WATER_GOAL_LITERS } from '../constants/beverageConstants';
 import {
   View,
   Text,
@@ -19,6 +20,7 @@ import {
 } from 'react-native';
 import { useWaterLog } from '../hooks/useWaterLog';
 import { useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
@@ -159,7 +161,7 @@ const QuickAddButton = ({ preset, onPress, isLoading }) => {
 /**
  * Main WaterLogger Modal Component
  */
-export default function WaterLogger({ visible, onClose, onSuccess }) { // Removed error from here
+export default function WaterLogger({ visible, onClose, onSuccess, onViewHistory, onDismiss }) { // Removed error from here
   const { logWater, quickAdd, isLogging, presets, getProgress, error: hookError } = useWaterLog();
   const queryClient = useQueryClient();
   const [customAmount, setCustomAmount] = useState('');
@@ -275,7 +277,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
 
   const dashboardData = queryClient.getQueryData(['dashboard']);
   const todayTotal = dashboardData?.today?.waterIntakeLiters || 0;
-  const dailyGoal = parseFloat(dashboardData?.goals?.waterLiters || 2.0);
+  const dailyGoal = parseFloat(dashboardData?.goals?.waterLiters || DEFAULT_WATER_GOAL_LITERS);
 
   return (
     <Modal
@@ -283,6 +285,7 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
       transparent
       animationType="none"
       onRequestClose={onClose}
+      onDismiss={onDismiss}
     >
       {/* Backdrop */}
       <Pressable style={styles.modalOverlay} onPress={onClose}>
@@ -308,6 +311,18 @@ export default function WaterLogger({ visible, onClose, onSuccess }) { // Remove
           <Text style={styles.headerSubtitle}>
             {(todayTotal * 1000).toFixed(0)}ml / {(dailyGoal * 1000).toFixed(0)}ml today
           </Text>
+          {onViewHistory && (
+            <TouchableOpacity
+              style={styles.historyLink}
+              onPress={onViewHistory}
+              accessibilityRole="button"
+              accessibilityLabel="View hydration history"
+            >
+              <Ionicons name="time-outline" size={17} color="#2563EB" />
+              <Text style={styles.historyLinkText}>View history</Text>
+              <Ionicons name="chevron-forward" size={15} color="#2563EB" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Water Wave Visualization */}
@@ -448,6 +463,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: TYPOGRAPHY.family.regular,
     color: TEXT.secondary,
+  },
+  historyLink: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+  },
+  historyLinkText: {
+    fontSize: 13,
+    fontFamily: TYPOGRAPHY.family.semibold,
+    color: '#2563EB',
   },
   waveContainer: {
     height: 200,

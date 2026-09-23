@@ -45,6 +45,7 @@ import {
   SHADOWS,
 } from '../../constants/premiumDesignSystem';
 import { usePressAnimation, SPRING } from '../../utils/animations';
+import { buildRecommendationSummary } from '../../utils/recommendationSummary';
 import ReasonCard from './ReasonCard';
 
 // ============================================================================
@@ -192,38 +193,32 @@ export default function Recommendation5W2HCard({
   const urgencyConfig = URGENCY_CONFIG[when?.urgency] || URGENCY_CONFIG.low;
 
   // Build summary sentence (What + Why fused) - the "one clear explanation"
-  const summary = useMemo(() => {
-    const action = what?.action || 'Take action';
-    const reason = why?.primaryReason || '';
-
-    // Create a natural-sounding fused sentence
-    if (reason) {
-      // "Earlier, lighter dinners to improve your sleep comfort."
-      // Not: "What: Eat earlier. Why: Sleep better."
-      const cleanReason = reason.toLowerCase().replace(/^your /, '').replace(/\.$/, '');
-      return `${action.replace(/\.$/, '')} to address ${cleanReason}.`;
-    }
-    return action;
-  }, [what, why]);
+  // typeof guards throughout: `recommendation` can arrive already in 5W2H
+  // shape (this card renders whatever transformTo5W2H — or a future caller —
+  // produces), and a non-string field here previously crashed the whole
+  // screen on first render (see transformTo5W2H in app/recommendations.jsx).
+  const summary = useMemo(() => buildRecommendationSummary(what, why), [what, why]);
 
   // Build narrative paragraph - the story, not the framework
   const narrative = useMemo(() => {
     const parts = [];
+    const actionText = typeof what?.action === 'string' ? what.action : null;
+    const firstInstruction = typeof how?.instructions?.[0] === 'string' ? how.instructions[0] : null;
 
     // Lead with the observation/problem (Why)
-    if (why?.primaryReason) {
+    if (typeof why?.primaryReason === 'string') {
       parts.push(why.primaryReason);
     }
 
     // Add the proposed solution (What + How)
-    if (what?.action && how?.instructions?.[0]) {
-      parts.push(`${what.action} ${how.instructions[0].toLowerCase()}`);
-    } else if (what?.action) {
-      parts.push(what.action);
+    if (actionText && firstInstruction) {
+      parts.push(`${actionText} ${firstInstruction.toLowerCase()}`);
+    } else if (actionText) {
+      parts.push(actionText);
     }
 
     // Add expected outcome (Health benefit)
-    if (why?.healthBenefit) {
+    if (typeof why?.healthBenefit === 'string') {
       parts.push(`This ${why.healthBenefit.toLowerCase()}.`);
     }
 
@@ -249,15 +244,24 @@ export default function Recommendation5W2HCard({
   }), [who, what, when, where, why, how, howMuch]);
 
   // Determine evidence type for badge
+  //
+  // `confidence` is only an object with a string `.source` when the item came
+  // through transformTo5W2H's mapping branch. Anything already carrying
+  // who/what/why is passed through untouched (recommendations.jsx), and on that
+  // path `confidence` is a bare 0-1 number — so `.source` is undefined and
+  // calling `.includes` on it threw "confidence?.source?.includes is not a
+  // function", crashing the whole screen on the first card. Guard on the type
+  // rather than on presence, matching the narrative memo above.
+  const confidenceSource = typeof confidence?.source === 'string' ? confidence.source : '';
   const evidenceType = useMemo(() => {
-    if (confidence?.source?.includes('USDA') || why?.scienceSource) {
+    if (confidenceSource.includes('USDA') || why?.scienceSource) {
       return 'evidenceBased';
     }
-    if (confidence?.source?.includes('pattern') || why?.dataPoints?.length > 0) {
+    if (confidenceSource.includes('pattern') || why?.dataPoints?.length > 0) {
       return 'correlation';
     }
     return 'personalized';
-  }, [confidence, why]);
+  }, [confidenceSource, why]);
 
   // Handle completion
   const handleComplete = useCallback(async () => {
@@ -370,7 +374,7 @@ export default function Recommendation5W2HCard({
         evidenceType={evidenceType}
         confidence={confidence?.score}
         dataPoints={confidence?.dataPoints}
-        source={confidence?.source || why?.scienceSource}
+        source={confidenceSource || why?.scienceSource}
         style={styles.reasonCard}
         onCopyReasoning={onCopyReasoning}
       />
@@ -402,7 +406,12 @@ export default function Recommendation5W2HCard({
 // ============================================================================
 
 function truncateChip(text, maxLength) {
-  if (!text) return null;
+  // Guards against a caller passing a nested object instead of a string (this
+  // shipped once already — see transformTo5W2H in app/recommendations.jsx).
+  // A plain object has no .length, so `text.length > maxLength` was `false`
+  // and this returned the object unchanged, which React Native then threw on
+  // rendering directly inside a <Text>.
+  if (!text || typeof text !== 'string') return null;
   return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
 

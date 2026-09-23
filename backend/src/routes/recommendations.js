@@ -13,6 +13,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimiter.js';
 import { and, eq, gte, desc } from 'drizzle-orm';
 import { db } from '../config/db.js';
+import { DEFAULT_WATER_GOAL_LITERS } from '../utils/nutrition.js';
 import { openaiClient } from '../services/apiClients/OpenAIClient.js';
 import { estimateMicronutrients, getSignificantMicronutrients } from '../services/micronutrientService.js';
 import { recommendationsHistoryTable, foodLogTable, profilesTable, dietaryPreferencesTable, nutritionGoalsTable } from '../db/schema.js';
@@ -26,9 +27,10 @@ import { getUserSignals, invalidateUserSignals } from '../services/userSignalCac
 import { selectArm, updateArm, generateArmKey, getTimeBucket } from '../services/thompsonSamplingService.js';
 import { generateCandidates } from '../services/candidateGenerationService.js';
 import { getUserLaggedCorrelations } from '../services/laggedCorrelationService.js';
-import { computeMicronutrientUrgency, detectAllergenRisk, expandAllergens } from '../services/foodKnowledgeGraphService.js';
+import { computeMicronutrientUrgency, detectAllergenRisk, expandAllergens, detectDietViolation } from '../services/foodKnowledgeGraphService.js';
 import { invalidateCFCache } from '../services/collaborativeFilteringService.js';
 import { attachOpenAIConsent } from '../middleware/requireOpenAIConsent.js';
+import { buildNutritionalGaps, getDeterministicReason } from '../services/recommendationReasoning.js';
 
 const router = express.Router();
 
@@ -160,7 +162,7 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
           db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1),
           db.select().from(dietaryPreferencesTable).where(eq(dietaryPreferencesTable.userId, userId)).limit(1),
           analyzeRecommendationHistory(db, userId),
-          getUnifiedIntelligence(userId, { lookbackDays: 7 }),
+          getUnifiedIntelligence(userId, { lookbackDays: 7, offsetMinutes: timezoneOffset ?? 0 }),
           generateRecommendationContext(userId),
           getUserSignals(userId, { timezoneOffset }),
           getUserLaggedCorrelations(userId).catch(() => []),
@@ -200,7 +202,7 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
           protein: Math.max(0, (goals.proteinG || 150) - (nutrition.totalProtein || 0)),
           carbs: Math.max(0, (goals.carbsG || 225) - (nutrition.totalCarbs || 0)),
           fats: Math.max(0, (goals.fatsG || 65) - (nutrition.totalFats || 0)),
-          water: Math.max(0, (goals.waterLiters || 2.0) - (today.waterIntakeLiters || 0)),
+          water: Math.max(0, (goals.waterLiters || DEFAULT_WATER_GOAL_LITERS) - (today.waterIntakeLiters || 0)),
         };
         logDebug(`Wellness Score: ${holisticIntelligence?.wellnessScore}, Recovery: ${holisticIntelligence?.recoveryScore}`);
         logDebug(`Personalized Patterns: ${personalizedContext.hasPatterns ? 'Available' : 'Building'} (${personalizedContext.goodFoods?.length || 0} good foods, ${personalizedContext.avoidFoods?.length || 0} watch foods)`);
@@ -223,13 +225,7 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
         const recentFoodNames = (history.preferredFoods ?? []).concat(
           (dashboardResult.today?.nutrition?.recentFoods ?? []).map((f) => f.foodName ?? f)
         );
-        const nutritionalGaps = {
-          calories: { remaining: remainingBudget.calories },
-          protein:  { status: remainingBudget.protein  < 30  ? 'low' : 'ok', remaining: remainingBudget.protein },
-          carbs:    { status: remainingBudget.carbs    < 50  ? 'low' : 'ok', remaining: remainingBudget.carbs },
-          fats:     { status: remainingBudget.fats     < 15  ? 'low' : 'ok', remaining: remainingBudget.fats },
-          fiber:    { status: 'unknown' },
-        };
+        const nutritionalGaps = buildNutritionalGaps(remainingBudget);
 
         const enrichedSignals = {
           ...userSignals,
@@ -303,7 +299,9 @@ router.get('/', requireAuth(), attachOpenAIConsent(), aiLimiter, async (req, res
             remainingBudget,
             parsedLimit,
             userSignalsForLLM,
-          ).filter(rec => !improvedAllergenCheck(rec, profile?.dietary?.allergies || []));
+          )
+            .filter(rec => !improvedAllergenCheck(rec, profile?.dietary?.allergies || []))
+            .filter(rec => !violatesDietPreference(rec, profile?.dietary?.preferences || []));
         }
 
         // Enrich with micronutrients
@@ -905,6 +903,27 @@ function improvedAllergenCheck(food, allergies) {
 }
 
 /**
+ * Normalise declared diet preferences to a flat array of ids. Accepts either
+ * bare strings or {id} objects — profile.dietary.preferences is stored as
+ * the latter (see dietaryPreferenceIds elsewhere in this file), while the
+ * dietary_preferences table itself stores bare strings, so every call site
+ * needs this rather than assuming the caller already normalised.
+ */
+function normalizeDietIds(preferences) {
+  return (preferences || [])
+    .map((p) => (typeof p === 'string' ? p : p?.id))
+    .filter(Boolean);
+}
+
+/**
+ * Diet-preference counterpart to improvedAllergenCheck, for the same
+ * "final filter after generation" call sites.
+ */
+function violatesDietPreference(food, preferences) {
+  return detectDietViolation(food, normalizeDietIds(preferences)).violates;
+}
+
+/**
  * Derive the user's local hour from the timezone offset sent by the device.
  *
  * JS getTimezoneOffset() semantics (also used by the mobile app):
@@ -1039,6 +1058,26 @@ function validateRecommendation(rec, remainingBudget, allergies, dietaryPrefs, m
   }
   if (rec.dietCompliant !== undefined && typeof rec.dietCompliant !== 'boolean') {
     errors.push('dietCompliant must be boolean');
+  }
+
+  // 5️⃣ Diet compliance — actually checked, not trusted from the model.
+  // The `dietaryPrefs` param existed here unused; rec.dietCompliant is the
+  // LLM self-reporting on its own suggestion, which is prompt-obedience, not
+  // verification.
+  const dietIds = normalizeDietIds(dietaryPrefs);
+  if (dietIds.length > 0) {
+    // Pass the full rec, not just {name, carbs} — detectDietViolation also
+    // reads .keyIngredients, and a name like "Hearty Grain Bowl" alone won't
+    // reveal a non-compliant ingredient the model itself listed separately.
+    const dietCheck = detectDietViolation(rec, dietIds);
+    if (dietCheck.violates) {
+      errors.push(`Violates declared diet preference: ${dietCheck.violatedDiets.join(', ')}`);
+    } else {
+      // Item passed a real check — the client's dietCompliance badge should
+      // say so even if the model's own dietCompliant guess disagreed, rather
+      // than surfacing "Not in your preferences" on a food we just verified.
+      rec.dietCompliant = true;
+    }
   }
 
   // 6️⃣ Preference strength validation
@@ -1920,7 +1959,7 @@ function buildDeterministicRecommendationsFromCandidates(candidates, recType, me
         message: 'Screened against allergens and hidden allergen dishes',
         confidence: candidate.allergenRisk?.confidence ?? 0.95,
       },
-      reason: `${candidate.name} ranked highly for your current ${mealType} context and remaining nutrition budget.`,
+      reason: getDeterministicReason(candidate, mealType, remainingBudget),
       tips: 'Use the listed portion as the nutrition baseline and adjust only after logging the actual amount.',
       mealType,
       recType,
@@ -1990,8 +2029,10 @@ async function generateEnhancedRecommendations(
     );
   }
 
-  // Final allergen filter for fallback
-  return recommendations.filter(rec => !improvedAllergenCheck(rec, allergies));
+  // Final allergen + diet filter for fallback
+  return recommendations
+    .filter(rec => !improvedAllergenCheck(rec, allergies))
+    .filter(rec => !violatesDietPreference(rec, profile?.dietary?.preferences || []));
 }
 
 /**
@@ -2669,6 +2710,7 @@ router.post('/pairings', requireAuth(), async (req, res) => {
     ]);
 
     const allergies = Array.isArray(dietaryRow?.allergies) ? dietaryRow.allergies : [];
+    const diets = Array.isArray(dietaryRow?.preferences) ? dietaryRow.preferences : [];
 
     // What today still needs, after this meal.
     const gaps = {
@@ -2677,11 +2719,25 @@ router.post('/pairings', requireAuth(), async (req, res) => {
       calories: Math.max(num(goalsRow?.dailyCalories) - num(macros.consumedCalories_kcal) - num(macros.calories_kcal), 0),
     };
 
+    // scoreCandidate() (candidateGenerationService.js) reads nutritionalGaps
+    // as { calories: { remaining }, protein: { status }, fiber: { status } }
+    // — passing `gaps` directly (plain numbers) made every `.status`/
+    // `.remaining` read undefined, so this endpoint never got the
+    // protein/fiber gap-closing bonus and always fell back to a flat
+    // 2000kcal "remaining budget" regardless of this user's real goal.
+    // `gaps` itself stays plain numbers for the closesProtein/closesFiber
+    // math below, which already expects that shape.
+    const nutritionalGapsForScoring = {
+      calories: { remaining: gaps.calories },
+      protein: { status: gaps.protein > 0 ? 'low' : 'ok', remaining: gaps.protein },
+      fiber: { status: gaps.fiber > 0 ? 'low' : 'ok', remaining: gaps.fiber },
+    };
+
     const candidates = await generateCandidates(userId, {
       signals: {
         allergies,
         cuisinePreference: Array.isArray(profileRow?.cuisinePreference) ? profileRow.cuisinePreference[0] : null,
-        nutritionalGaps: gaps,
+        nutritionalGaps: nutritionalGapsForScoring,
         mealType,
       },
       profile: {
@@ -2699,7 +2755,20 @@ router.post('/pairings', requireAuth(), async (req, res) => {
     // risky foods, but this endpoint feeds a screen that shows food directly to
     // someone who told us what could hospitalise them — worth being certain
     // rather than trusting a single upstream filter.
-    const safe = candidates.filter((c) => !detectAllergenRisk(c.name || c.foodName || '', allergies).hasRisk);
+    //
+    // Diet-preference check added alongside it: generateCandidates has no
+    // diet awareness at all (confirmed — it screens neither excludedDiets
+    // nor declared preferences), and this route previously fetched
+    // dietaryRow.preferences without ever reading it. The mobile fallback
+    // (utils/pairingSelector.js's filterSafeCandidates) already checks diets
+    // — this endpoint, tried first whenever the backend is reachable, was
+    // the less-safe path despite being primary.
+    const safe = candidates.filter((c) => {
+      const name = c.name || c.foodName || '';
+      if (detectAllergenRisk(name, allergies).hasRisk) return false;
+      if (diets.length > 0 && detectDietViolation(c, diets).violates) return false;
+      return true;
+    });
 
     // Keep only things that actually close a gap this meal left open.
     const scored = safe

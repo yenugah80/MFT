@@ -7,7 +7,7 @@
  * The endpoint has four meaningful outcomes and this card handles all four
  * explicitly, because each needs a different thing from the user:
  *
- *   403 + OPENAI_CONSENT_REQUIRED  — the user has not agreed to AI processing
+ *   403 + openai_consent_required — the user has not agreed to AI processing
  *   insights: [] + message         — fewer than 7 sessions, nothing to analyse
  *   insights: [...]                — observations
  *   error                          — retry
@@ -28,8 +28,10 @@ import {
   SPACING,
   RADIUS,
   SHADOWS,
-  BRAND,
+  VIBRANT_WELLNESS,
 } from '../../constants/premiumTheme';
+
+const ACTIVITY_COLOR = VIBRANT_WELLNESS.activity.solid;
 
 const TYPE_ICON = {
   achievement: 'trophy-outline',
@@ -49,6 +51,7 @@ export default function SmartInsightsCard({
   error,
   onGenerate,
   onGiveConsent,
+  embedded = false,
 }) {
   const [hasAsked, setHasAsked] = useState(false);
 
@@ -62,7 +65,7 @@ export default function SmartInsightsCard({
     if (isLoading) {
       return (
         <View style={styles.centre}>
-          <ActivityIndicator size="small" color={BRAND.primary} />
+          <ActivityIndicator size="small" color={ACTIVITY_COLOR} />
           <Text style={styles.muted}>Reading your last 30 days…</Text>
         </View>
       );
@@ -72,7 +75,7 @@ export default function SmartInsightsCard({
       return (
         <>
           <Text style={styles.body}>
-            This sends your training patterns — sessions, timing and intensity — to
+            This sends your training patterns — workouts, timing and intensity — to
             OpenAI to be written up. It needs your consent first, and you can withdraw
             it at any time.
           </Text>
@@ -107,7 +110,7 @@ export default function SmartInsightsCard({
             <View style={[styles.fill, { width: `${Math.min((have / need) * 100, 100)}%` }]} />
           </View>
           <Text style={styles.muted}>
-            {have} of {need} sessions
+            {have} of {need} workouts
           </Text>
         </>
       );
@@ -121,7 +124,7 @@ export default function SmartInsightsCard({
               <Ionicons
                 name={TYPE_ICON[insight.type] || 'sparkles-outline'}
                 size={16}
-                color={BRAND.primary}
+                color={ACTIVITY_COLOR}
                 style={styles.insightIcon}
               />
               <View style={styles.insightBody}>
@@ -155,14 +158,14 @@ export default function SmartInsightsCard({
   };
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
+    <View style={[styles.card, embedded && styles.cardEmbedded]}>
+      {!embedded && <View style={styles.header}>
         <View style={styles.chip}>
-          <Ionicons name="sparkles" size={15} color={BRAND.primary} />
+          <Ionicons name="sparkles" size={15} color={ACTIVITY_COLOR} />
         </View>
         <Text style={styles.title}>Smart insights</Text>
         {!!insights?.length && <Text style={styles.meta}>{insights.length}</Text>}
-      </View>
+      </View>}
       {body()}
     </View>
   );
@@ -176,6 +179,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[3],
     ...SHADOWS.sm,
   },
+  cardEmbedded: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,7 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${BRAND.primary}18`,
+    backgroundColor: `${ACTIVITY_COLOR}18`,
   },
   title: {
     flex: 1,
@@ -228,7 +237,7 @@ const styles = StyleSheet.create({
   fill: {
     height: '100%',
     borderRadius: 3,
-    backgroundColor: BRAND.primary,
+    backgroundColor: ACTIVITY_COLOR,
   },
   insight: {
     flexDirection: 'row',
@@ -260,7 +269,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING[3],
     paddingVertical: SPACING[3],
     borderRadius: RADIUS.lg,
-    backgroundColor: BRAND.primary,
+    backgroundColor: ACTIVITY_COLOR,
   },
   primaryText: {
     fontSize: TYPOGRAPHY.size.sm,
@@ -275,6 +284,6 @@ const styles = StyleSheet.create({
   ghostText: {
     fontSize: TYPOGRAPHY.size.sm,
     fontFamily: TYPOGRAPHY.family.semibold,
-    color: BRAND.primary,
+    color: ACTIVITY_COLOR,
   },
 });

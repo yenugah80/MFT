@@ -20,7 +20,7 @@ module.exports = defineConfig([
   // every test file reports ~10-30 false-positive no-undef errors that bury
   // real ones in lint output.
   {
-    files: ['**/__tests__/**', '**/*.test.js', '**/*.test.jsx', '**/jest.setup.js'],
+    files: ['**/__tests__/**', '**/*.test.js', '**/*.test.jsx', '**/jest.setup.js', '**/jest.setup.components.js'],
     languageOptions: {
       globals: globals.jest,
     },

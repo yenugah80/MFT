@@ -108,8 +108,10 @@ async function getSyncState(userId, platform) {
         WHERE user_id = ${userId} AND platform = ${platform}
       `);
 
-      if (result.rows?.length > 0) {
-        state = result.rows[0];
+      // db.execute() returns the row array directly on this driver, not
+      // { rows: [...] } — see gamificationRewardService.js.
+      if (result.length > 0) {
+        state = result[0];
       } else {
         // Create initial sync state
         state = {
@@ -594,11 +596,17 @@ async function exportToHealthPlatform(userId, platform, startDate, endDate) {
       LIMIT ${CONFIG.SYNC_BATCH_SIZE}
     `);
 
-    if (!nutritionData.rows || nutritionData.rows.length === 0) {
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js. NOTE: this query
+    // itself is still broken independent of that — food_log has no
+    // logged_at (it's logged_date) or health_platform_synced /
+    // health_platform_synced_at columns at all. Flagged, not fixed here;
+    // needs an actual migration decision, not a rename.
+    if (!nutritionData || nutritionData.length === 0) {
       return results;
     }
 
-    for (const record of nutritionData.rows) {
+    for (const record of nutritionData) {
       // Convert to health platform format
       const healthRecords = convertNutritionToHealthFormat(record, platform);
 
@@ -693,7 +701,7 @@ async function findExistingHealthData(userId, data) {
         AND timestamp <= ${new Date(data.timestamp.getTime() + 60000).toISOString()}
       LIMIT 1
     `);
-    return result.rows?.[0] || null;
+    return result[0] || null;
   } catch (error) {
     console.error('[HealthPlatform] findExistingHealthData failed:', error);
     return null;
@@ -827,7 +835,7 @@ async function getHealthSummary(userId, date = new Date()) {
       sleep: {},
     };
 
-    for (const row of activityResult.rows || []) {
+    for (const row of activityResult || []) {
       summary.activity[row.data_type] = {
         total: parseFloat(row.total),
         average: parseFloat(row.average),
@@ -835,14 +843,14 @@ async function getHealthSummary(userId, date = new Date()) {
       };
     }
 
-    for (const row of bodyResult.rows || []) {
+    for (const row of bodyResult || []) {
       summary.body[row.data_type] = {
         value: parseFloat(row.value),
         timestamp: row.timestamp,
       };
     }
 
-    for (const row of sleepResult.rows || []) {
+    for (const row of sleepResult || []) {
       summary.sleep[row.data_type] = parseFloat(row.total);
     }
 
@@ -888,7 +896,7 @@ async function getHealthTrends(userId, dataType, days = 7) {
     const trends = {
       dataType,
       period: `${days} days`,
-      data: result.rows || [],
+      data: result || [],
     };
 
     // Calculate overall trend (linear regression simplified)

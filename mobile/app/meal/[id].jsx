@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
 
 import { getMealById } from '@/services/database';
+import { getMealTypeFromTime } from '@/utils/mealTypeFromTime';
 import {
   TEXT,
   BRAND,
@@ -28,6 +29,7 @@ import {
   TYPOGRAPHY,
   SURFACES,
 } from '@/constants/premiumTheme';
+import { DAILY_VALUES } from '@/constants/dailyValues';
 
 // Source icons and labels
 const SOURCE_CONFIG = {
@@ -62,17 +64,6 @@ const GRADE_CONFIG = {
  * Dinner: 6pm - 11:59pm (including late dinners)
  * Late night: 12am - 4:59am (treated as snack)
  */
-function detectMealType(timestamp) {
-  if (!timestamp) return 'snack';
-  const date = new Date(timestamp);
-  const hour = date.getHours();
-
-  if (hour >= 5 && hour < 11) return 'breakfast';
-  if (hour >= 11 && hour < 16) return 'lunch';
-  if (hour >= 18 || hour < 1) return 'dinner'; // 6pm-12:59am
-  return 'snack'; // 4-5:59pm or 1-4:59am
-}
-
 /**
  * Calculate meal health score (0-100)
  */
@@ -254,9 +245,21 @@ export default function MealDetailScreen() {
     return Math.round((macro / total) * 100);
   };
 
-  // Calculate scores on the fly (must be before early returns for hooks rules)
-  const healthScore = useMemo(() => meal ? calculateHealthScore(meal) : 50, [meal]);
-  const nutritionGrade = useMemo(() => meal ? calculateNutritionGrade(meal) : 'C', [meal]);
+  // Stage 8b: trust the score/grade already computed and stored at save
+  // time (same value shown on the post-log confirmation card and in
+  // history/index.jsx) instead of recomputing from a third, differently-
+  // weighted rubric — confirmed live this was producing a different score
+  // for the identical meal depending on which screen you viewed it from.
+  // Falls back to the local calculation only when a stored value is
+  // genuinely absent (older logs, or a local-only unsynced entry).
+  const healthScore = useMemo(() => {
+    if (meal?.healthScore > 0) return meal.healthScore;
+    return meal ? calculateHealthScore(meal) : 50;
+  }, [meal]);
+  const nutritionGrade = useMemo(() => {
+    if (meal?.nutriscore) return meal.nutriscore;
+    return meal ? calculateNutritionGrade(meal) : 'C';
+  }, [meal]);
 
   if (loading) {
     return (
@@ -289,8 +292,19 @@ export default function MealDetailScreen() {
   const netCarbs = Math.max(0, carbs - fiber);
 
   // Always detect meal type from timestamp (stored value may be incorrect)
-  const mealType = detectMealType(meal.timestamp);
+  const mealType = meal.timestamp ? getMealTypeFromTime(new Date(meal.timestamp)) : 'snack';
   const mealConfig = MEAL_TYPE_CONFIG[mealType] || MEAL_TYPE_CONFIG.snack;
+
+  // sourceMeta.confidenceTier is the same backend-computed signal
+  // (computeConfidenceTier in canonicalNutrition.js) already forwarded and
+  // saved per item at log time. 'high' means a record-based source (e.g.
+  // barcode/USDA match) with a non-estimated portion; 'low'/'medium' mean
+  // an AI-derived approximation. A record saved before this field existed
+  // has confidenceTier === undefined/null — show nothing rather than
+  // guessing either way, so an unlabeled older meal isn't misread as either
+  // "verified" or "estimated".
+  const confidenceTier = meal.sourceMeta?.confidenceTier ?? null;
+  const isEstimatedData = confidenceTier === 'low' || confidenceTier === 'medium';
 
   // Source info
   const source = meal.source || 'text';
@@ -408,7 +422,10 @@ export default function MealDetailScreen() {
 
         {/* Macros Overview */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Macro Breakdown</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Macro Breakdown</Text>
+            {isEstimatedData && <Text style={styles.sectionNote}>Estimated</Text>}
+          </View>
 
           {/* Macro Distribution Bar */}
           <View style={styles.macroBar}>
@@ -448,21 +465,23 @@ export default function MealDetailScreen() {
         {/* Micronutrients Section */}
         {meal.micros && Object.keys(meal.micros).length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Micronutrients</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Micronutrients</Text>
+              {isEstimatedData && <Text style={styles.sectionNote}>Estimated</Text>}
+            </View>
             <View style={styles.microList}>
               {Object.entries(meal.micros).slice(0, 8).map(([key, value]) => {
                 const amount = typeof value === 'object' ? value.value : value;
                 const unit = typeof value === 'object' ? value.unit : 'mg';
                 const displayAmount = Math.round(amount || 0);
 
-                // Daily values for common nutrients
-                const dailyValues = {
-                  calcium: 1300, iron: 18, magnesium: 420, potassium: 4700,
-                  sodium: 2300, zinc: 11, vitaminA: 900, vitaminC: 90,
-                  vitaminD: 20, vitaminB12: 2.4, folate: 400,
-                };
+                // Stage 8b: was a separate, smaller (11-entry) hardcoded
+                // table that could silently drift from the canonical one —
+                // now the same DAILY_VALUES MicrosGrid.jsx already uses
+                // correctly, so %DV can't disagree between screens.
                 const dvKey = key.toLowerCase().replace(/[_\s]/g, '');
-                const dv = dailyValues[dvKey] || dailyValues[key] || 100;
+                const dvEntry = DAILY_VALUES[dvKey] || DAILY_VALUES[key];
+                const dv = dvEntry?.value || 100;
                 const dvPercent = Math.min(100, Math.round((displayAmount / dv) * 100));
 
                 // Color based on percentage
@@ -735,6 +754,17 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weight.bold,
     fontFamily: TYPOGRAPHY.family.bold,
     color: TEXT.primary,
+    marginBottom: SPACING[4],
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionNote: {
+    fontSize: TYPOGRAPHY.size.xs,
+    fontFamily: TYPOGRAPHY.family.regular,
+    color: TEXT.muted,
     marginBottom: SPACING[4],
   },
 

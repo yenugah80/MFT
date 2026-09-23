@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -20,7 +20,7 @@ import {
   RADIUS,
   SEMANTIC,
 } from '../../constants/premiumTheme';
-import { useStressLog, STRESS_LEVELS } from '../../hooks/useStressLog';
+import { useStressLog, STRESS_LEVELS, STRESS_TRIGGERS } from '../../hooks/useStressLog';
 import StressLogger from '../StressLogger';
 
 // Stress color gradient
@@ -31,17 +31,8 @@ const STRESS_COLORS = [
 
 export default function StressSummaryCard({ compact = true }) {
   const router = useRouter();
-  const { todaySummary, isLoading } = useStressLog();
+  const { todaySummary, isTodayLoading } = useStressLog();
   const [showLogger, setShowLogger] = useState(false);
-
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!todaySummary?.avgLevel) {
-      setShowLogger(true);
-    } else {
-      router.push('/insights/stress-patterns');
-    }
-  };
 
   const handleLogStress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -54,8 +45,26 @@ export default function StressSummaryCard({ compact = true }) {
     return info || STRESS_LEVELS[4]; // Default to level 5
   };
 
+  // Loading state — never render the level-5 fallback as if it were a real check-in
+  if (isTodayLoading && !todaySummary?.avgLevel) {
+    return (
+      <View style={styles.card} accessibilityLabel="Stress summary loading">
+        <View style={styles.header}>
+          <View style={[styles.iconBg, { backgroundColor: `${SEMANTIC.warning.base}20` }]}>
+            <Ionicons name="pulse" size={24} color={SEMANTIC.warning.base} />
+          </View>
+          <ActivityIndicator size="small" color={SEMANTIC.warning.base} />
+        </View>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Stress</Text>
+          <Text style={styles.subtitle}>Loading…</Text>
+        </View>
+      </View>
+    );
+  }
+
   // No data state
-  if (!todaySummary?.avgLevel && !isLoading) {
+  if (!todaySummary?.avgLevel && !isTodayLoading) {
     return (
       <>
         <TouchableOpacity
@@ -67,13 +76,13 @@ export default function StressSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${SEMANTIC.warning.base}20` }]}>
               <Ionicons name="pulse" size={24} color={SEMANTIC.warning.base} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Stress</Text>
-              <Text style={styles.subtitle}>Check in</Text>
-            </View>
             <View style={styles.logButton}>
               <Ionicons name="add" size={20} color={SEMANTIC.warning.base} />
             </View>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Stress</Text>
+            <Text style={styles.subtitle}>Check in</Text>
           </View>
           <Text style={styles.emptyText}>
             Track stress to understand what helps you stay calm
@@ -87,8 +96,13 @@ export default function StressSummaryCard({ compact = true }) {
   const avgLevel = Math.round(todaySummary?.avgLevel || 5);
   const stressInfo = getStressInfo(avgLevel);
   const stressColor = STRESS_COLORS[avgLevel - 1] || STRESS_COLORS[4];
-  const checkInCount = todaySummary?.checkInCount || 0;
-  const topTrigger = todaySummary?.topTriggers?.[0];
+  const checkInCount = todaySummary?.count || 0;
+  // Backend returns triggers as a { key: count } map — pick the most frequent
+  const topTriggerKey = Object.entries(todaySummary?.triggers || {})
+    .sort((a, b) => b[1] - a[1])[0]?.[0];
+  const topTrigger = topTriggerKey
+    ? (STRESS_TRIGGERS.find(t => t.key === topTriggerKey)?.label || topTriggerKey)
+    : null;
 
   // Get status based on level
   const getStressStatus = () => {
@@ -111,15 +125,15 @@ export default function StressSummaryCard({ compact = true }) {
             <View style={[styles.iconBg, { backgroundColor: `${stressColor}20` }]}>
               <Ionicons name="pulse" size={24} color={stressColor} />
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Stress</Text>
-              <Text style={styles.subtitle}>
-                {checkInCount} check-in{checkInCount !== 1 ? 's' : ''} today
-              </Text>
-            </View>
             <TouchableOpacity onPress={handleLogStress} style={styles.logButton}>
               <Ionicons name="add" size={20} color={stressColor} />
             </TouchableOpacity>
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Stress</Text>
+            <Text style={styles.subtitle}>
+              {checkInCount} check-in{checkInCount !== 1 ? 's' : ''} today
+            </Text>
           </View>
 
           {/* Level Display */}
@@ -140,8 +154,13 @@ export default function StressSummaryCard({ compact = true }) {
               <Text style={[styles.statusText, { color: stressColor }]}>{stressStatus.text}</Text>
             </View>
             {topTrigger && (
-              <Text style={styles.triggerText}>
-                Top trigger: {topTrigger}
+              <Text
+                style={styles.triggerText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                accessibilityLabel={`Top trigger: ${topTrigger}`}
+              >
+                {topTrigger}
               </Text>
             )}
           </View>
@@ -149,24 +168,40 @@ export default function StressSummaryCard({ compact = true }) {
           {/* Action Buttons */}
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
-              style={[styles.actionButton, { borderColor: `${stressColor}20` }]}
+              style={[
+                styles.actionButton,
+                styles.secondaryActionButton,
+                { backgroundColor: `${stressColor}0A`, borderColor: `${stressColor}28` },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/history/stress');
+              }}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open stress history"
+              accessibilityHint="Shows your previous stress check-ins"
+            >
+              <Ionicons name="time-outline" size={14} color={stressColor} />
+              <Text style={[styles.actionButtonText, { color: stressColor }]} numberOfLines={1}>History</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.primaryActionButton,
+                { backgroundColor: stressColor, borderColor: stressColor, shadowColor: stressColor },
+              ]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push('/insights/stress-patterns');
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Open stress insights"
+              accessibilityHint="Shows trends and patterns from your stress check-ins"
             >
-              <Ionicons name="analytics-outline" size={14} color={stressColor} />
-              <Text style={styles.actionButtonText}>Insights</Text>
-              <Ionicons name="chevron-forward" size={12} color={TEXT.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { borderColor: `${stressColor}20` }]}
-              onPress={handleLogStress}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add-circle-outline" size={14} color={stressColor} />
-              <Text style={styles.actionButtonText}>Log</Text>
+              <Ionicons name="analytics" size={14} color={TEXT.primary} />
+              <Text style={styles.actionButtonText} numberOfLines={1}>Insights</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -180,16 +215,21 @@ export default function StressSummaryCard({ compact = true }) {
 
 const styles = StyleSheet.create({
   card: {
+    // Fills its grid cell so the Sleep and Stress cards are the same height
+    // regardless of which state each is in.
+    flex: 1,
     backgroundColor: SURFACES.card.primary,
     borderRadius: RADIUS.lg,
     padding: SPACING[4],
     ...SHADOWS.sm,
   },
+  // Icon and action only — see SleepSummaryCard. At half width the title had
+  // roughly 39pt beside these controls and broke "Stress" mid-word.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING[3],
-    marginBottom: SPACING[3],
+    justifyContent: 'space-between',
+    marginBottom: SPACING[2],
   },
   iconBg: {
     width: 44,
@@ -199,7 +239,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerText: {
-    flex: 1,
+    marginBottom: SPACING[3],
   },
   title: {
     fontSize: TYPOGRAPHY.size.base,
@@ -265,10 +305,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 4,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: SPACING[1],
     paddingVertical: SPACING[1],
     paddingHorizontal: SPACING[2],
@@ -280,13 +322,15 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.family.semibold,
   },
   triggerText: {
+    flex: 1,
     fontSize: TYPOGRAPHY.size.xs,
     color: TEXT.tertiary,
+    textAlign: 'right',
   },
   // Action Buttons
   actionButtonsRow: {
     flexDirection: 'row',
-    gap: SPACING[2],
+    gap: 6,
     marginTop: SPACING[3],
   },
   actionButton: {
@@ -294,15 +338,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING[1],
-    backgroundColor: SURFACES.background.secondary,
+    gap: 4,
+    minHeight: 44,
     paddingVertical: SPACING[2],
-    paddingHorizontal: SPACING[2],
-    borderRadius: RADIUS.md,
+    paddingHorizontal: 6,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
   },
+  secondaryActionButton: {
+    backgroundColor: SURFACES.background.secondary,
+  },
+  primaryActionButton: {
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   actionButtonText: {
-    flex: 1,
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: TYPOGRAPHY.size.xs,
     fontWeight: TYPOGRAPHY.weight.semibold,
     fontFamily: TYPOGRAPHY.family.semibold,

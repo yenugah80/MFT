@@ -1,5 +1,5 @@
 // Existing imports already include text, integer, timestamp, etc.
-import { pgTable, serial, text, timestamp, integer, uniqueIndex, decimal, json, jsonb, boolean, index, check, unique, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, bigint, uniqueIndex, decimal, json, jsonb, boolean, index, check, unique, date } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // User profiles table - stores personal information
@@ -52,9 +52,9 @@ export const accountSettingsTable = pgTable(
       .notNull()
       .unique()
       .references(() => profilesTable.userId, { onDelete: "cascade" }),
-    privacy: json("privacy").default({}),
-    notifications: json("notifications").default({}),
-    preferences: json("preferences").default({}),
+    privacy: jsonb("privacy").default({}),
+    notifications: jsonb("notifications").default({}),
+    preferences: jsonb("preferences").default({}),
     // Push notification token from Expo
     expoPushToken: text("expo_push_token"),
     pushTokenUpdatedAt: timestamp("push_token_updated_at"),
@@ -65,6 +65,44 @@ export const accountSettingsTable = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   }
+);
+
+// Append-only record of purpose-specific privacy choices. Current state remains
+// in account_settings for fast reads, while this table preserves when a person
+// granted or revoked each purpose for export, support, and compliance review.
+export const privacyConsentAuditTable = pgTable(
+  "privacy_consent_audit",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    purposeKey: text("purpose_key").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    previousState: boolean("previous_state").notNull(),
+    newState: boolean("new_state").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    sourceScreen: text("source_screen").notNull().default("unknown"),
+    devicePlatform: text("device_platform").notNull().default("unknown"),
+    changedAt: timestamp("changed_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (table) => ({
+    userChangedAtIndex: index("privacy_consent_audit_user_changed_at_idx")
+      .on(table.userId, table.changedAt),
+    purposeCheck: check(
+      "privacy_consent_audit_purpose_check",
+      sql`${table.purposeKey} IN ('usageAnalytics', 'crossDomainInsights', 'contextInInsights', 'reflectionInInsights', 'sensitiveInsights', 'aiWellnessNarration', 'weeklyReviewReminder')`
+    ),
+    platformCheck: check(
+      "privacy_consent_audit_platform_check",
+      sql`${table.devicePlatform} IN ('ios', 'android', 'web', 'unknown')`
+    ),
+    stateChangedCheck: check(
+      "privacy_consent_audit_state_changed_check",
+      sql`${table.previousState} <> ${table.newState}`
+    ),
+  })
 );
 
 // Dietary preferences table
@@ -161,6 +199,30 @@ export const gamificationTable = pgTable(
     previousStreakCheck: check("previous_streak_check", sql`${table.previousStreak} >= 0`),
     streakFreezesCheck: check("streak_freezes_check", sql`${table.streakFreezes} >= 0`),
     totalMealsCheck: check("total_meals_check", sql`${table.totalMealsLogged} >= 0`),
+  })
+);
+
+// Audit trail for gamification.streak writes — added after two production
+// incidents where the streak was silently overwritten by buggy code and the
+// only way to reconstruct what happened was live reasoning + manual queries.
+// Written by updateStreak() (the single source of truth for streak changes)
+// in gamificationRewardService.js.
+export const gamificationAuditLogTable = pgTable(
+  "gamification_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profilesTable.userId, { onDelete: "cascade" }),
+    changedAt: timestamp("changed_at").defaultNow().notNull(),
+    source: text("source").notNull(),
+    oldValues: jsonb("old_values"),
+    newValues: jsonb("new_values"),
+    callSite: text("call_site"),
+  },
+  (table) => ({
+    userIdIdx: index("gamification_audit_log_user_id_idx").on(table.userId),
+    changedAtIdx: index("gamification_audit_log_changed_at_idx").on(table.changedAt),
   })
 );
 
@@ -1010,9 +1072,13 @@ export const recommendationArmsTable = pgTable(
     alpha: decimal("alpha", { precision: 10, scale: 4 }).notNull().default("1.0"), // Successes + prior
     beta: decimal("beta", { precision: 10, scale: 4 }).notNull().default("1.0"),   // Failures + prior
 
-    // Trial counts
-    trials: integer("trials").default(0),
-    successes: integer("successes").default(0),
+    // Trial counts. NOT NULL matches the live column (and matches reality —
+    // these are counters compared and summed in Thompson Sampling arithmetic,
+    // where a NULL would corrupt the calculation rather than mean anything
+    // valid). schema.js previously under-declared this; the database was
+    // already correct.
+    trials: integer("trials").notNull().default(0),
+    successes: integer("successes").notNull().default(0),
 
     // Temporal tracking
     lastUpdated: timestamp("last_updated").defaultNow(),
@@ -1301,8 +1367,12 @@ export const activityLogTable = pgTable(
     exerciseId: text("exercise_id"),
     exerciseName: text("exercise_name"),
 
-    // Idempotency support
-    clientEventId: text("client_event_id").notNull().default(sql`gen_random_uuid()`),
+    // Idempotency support. Nullable, no default — matches the real column
+    // (migration 0031). The route inserts `clientEventId || null` for any
+    // client that doesn't send one; a NOT NULL + generated default here
+    // never reflected production and would break exactly that insert the
+    // moment this schema were ever pushed for real.
+    clientEventId: text("client_event_id"),
 
     // Timezone normalization
     dayKey: text("day_key"), // YYYY-MM-DD at log time
@@ -1318,7 +1388,8 @@ export const activityLogTable = pgTable(
     userDayKeyIdx: index("activity_log_user_day_key_idx").on(table.userId, table.dayKey),
     userTypeIdx: index("activity_log_user_type_idx").on(table.userId, table.type),
     userExerciseIdx: index("activity_log_user_exercise_idx").on(table.userId, table.exerciseId),
-    // Unique constraint for idempotency
+    // Unique constraint for idempotency. Postgres treats each NULL as distinct,
+    // so rows with no clientEventId never collide against each other or the DB.
     userClientEventIdUnique: unique("activity_log_user_client_event_id_unique").on(table.userId, table.clientEventId),
     // CHECK constraints
     durationCheck: check("activity_duration_check", sql`${table.durationMinutes} > 0 AND ${table.durationMinutes} <= 1440`),
@@ -1767,6 +1838,107 @@ export const pendingCheckInsTable = pgTable(
 );
 
 // ============================================================================
+// DEVICE REGISTRY & PER-DEVICE NOTIFICATION OWNERSHIP
+//
+// Additive, backward-compatible per-device model. accountSettingsTable still
+// holds exactly one fcmToken/expoPushToken per account for old app builds
+// that have never called /profile/devices/register — that legacy column is
+// intentionally left untouched. A user is resolved as EITHER all-legacy
+// (zero rows here) or all-per-device (>=1 row here); see deviceRegistry.js.
+// ============================================================================
+
+export const devicesTable = pgTable(
+  "devices",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
+    // Client-generated stable UUID, persisted once per install (SecureStore).
+    // Not itself unique across accounts by design — the same physical
+    // device switching accounts (sign-out, sign-in as someone else) produces
+    // a second row keyed by the same deviceId under the new userId, keeping
+    // ownership/tokens fully isolated per account.
+    deviceId: text("device_id").notNull(),
+    platform: text("platform"), // 'ios' | 'android'
+    fcmToken: text("fcm_token"),
+    fcmTokenUpdatedAt: timestamp("fcm_token_updated_at"),
+    expoPushToken: text("expo_push_token"),
+    expoPushTokenUpdatedAt: timestamp("expo_push_token_updated_at"),
+    lastSeenAt: timestamp("last_seen_at").defaultNow(),
+    // Narrow, single-purpose credential for cleaning up this exact device
+    // row AFTER the account session that created it is gone — the whole
+    // reason it exists is that a normal deregistration call needs a valid
+    // Clerk session, and offline-at-sign-out means that session is torn
+    // down before the retry can ever succeed. Deliberately NOT a cached
+    // account session or API key: this token authorizes exactly one action
+    // (delete THIS row) via exact-match lookup, nothing else — it can't
+    // read any data, can't act as the user anywhere else, expires, and is
+    // consumed on first successful use. Issued while online+authenticated
+    // (mobile/services/fcmService.js, on every successful token
+    // registration) and cached client-side for later use with no session
+    // at all — see routes/deviceDeregistration.js, the one endpoint that
+    // accepts it without requireAuth().
+    deregisterToken: text("deregister_token").unique(),
+    deregisterTokenExpiresAt: timestamp("deregister_token_expires_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userDeviceUnique: unique("devices_user_device_unique").on(table.userId, table.deviceId),
+    userIdIdx: index("devices_user_id_idx").on(table.userId),
+  })
+);
+
+// Per-device, per-category delivery ownership. A row with owner='local'
+// means the device's own repeating expo-notifications schedule is the sole
+// intended source for that category — the backend reminder job must not
+// also send it there. Absence of a row (the default) means the backend
+// owns delivery, exactly like every device did before this table existed.
+export const notificationOwnershipTable = pgTable(
+  "notification_ownership",
+  {
+    id: serial("id").primaryKey(),
+    deviceId: integer("device_id").notNull().references(() => devicesTable.id, { onDelete: "cascade" }),
+    category: text("category").notNull(), // 'hydration_nudge' | 'daily_reminder' | 'mood_checkin' | 'activity_reminder'
+    owner: text("owner").notNull().default("backend"), // 'local' | 'backend'
+    registeredAt: timestamp("registered_at").defaultNow(),
+  },
+  (table) => ({
+    deviceCategoryUnique: unique("notification_ownership_device_category_unique").on(table.deviceId, table.category),
+  })
+);
+
+// Atomic, single-owner-per-token model — see migration 0055 for the full
+// rationale. accountSettingsTable.fcmToken/expoPushToken and devicesTable's
+// per-device columns remain per-account bookkeeping; this table is the
+// authoritative, race-free answer to which account should actually receive
+// a push to a given token right now. The UNIQUE constraint on token is what
+// makes "two accounts both own this token" structurally impossible — reads
+// and writes against it go through utils/pushTokenOwnership.js's
+// claimTokenOwnership, never a plain insert/update here.
+export const pushTokenOwnershipTable = pgTable(
+  "push_token_ownership",
+  {
+    id: serial("id").primaryKey(),
+    token: text("token").notNull(),
+    tokenType: text("token_type").notNull(), // 'fcm' | 'expo'
+    userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
+    deviceId: text("device_id"),
+    // Clerk JWT `iat` (unix seconds) of the request that won this claim.
+    issuedAt: bigint("issued_at", { mode: "number" }).notNull(),
+    claimedAt: timestamp("claimed_at").notNull().defaultNow(),
+    // NULL = actively claimed. Non-null = explicitly released — distinct
+    // from no row existing at all (never claimed, treated permissively for
+    // pre-migration legacy tokens). See migration 0055.
+    releasedAt: timestamp("released_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    tokenUnique: unique("push_token_ownership_token_unique").on(table.token),
+    userIdIdx: index("push_token_ownership_user_id_idx").on(table.userId),
+  })
+);
+
+// ============================================================================
 // NOTIFICATION DELIVERY & TRACKING TABLES
 // Added for smart reminder system with snooze/dismiss persistence
 // ============================================================================
@@ -1777,6 +1949,11 @@ export const notificationDeliveryLogTable = pgTable(
   {
     id: serial("id").primaryKey(),
     userId: text("user_id").notNull().references(() => profilesTable.userId, { onDelete: "cascade" }),
+    // Which device this was sent to, when sent via the per-device path.
+    // NULL for legacy single-token sends and for account-wide broadcasts
+    // (goal-achieved/insight-drop fan-out) — those keep today's userId-only
+    // ack ownership check; see acknowledgeDelivery in deliveryAck.js.
+    deviceId: integer("device_id").references(() => devicesTable.id, { onDelete: "set null" }),
     notificationType: text("notification_type").notNull(),
     title: text("title").notNull(),
     body: text("body"),
@@ -1786,6 +1963,17 @@ export const notificationDeliveryLogTable = pgTable(
     errorMessage: text("error_message"),
     clickedAt: timestamp("clicked_at"),
     screenNavigated: text("screen_navigated"),
+    // Unique per send, embedded in the push's own data payload so the
+    // receiving device can acknowledge THIS specific message rather than
+    // merely "some push arrived within a time window" — a timestamp-only
+    // correlation can't tell two different sends close together apart, and
+    // can't validate that the acker actually owns this delivery.
+    deliveryId: text("delivery_id").unique(),
+    // Set only on the first ack for this row (see acknowledgePushReceived) —
+    // NOT the same as deliveryStatus='sent', which only means Firebase/APNs
+    // accepted the request. This is the actual "the device's JS runtime
+    // processed this specific push" confirmation.
+    ackedAt: timestamp("acked_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({

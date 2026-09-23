@@ -8,6 +8,30 @@
  * - Model retraining triggers
  * - User preference learning
  * - Collaborative filtering signals
+ *
+ * STATUS (2026-08): most of this file cannot actually run. Six tables it
+ * depends on were never created by any migration — feedback_signals,
+ * view_engagement, implicit_signals, retraining_queue,
+ * user_learned_preferences, and (separately) ab_test_metrics-adjacent
+ * feedback table `feedback`. Every function that touches those throws
+ * "relation does not exist" today:
+ *   recordExplicitFeedback, recordImplicitSignal, recordViewEngagement,
+ *   calculateRecommendationQuality, learnUserPreferences,
+ *   checkRetrainingTrigger, getUserFeedbackAnalytics,
+ *   getGlobalFeedbackTrends, getSavedItems.
+ * This is not the execute()/rows bug fixed elsewhere in this file (that
+ * fix is still correct and applied throughout) — it's missing schema, a
+ * real design decision (retention, indexing, whether this subsystem is
+ * still wanted) that shouldn't be made by silently adding six tables here.
+ *
+ * No exported function currently completes successfully — even
+ * updateThompsonSamplingArms and updateRecommendationFeedback, which only
+ * touch tables that DO exist (recommendations_history, insight_feedback,
+ * recommendation_arms), are unreachable in practice: recordExplicitFeedback
+ * calls them only after its own feedback_signals INSERT, which throws
+ * first (verified against production). They'd work correctly on their own
+ * if called directly, or once feedback_signals exists — that's the
+ * narrower remaining gap, not a rewrite.
  */
 
 import { db } from '../config/db.js';
@@ -288,11 +312,13 @@ export async function calculateRecommendationQuality(recommendationId) {
     GROUP BY e.avg_engagement, e.view_count
   `);
 
-  if (result.rows.length === 0) {
+  // db.execute() returns the row array directly on this driver, not
+  // { rows: [...] } — see gamificationRewardService.js.
+  if (result.length === 0) {
     return { quality_score: 0.5, confidence: 0 }; // Default neutral
   }
 
-  const { feedback_score, avg_engagement, view_count } = result.rows[0];
+  const { feedback_score, avg_engagement, view_count } = result[0];
 
   // Combine feedback and engagement
   const feedbackComponent = Math.tanh(feedback_score / 10) * 0.5 + 0.5; // Normalize to 0-1
@@ -342,7 +368,7 @@ export async function learnUserPreferences(userId) {
     LIMIT 100
   `);
 
-  if (feedback.rows.length < 10) {
+  if (feedback.length < 10) {
     return { learned: false, reason: 'insufficient_data' };
   }
 
@@ -355,7 +381,7 @@ export async function learnUserPreferences(userId) {
     dismiss_patterns: {},
   };
 
-  for (const row of feedback.rows) {
+  for (const row of feedback) {
     const isPositive = [FeedbackTypes.LIKE, FeedbackTypes.SAVE, FeedbackTypes.COMPLETE].includes(row.feedback_type);
     const isNegative = [FeedbackTypes.DISLIKE, FeedbackTypes.DISMISS].includes(row.feedback_type);
 
@@ -415,20 +441,20 @@ export async function learnUserPreferences(userId) {
       user_id, preference_type, preference_data, confidence, updated_at
     ) VALUES (
       ${userId}, 'recommendation_preferences', ${JSON.stringify(preferenceScores)},
-      ${Math.min(feedback.rows.length / 50, 1)}, NOW()
+      ${Math.min(feedback.length / 50, 1)}, NOW()
     )
     ON CONFLICT (user_id, preference_type)
     DO UPDATE SET
       preference_data = ${JSON.stringify(preferenceScores)},
-      confidence = ${Math.min(feedback.rows.length / 50, 1)},
+      confidence = ${Math.min(feedback.length / 50, 1)},
       updated_at = NOW()
   `);
 
   return {
     learned: true,
     preference_scores: preferenceScores,
-    sample_size: feedback.rows.length,
-    confidence: Math.min(feedback.rows.length / 50, 1),
+    sample_size: feedback.length,
+    confidence: Math.min(feedback.length / 50, 1),
   };
 }
 
@@ -448,9 +474,9 @@ async function updateThompsonSamplingArms(userId, recommendationId, feedbackType
       WHERE recommendation_id = ${recommendationId}
     `);
 
-    if (rec.rows.length === 0) return;
+    if (rec.length === 0) return;
 
-    const { recommendation_type, meal_type } = rec.rows[0];
+    const { recommendation_type, meal_type } = rec[0];
     const armKey = `${recommendation_type}:${meal_type || 'any'}`;
 
     // Determine success/failure
@@ -501,7 +527,7 @@ async function checkRetrainingTrigger(userId, itemType) {
       AND created_at > NOW() - INTERVAL '24 hours'
   `);
 
-  const { total, negative } = result.rows[0];
+  const { total, negative } = result[0];
 
   // Trigger retraining if negative ratio is high
   if (total >= 10 && negative / total > 0.4) {
@@ -624,7 +650,7 @@ export async function getUserFeedbackAnalytics(userId, days = 30) {
   return {
     user_id: userId,
     period_days: days,
-    feedback_breakdown: result.rows,
+    feedback_breakdown: result,
   };
 }
 
@@ -647,7 +673,7 @@ export async function getGlobalFeedbackTrends(days = 7) {
 
   return {
     period_days: days,
-    trends: result.rows,
+    trends: result,
   };
 }
 
@@ -678,8 +704,8 @@ export async function getSavedItems(userId, itemType = null, limit = 50) {
 
   return {
     user_id: userId,
-    saved_items: result.rows,
-    count: result.rows.length,
+    saved_items: result,
+    count: result.length,
   };
 }
 

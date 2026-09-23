@@ -32,6 +32,7 @@ import {
   stressLogTable,
 } from '../db/schema.js';
 import { eq, and, gte, desc, sql } from 'drizzle-orm';
+import { getDayKey, getLocalWeekRange } from '../utils/timezone.js';
 
 // Import ML component services
 import {
@@ -70,6 +71,15 @@ const DATA_THRESHOLDS = {
   // Validation requirements (lowered from 3 to 2)
   MIN_EVIDENCE_COUNT: 2,
 };
+
+// Domain insight generators intentionally use a stable rolling evidence
+// window. This is returned with every response so clients never imply these
+// observations are scoped by a separate Day/Week/Month display filter.
+export const DOMAIN_INSIGHT_WINDOW = Object.freeze({
+  type: 'rolling',
+  days: 14,
+  correlationDays: [7, 14],
+});
 
 // Decision types with their priorities
 const DECISION_PRIORITY = {
@@ -487,6 +497,7 @@ export async function generateMoodInsights(userId) {
     if (moodData.moodLogs.length < 3) {
       return {
         success: true,
+        window: DOMAIN_INSIGHT_WINDOW,
         hasEnoughData: false,
         message: 'Log more mood entries to see patterns',
         dataStatus: {
@@ -499,10 +510,12 @@ export async function generateMoodInsights(userId) {
       };
     }
 
-    // Step 3: Generate mood profile using existing mood engine
-    const moodProfile = await generateMoodProfile(userId, {
-      windowDays: 14,
-    });
+    // Step 3: Generate mood profile using existing mood engine.
+    // buildMoodProfile(userId) only takes one argument (it uses its own
+    // hardcoded 30/7-day windows internally) — the windowDays option here
+    // was silently ignored either way, so it's dropped rather than left
+    // implying a configurability that doesn't exist.
+    const moodProfile = await generateMoodProfile(userId);
 
     // Step 4: Get mood-specific correlations
     let moodCorrelations = [];
@@ -522,8 +535,12 @@ export async function generateMoodInsights(userId) {
     // Step 6: Generate mood-specific insights (patterns)
     const patterns = generateMoodPatterns(moodData, moodStats, moodCorrelations);
 
-    // Step 7: Get mood recommendations
-    const recommendations = await generateMoodRecommendations(userId, moodProfile);
+    // Step 7: Get mood recommendations. generateMoodRecommendations(profile)
+    // takes ONE argument — passing userId first shifted moodProfile into an
+    // unused second slot, so `profile` inside was a string with no
+    // .foodMoodCorrelations, and getFoodMoodRecommendations's
+    // correlations.find() threw on every call to this endpoint.
+    const recommendations = await generateMoodRecommendations(moodProfile);
 
     // Step 8: Get trend data (7-day)
     const trendData = generateMoodTrendData(moodData.moodLogs);
@@ -535,6 +552,7 @@ export async function generateMoodInsights(userId) {
 
     return {
       success: true,
+      window: DOMAIN_INSIGHT_WINDOW,
       hasEnoughData: true,
       processingTimeMs: processingTime,
 
@@ -648,6 +666,7 @@ export async function generateNutritionInsights(userId) {
     if (nutritionData.foodLogs.length < 5) {
       return {
         success: true,
+        window: DOMAIN_INSIGHT_WINDOW,
         hasEnoughData: false,
         message: 'Log more meals to see nutrition patterns',
         dataStatus: {
@@ -691,6 +710,7 @@ export async function generateNutritionInsights(userId) {
 
     return {
       success: true,
+      window: DOMAIN_INSIGHT_WINDOW,
       hasEnoughData: true,
       processingTimeMs: processingTime,
 
@@ -777,19 +797,20 @@ export async function generateNutritionInsights(userId) {
  * @param {string} userId - User ID
  * @returns {Promise<object>} Hydration insights with patterns and recommendations
  */
-export async function generateHydrationInsights(userId) {
+export async function generateHydrationInsights(userId, offsetMinutes = 0) {
   const startTime = Date.now();
 
   try {
     console.log(`[DecisionBrain] Generating hydration insights for user: ${userId}`);
 
     // Step 1: Gather hydration-specific data
-    const hydrationData = await gatherHydrationData(userId);
+    const hydrationData = await gatherHydrationData(userId, offsetMinutes);
 
     // Step 2: Check data sufficiency
     if (hydrationData.waterLogs.length < 3) {
       return {
         success: true,
+        window: DOMAIN_INSIGHT_WINDOW,
         hasEnoughData: false,
         message: 'Log more water intake to see hydration patterns',
         dataStatus: {
@@ -815,7 +836,11 @@ export async function generateHydrationInsights(userId) {
     }
 
     // Step 4: Calculate hydration statistics
-    const hydrationStats = calculateHydrationStats(hydrationData.waterLogs, hydrationData.goal);
+    const hydrationStats = calculateHydrationStats(
+      hydrationData.waterLogs,
+      hydrationData.goal,
+      offsetMinutes
+    );
 
     // Step 5: Generate hydration patterns
     const patterns = generateHydrationPatterns(hydrationData, hydrationStats, hydrationCorrelations);
@@ -824,7 +849,7 @@ export async function generateHydrationInsights(userId) {
     const recommendations = generateHydrationRecommendations(hydrationStats, hydrationData);
 
     // Step 7: Get trend data
-    const trendData = generateHydrationTrendData(hydrationData.waterLogs);
+    const trendData = generateHydrationTrendData(hydrationData.waterLogs, offsetMinutes);
 
     // Step 8: Decision logic
     const decision = makeHydrationDecision(hydrationStats, hydrationCorrelations, hydrationData);
@@ -833,6 +858,7 @@ export async function generateHydrationInsights(userId) {
 
     return {
       success: true,
+      window: DOMAIN_INSIGHT_WINDOW,
       hasEnoughData: true,
       processingTimeMs: processingTime,
 
@@ -853,6 +879,7 @@ export async function generateHydrationInsights(userId) {
         isConsistent: hydrationStats.isConsistent,
         streak: hydrationData.streak,
         todayProgress: hydrationStats.todayProgress,
+        todayDayKey: hydrationStats.todayDayKey,
       },
 
       trendData,
@@ -915,19 +942,20 @@ export async function generateHydrationInsights(userId) {
  * @param {string} userId - User ID
  * @returns {Promise<object>} Activity insights with patterns and recommendations
  */
-export async function generateActivityInsights(userId) {
+export async function generateActivityInsights(userId, offsetMinutes = 0) {
   const startTime = Date.now();
 
   try {
     console.log(`[DecisionBrain] Generating activity insights for user: ${userId}`);
 
     // Step 1: Gather activity-specific data
-    const activityData = await gatherActivityData(userId);
+    const activityData = await gatherActivityData(userId, offsetMinutes);
 
     // Step 2: Check data sufficiency
     if (activityData.activityLogs.length < 3) {
       return {
         success: true,
+        window: DOMAIN_INSIGHT_WINDOW,
         hasEnoughData: false,
         message: 'Log more activities to see fitness patterns',
         dataStatus: {
@@ -953,7 +981,7 @@ export async function generateActivityInsights(userId) {
     }
 
     // Step 4: Calculate activity statistics
-    const activityStats = calculateActivityStats(activityData.activityLogs, activityData.moodLogs);
+    const activityStats = calculateActivityStats(activityData.activityLogs, activityData.moodLogs, offsetMinutes);
 
     // Step 5: Generate activity patterns
     const patterns = generateActivityPatterns(activityData, activityStats, activityCorrelations);
@@ -971,6 +999,7 @@ export async function generateActivityInsights(userId) {
 
     return {
       success: true,
+      window: DOMAIN_INSIGHT_WINDOW,
       hasEnoughData: true,
       processingTimeMs: processingTime,
 
@@ -1382,7 +1411,31 @@ function generateRecommendationMessage(decision, lifecycleStage, domain) {
  * ============================================================================
  */
 
-function calculateMoodStats(moodLogs) {
+const MOOD_VALENCE = {
+  happy: 1,
+  calm: 1,
+  focused: 1,
+  energized: 1,
+  neutral: 0,
+  tired: -0.5,
+  stressed: -1,
+  sad: -1,
+};
+
+/**
+ * Convert category + intensity into a wellbeing-oriented score. Intensity is
+ * raw emotional strength: stressed 9/10 must not be interpreted as wellbeing
+ * 9/10. This mirrors mobile/utils/moodAggregation.js so dashboard and server
+ * narratives use the same semantics.
+ */
+export function moodWellbeingScore(mood, intensity) {
+  const boundedIntensity = Math.min(10, Math.max(1, Number(intensity ?? 5)));
+  const valence = MOOD_VALENCE[String(mood || 'neutral').toLowerCase()] ?? 0;
+  if (valence === 0) return 5;
+  return valence > 0 ? boundedIntensity : 11 - boundedIntensity;
+}
+
+export function calculateMoodStats(moodLogs) {
   if (!moodLogs || moodLogs.length === 0) {
     return {
       avgMood: 0,
@@ -1411,12 +1464,15 @@ function calculateMoodStats(moodLogs) {
 
   // Calculate daily averages
   const dailyAvgs = Object.entries(byDay).map(([date, logs]) => {
-    const avgIntensity = logs.reduce((sum, l) => sum + (l.intensity || 5), 0) / logs.length;
-    return { date, intensity: avgIntensity };
+    const avgWellbeing = logs.reduce(
+      (sum, log) => sum + moodWellbeingScore(log.mood, log.intensity),
+      0
+    ) / logs.length;
+    return { date, intensity: avgWellbeing };
   }).sort((a, b) => a.date.localeCompare(b.date));
 
   // Overall averages
-  const intensities = moodLogs.map(m => m.intensity || 5);
+  const intensities = moodLogs.map((log) => moodWellbeingScore(log.mood, log.intensity));
   const energies = moodLogs.map(m => m.energyLevel || 5);
 
   const avgMood = intensities.reduce((a, b) => a + b, 0) / intensities.length;
@@ -1468,7 +1524,7 @@ function calculateMoodStats(moodLogs) {
   };
 }
 
-function generateMoodTrendData(moodLogs) {
+export function generateMoodTrendData(moodLogs) {
   // Generate 7-day trend data
   const now = new Date();
   const trendData = [];
@@ -1487,7 +1543,7 @@ function generateMoodTrendData(moodLogs) {
 
     const hasData = dayLogs.length > 0;
     const avgIntensity = hasData
-      ? dayLogs.reduce((sum, l) => sum + (l.intensity || 5), 0) / dayLogs.length
+      ? dayLogs.reduce((sum, log) => sum + moodWellbeingScore(log.mood, log.intensity), 0) / dayLogs.length
       : 0;
 
     trendData.push({
@@ -1633,7 +1689,7 @@ function generateMoodPatterns(moodData, moodStats, correlations) {
  * - Filter out patterns with insufficient occurrences (<7)
  * - Filter out low confidence patterns (<0.6)
  */
-function filterAndDeduplicateCorrelations(correlations, minOccurrences = 7, minConfidence = 0.6) {
+export function filterAndDeduplicateCorrelations(correlations, minOccurrences = 7, minConfidence = 0.6) {
   if (!correlations || !Array.isArray(correlations)) return [];
 
   // First filter by minimum thresholds
@@ -1847,7 +1903,7 @@ function categorizePattern(ruleName) {
   return 'general';
 }
 
-function formatCorrelationTitle(ruleName) {
+export function formatCorrelationTitle(ruleName) {
   if (!ruleName) return 'Pattern detected';
 
   const titleMap = {
@@ -1909,7 +1965,7 @@ function getIconForCorrelation(ruleName) {
  *
  * Returns null if insufficient data - UI handles empty states
  */
-function generateSuggestionForCorrelation(correlation) {
+export function generateSuggestionForCorrelation(correlation) {
   const {
     ruleName = '',
     signalAValue,
@@ -2502,13 +2558,12 @@ async function gatherNutritionData(userId) {
   };
 }
 
-async function gatherHydrationData(userId) {
+async function gatherHydrationData(userId, offsetMinutes = 0) {
   const now = new Date();
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayKey = getDayKey(now, offsetMinutes);
 
   const [waterLogs, gamification, profile] = await Promise.all([
     db.select()
@@ -2532,10 +2587,9 @@ async function gatherHydrationData(userId) {
       .then(rows => rows[0] || {}),
   ]);
 
-  const todaysLogs = waterLogs.filter(log => {
-    const logDate = new Date(log.loggedDate);
-    return logDate >= today;
-  });
+  const todaysLogs = waterLogs.filter(
+    (log) => getDayKey(new Date(log.loggedDate), offsetMinutes) === todayKey
+  );
 
   const todaysIntake = todaysLogs.reduce((sum, log) =>
     sum + parseFloat(log.amountLiters || 0), 0);
@@ -2548,15 +2602,12 @@ async function gatherHydrationData(userId) {
   };
 }
 
-async function gatherActivityData(userId) {
+async function gatherActivityData(userId, offsetMinutes = 0) {
   const now = new Date();
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const [activityLogs, moodLogs, gamification] = await Promise.all([
+  const [activityLogs, moodLogs, activityDateRows] = await Promise.all([
     db.select()
       .from(activityLogTable)
       .where(and(
@@ -2574,23 +2625,25 @@ async function gatherActivityData(userId) {
       ))
       .orderBy(desc(moodLogTable.loggedDate)),
 
-    db.select()
-      .from(gamificationTable)
-      .where(eq(gamificationTable.userId, userId))
-      .limit(1)
-      .then(rows => rows[0] || {}),
+    // Activity streaks must come from activity dates. The gamification streak
+    // is a product-wide logging streak and can be much larger even when the
+    // user skipped activity days.
+    db.select({ dayKey: activityLogTable.dayKey, loggedAt: activityLogTable.loggedAt })
+      .from(activityLogTable)
+      .where(eq(activityLogTable.userId, userId))
+      .orderBy(desc(activityLogTable.loggedAt)),
   ]);
 
-  const todaysActivities = activityLogs.filter(log => {
-    const logDate = new Date(log.loggedAt);
-    return logDate >= today;
-  });
+  const todayKey = toActivityDayKey({ loggedAt: now }, offsetMinutes);
+  const todaysActivities = activityLogs.filter(
+    (log) => toActivityDayKey(log, offsetMinutes) === todayKey
+  );
 
   return {
     activityLogs,
     moodLogs,
     todaysActivities,
-    streak: gamification.streak || 0,
+    streak: calculateActivityLogStreak(activityDateRows, now, offsetMinutes),
   };
 }
 
@@ -2750,7 +2803,13 @@ function calculateNutritionStats(foodLogs, goals) {
   };
 }
 
-function calculateHydrationStats(waterLogs, goal) {
+export function calculateHydrationStats(
+  waterLogs,
+  goal,
+  offsetMinutes = 0,
+  reference = new Date()
+) {
+  const todayDayKey = getDayKey(reference, offsetMinutes);
   if (!waterLogs || waterLogs.length === 0) {
     return {
       avgDailyIntake: 0,
@@ -2764,13 +2823,14 @@ function calculateHydrationStats(waterLogs, goal) {
       hydrationHabit: 'building',
       peakHydrationTime: null,
       todayProgress: 0,
+      todayDayKey,
     };
   }
 
   // Group by day
   const byDay = {};
   waterLogs.forEach(log => {
-    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    const dateKey = getDayKey(new Date(log.loggedDate), offsetMinutes);
     if (!byDay[dateKey]) {
       byDay[dateKey] = [];
     }
@@ -2832,7 +2892,8 @@ function calculateHydrationStats(waterLogs, goal) {
   // Peak hydration time
   const hourCounts = {};
   waterLogs.forEach(log => {
-    const hour = new Date(log.loggedDate).getHours();
+    const timestamp = new Date(log.loggedDate);
+    const hour = new Date(timestamp.getTime() - offsetMinutes * 60_000).getUTCHours();
     hourCounts[hour] = (hourCounts[hour] || 0) + 1;
   });
   const peakHour = Object.entries(hourCounts)
@@ -2842,9 +2903,10 @@ function calculateHydrationStats(waterLogs, goal) {
     : null;
 
   // Today's progress
-  const today = new Date().toISOString().split('T')[0];
-  const todayData = dailyTotals.find(d => d.date === today);
-  const todayProgress = todayData ? Math.min(100, Math.round((todayData.liters / goal) * 100)) : 0;
+  const todayData = dailyTotals.find(d => d.date === todayDayKey);
+  const todayProgress = todayData && goal > 0
+    ? Math.min(100, Math.round((todayData.liters / goal) * 100))
+    : 0;
 
   return {
     avgDailyIntake,
@@ -2858,10 +2920,49 @@ function calculateHydrationStats(waterLogs, goal) {
     hydrationHabit,
     peakHydrationTime,
     todayProgress,
+    todayDayKey,
   };
 }
 
-function calculateActivityStats(activityLogs, moodLogs) {
+function toActivityDayKey(log, offsetMinutes = 0) {
+  const persisted = String(log?.dayKey || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(persisted)) return persisted;
+
+  const timestamp = new Date(log?.loggedAt);
+  if (Number.isNaN(timestamp.getTime())) return null;
+  return new Date(timestamp.getTime() - offsetMinutes * 60_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+export function calculateActivityLogStreak(activityLogs, reference = new Date(), offsetMinutes = 0) {
+  const activityDays = new Set(
+    (Array.isArray(activityLogs) ? activityLogs : [])
+      .map((log) => toActivityDayKey(log, offsetMinutes))
+      .filter(Boolean)
+  );
+  if (activityDays.size === 0) return 0;
+
+  const todayKey = toActivityDayKey({ loggedAt: reference }, offsetMinutes);
+  const today = new Date(`${todayKey}T00:00:00.000Z`);
+  const yesterday = new Date(today);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const yesterdayKey = yesterday.toISOString().slice(0, 10);
+
+  let cursor;
+  if (activityDays.has(todayKey)) cursor = today;
+  else if (activityDays.has(yesterdayKey)) cursor = yesterday;
+  else return 0;
+
+  let streak = 0;
+  while (activityDays.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  return streak;
+}
+
+export function calculateActivityStats(activityLogs, moodLogs, offsetMinutes = 0) {
   if (!activityLogs || activityLogs.length === 0) {
     return {
       totalMinutesThisWeek: 0,
@@ -2880,10 +2981,14 @@ function calculateActivityStats(activityLogs, moodLogs) {
     };
   }
 
-  // Group by day
+  // Group by day. activity_log's timestamp column is `loggedAt`, not
+  // `loggedDate` (that name belongs to other log tables, e.g. mood_log) —
+  // reading the wrong field here always produced Invalid Date, so this
+  // function has thrown for every user on every call since it was written.
   const byDay = {};
   activityLogs.forEach(log => {
-    const dateKey = new Date(log.loggedDate).toISOString().split('T')[0];
+    const dateKey = toActivityDayKey(log, offsetMinutes);
+    if (!dateKey) return;
     if (!byDay[dateKey]) {
       byDay[dateKey] = [];
     }
@@ -2899,14 +3004,13 @@ function calculateActivityStats(activityLogs, moodLogs) {
     return { date, minutes, calories, count: logs.length };
   }).sort((a, b) => a.date.localeCompare(b.date));
 
-  // This week's minutes
-  const now = new Date();
-  const weekAgo = new Date(now);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekKey = weekAgo.toISOString().split('T')[0];
-
-  const thisWeekTotals = dailyTotals.filter(d => d.date >= weekKey);
-  const totalMinutesThisWeek = thisWeekTotals.reduce((sum, d) => sum + d.minutes, 0);
+  // Current user-local Sunday-Saturday week. This used to include the previous
+  // seven-plus calendar dates and could disagree with Dashboard by hours or
+  // entire days near the boundary.
+  const { start: weekStart } = getLocalWeekRange(offsetMinutes);
+  const totalMinutesThisWeek = activityLogs
+    .filter((log) => new Date(log.loggedAt) >= weekStart)
+    .reduce((sum, log) => sum + (log.durationMinutes || 0), 0);
 
   // Averages
   const totalMinutes = activityLogs.reduce((sum, log) => sum + (log.durationMinutes || 0), 0);
@@ -2917,7 +3021,10 @@ function calculateActivityStats(activityLogs, moodLogs) {
   // Most active day of week
   const dayOfWeekCounts = {};
   activityLogs.forEach(log => {
-    const dayOfWeek = new Date(log.loggedDate).toLocaleDateString('en-US', { weekday: 'long' });
+    const dateKey = toActivityDayKey(log, offsetMinutes);
+    if (!dateKey) return;
+    const dayOfWeek = new Date(`${dateKey}T12:00:00.000Z`)
+      .toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
     dayOfWeekCounts[dayOfWeek] = (dayOfWeekCounts[dayOfWeek] || 0) + 1;
   });
   const mostActiveDay = Object.entries(dayOfWeekCounts)
@@ -2970,7 +3077,9 @@ function calculateActivityStats(activityLogs, moodLogs) {
   // Preferred time
   const hourCounts = {};
   activityLogs.forEach(log => {
-    const hour = new Date(log.loggedDate).getHours();
+    const timestamp = new Date(log.loggedAt);
+    if (Number.isNaN(timestamp.getTime())) return;
+    const hour = new Date(timestamp.getTime() - offsetMinutes * 60_000).getUTCHours();
     hourCounts[hour] = (hourCounts[hour] || 0) + 1;
   });
   const peakHour = Object.entries(hourCounts)
@@ -3805,18 +3914,19 @@ function generateNutritionTrendData(foodLogs) {
   return trendData;
 }
 
-function generateHydrationTrendData(waterLogs) {
-  const now = new Date();
+function generateHydrationTrendData(waterLogs, offsetMinutes = 0, reference = new Date()) {
+  const todayKey = getDayKey(reference, offsetMinutes);
+  const today = new Date(`${todayKey}T00:00:00.000Z`);
   const trendData = [];
 
   for (let i = 6; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const dateKey = date.toISOString().split('T')[0];
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() - i);
+    const dateKey = date.toISOString().slice(0, 10);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }).charAt(0);
 
     const dayLogs = waterLogs.filter(log => {
-      const logDate = new Date(log.loggedDate).toISOString().split('T')[0];
+      const logDate = getDayKey(new Date(log.loggedDate), offsetMinutes);
       return logDate === dateKey;
     });
 
@@ -3836,7 +3946,7 @@ function generateHydrationTrendData(waterLogs) {
   return trendData;
 }
 
-function generateActivityTrendData(activityLogs) {
+export function generateActivityTrendData(activityLogs) {
   const now = new Date();
   const trendData = [];
 
@@ -3846,8 +3956,12 @@ function generateActivityTrendData(activityLogs) {
     const dateKey = date.toISOString().split('T')[0];
     const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
 
+    // activity_log's timestamp column is `loggedAt`, not `loggedDate` (see
+    // calculateActivityStats above for the same bug) — this filter always
+    // matched zero rows before, then threw once new Date(undefined) hit
+    // .toISOString().
     const dayLogs = activityLogs.filter(log => {
-      const logDate = new Date(log.loggedDate).toISOString().split('T')[0];
+      const logDate = new Date(log.loggedAt).toISOString().split('T')[0];
       return logDate === dateKey;
     });
 

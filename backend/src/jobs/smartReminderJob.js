@@ -30,6 +30,7 @@
  */
 
 import cron from 'cron';
+import { randomUUID } from 'node:crypto';
 import { db } from '../config/db.js';
 import {
   accountSettingsTable,
@@ -37,7 +38,7 @@ import {
   profilesTable,
   waterLogTable,
   nutritionGoalsTable,
-  notificationDeliveryLogTable,
+  devicesTable,
 } from '../db/schema.js';
 import { eq, isNotNull, or, and, sql, gte, lte, isNull } from 'drizzle-orm';
 import { getSmartReminders, REMINDER_TYPES } from '../services/smartReminderService.js';
@@ -56,6 +57,19 @@ import {
   NOTIFICATION_TYPES
 } from '../services/pushNotificationService.js';
 import { isFirebaseReady } from '../config/firebase.js';
+import { resolveSendTargets, getOwnedCategoriesForDevice } from '../utils/deviceRegistry.js';
+import {
+  filterRemindersForDevice,
+  mapReminderJobCategoryToLocalCategory,
+  getEffectiveDailyCap,
+} from '../utils/notificationOwnership.js';
+import {
+  NOTIFICATION_POLICY,
+  checkHourlyRateLimit,
+  checkMinSpacing,
+  isInQuietHours,
+  withReservedNotificationSlot,
+} from '../utils/notificationPolicy.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -66,9 +80,14 @@ const CONFIG = {
   BATCH_SIZE: 100,
   BATCH_DELAY_MS: 1000, // 1 second between batches to avoid overwhelming
 
-  // Rate limiting
-  MAX_NOTIFICATIONS_PER_USER_PER_HOUR: 2,
-  MAX_NOTIFICATIONS_PER_USER_PER_DAY: 8,
+  // Rate limiting / quiet hours — moved to utils/notificationPolicy.js so
+  // every backend send path (this cron, nutrientDeficitJob.js,
+  // predictionLearningService.js, gamificationRewardService.js) shares one
+  // definition instead of each enforcing its own subset. See that file's
+  // header for the full history (the daily cap used to be declared here
+  // but never actually checked; the spacing floor was added after the
+  // felt-spam incident this was investigated from).
+  ...NOTIFICATION_POLICY,
 
   // Circuit breaker
   FAILURE_THRESHOLD: 10, // Consecutive failures before opening circuit
@@ -76,10 +95,6 @@ const CONFIG = {
 
   // Scheduling
   CRON_SCHEDULE: '*/15 * * * *', // Every 15 minutes
-
-  // Quiet hours (default, can be overridden per user)
-  DEFAULT_QUIET_START: 22, // 10 PM
-  DEFAULT_QUIET_END: 7,    // 7 AM
 };
 
 // ============================================================================
@@ -154,25 +169,23 @@ function checkRateLimitInMemory(userId) {
   return true;
 }
 
-async function checkRateLimitFromDB(userId) {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const [row] = await db
-    .select({ count: sql`COUNT(*)::int` })
-    .from(notificationDeliveryLogTable)
-    .where(
-      and(
-        eq(notificationDeliveryLogTable.userId, userId),
-        gte(notificationDeliveryLogTable.createdAt, oneHourAgo)
-      )
-    );
-  return (row?.count ?? 0) < CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_HOUR;
-}
-
 async function checkRateLimit(userId) {
   // Fast path: in-memory check (avoids DB round-trip on most calls)
   if (!checkRateLimitInMemory(userId)) return false;
-  // Authoritative path: DB check survives server restarts
-  return checkRateLimitFromDB(userId);
+  // Authoritative, account-level PRE-filter — cheap early exit for a user
+  // obviously over the hourly burst cap or inside the spacing floor, before
+  // spending any work computing reminders or resolving devices. These two
+  // aren't affected by per-device local allocation (they bound how often
+  // the BACKEND sends, not the combined total), so checking them once per
+  // user here is correct. The DAILY cap is NOT checked here — it now
+  // depends on each device's local-schedule allocation (getEffectiveDailyCap)
+  // and is enforced per-device, atomically, via reserveNotificationSlot
+  // inside the device loop in processUserReminders.
+  const [hourlyOk, spacingOk] = await Promise.all([
+    checkHourlyRateLimit(db, userId),
+    checkMinSpacing(db, userId),
+  ]);
+  return hourlyOk && spacingOk;
 }
 
 function clearOldRateLimits() {
@@ -189,7 +202,21 @@ function clearOldRateLimits() {
 
 /**
  * Get users eligible for notifications in batches
- * Filters: has push token, notifications enabled, not in quiet hours
+ * Filters: has a push token (legacy column OR at least one registered
+ * device), notifications enabled, not in quiet hours
+ *
+ * Base table is deliberately profilesTable, not accountSettingsTable: a
+ * user who has only ever called /profile/devices/register (never touched
+ * /profile/notifications or the legacy /profile/fcm-token, which are what
+ * actually create an accountSettingsTable row) would have NO row there at
+ * all — selecting FROM accountSettingsTable would silently exclude them
+ * regardless of what the WHERE clause checks, since a left-joined table can
+ * never appear in a query's own FROM-driven row set. profilesTable is safe
+ * as the base: registerDeviceEndpoint requires a profile to already exist
+ * before it will create a device row, so every device-registered user is
+ * guaranteed to have one. Caught by _verifyEligibleQuery.mjs against real
+ * Postgres — the original accountSettingsTable-rooted version returned zero
+ * rows for a device-only user even with the EXISTS clause present.
  */
 async function* getEligibleUsersBatched() {
   let offset = 0;
@@ -197,7 +224,7 @@ async function* getEligibleUsersBatched() {
   while (true) {
     const users = await db
       .select({
-        userId: accountSettingsTable.userId,
+        userId: profilesTable.userId,
         expoPushToken: accountSettingsTable.expoPushToken,
         fcmToken: accountSettingsTable.fcmToken,
         notifications: accountSettingsTable.notifications,
@@ -205,13 +232,14 @@ async function* getEligibleUsersBatched() {
         streak: gamificationTable.streak,
         fullName: profilesTable.fullName,
       })
-      .from(accountSettingsTable)
-      .leftJoin(gamificationTable, eq(accountSettingsTable.userId, gamificationTable.userId))
-      .leftJoin(profilesTable, eq(accountSettingsTable.userId, profilesTable.userId))
+      .from(profilesTable)
+      .leftJoin(accountSettingsTable, eq(profilesTable.userId, accountSettingsTable.userId))
+      .leftJoin(gamificationTable, eq(profilesTable.userId, gamificationTable.userId))
       .where(
         or(
           isNotNull(accountSettingsTable.expoPushToken),
-          isNotNull(accountSettingsTable.fcmToken)
+          isNotNull(accountSettingsTable.fcmToken),
+          sql`EXISTS (SELECT 1 FROM ${devicesTable} WHERE ${devicesTable.userId} = ${profilesTable.userId})`
         )
       )
       .limit(CONFIG.BATCH_SIZE)
@@ -283,11 +311,22 @@ async function getTodayHydration(userId) {
 }
 
 /**
- * Send notification via both FCM and Expo (with fallback)
+ * Send notification via both FCM and Expo (with fallback) to ONE specific
+ * device. `device` is either a real `devices` row (has a real `id`) or the
+ * legacy pseudo-device shape from resolveSendTargets (`id: null`) — both
+ * carry the same {id, fcmToken, expoPushToken} shape so this function never
+ * needs to branch on which kind it got.
  */
-async function deliverNotification(user, reminder) {
-  const { userId, fcmToken, expoPushToken, streak } = user;
+async function deliverNotification(user, device, reminder) {
+  const { userId, streak } = user;
+  const { id: deviceId, fcmToken, expoPushToken } = device;
   const { type, title, body, priority } = reminder;
+
+  // Unique per send, embedded in the push itself so the receiving device can
+  // acknowledge THIS specific message. A timestamp-window correlation can't
+  // tell two sends close together apart and can't validate the acker
+  // actually owns this delivery — see acknowledgePushReceived.
+  const deliveryId = randomUUID();
 
   const notification = {
     title,
@@ -296,6 +335,7 @@ async function deliverNotification(user, reminder) {
       type,
       priority: String(priority),
       screen: getScreenForType(type),
+      deliveryId,
     },
   };
 
@@ -312,26 +352,26 @@ async function deliverNotification(user, reminder) {
       switch (fcmType) {
         case 'hydration': {
           const { currentMl, goalMl } = await getTodayHydration(userId);
-          result = await sendHydrationNudgeNotification(db, userId, currentMl, goalMl, { streak });
+          result = await sendHydrationNudgeNotification(db, userId, currentMl, goalMl, { streak, deliveryId, deviceId });
           break;
         }
         case 'meal':
-          result = await sendMealReminderNotification(db, userId, { streak });
+          result = await sendMealReminderNotification(db, userId, { streak, deliveryId, deviceId });
           break;
         case 'mood':
-          result = await sendMoodCheckInNotification(db, userId, {});
+          result = await sendMoodCheckInNotification(db, userId, { deliveryId, deviceId });
           break;
         case 'activity':
-          result = await sendActivityNudgeNotification(db, userId, {});
+          result = await sendActivityNudgeNotification(db, userId, { deliveryId, deviceId });
           break;
         case 'streak':
-          result = await sendStreakCelebrationNotification(db, userId, streak || 0);
+          result = await sendStreakCelebrationNotification(db, userId, streak || 0, { deliveryId, deviceId });
           break;
         case 'reengagement':
-          result = await sendReengagementNotification(db, userId, {});
+          result = await sendReengagementNotification(db, userId, { deliveryId, deviceId });
           break;
         default:
-          result = await sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, notification);
+          result = await sendUserFCMNotification(db, userId, FCM_NOTIFICATION_TYPES.DAILY_REMINDER, notification, { deviceId });
       }
 
       fcmSuccess = result?.success === true;
@@ -343,7 +383,7 @@ async function deliverNotification(user, reminder) {
   // Fallback to Expo if FCM failed or unavailable
   if (!fcmSuccess && expoPushToken) {
     try {
-      const result = await sendUserNotification(db, userId, mapTypeToExpo(type), notification);
+      const result = await sendUserNotification(db, userId, mapTypeToExpo(type), notification, { deviceId });
       expoSuccess = result?.success === true;
     } catch (err) {
       console.warn(`[SmartReminderJob] Expo delivery failed for ${userId}:`, err.message);
@@ -352,25 +392,23 @@ async function deliverNotification(user, reminder) {
 
   const delivered = fcmSuccess || expoSuccess;
 
-  // Log every successful delivery to the DB — this is the source of truth for
-  // the DB-backed rate limiter (checkRateLimitFromDB) and analytics.
-  if (delivered) {
-    try {
-      await db.insert(notificationDeliveryLogTable).values({
-        userId,
-        notificationType: type,
-        title,
-        body,
-        channel: fcmSuccess ? 'fcm' : 'expo',
-        priority: reminder.priority || 3,
-        deliveryStatus: 'sent',
-      });
-    } catch (logErr) {
-      console.warn('[SmartReminderJob] Failed to log delivery (non-critical):', logErr.message);
-    }
-  }
-
-  return delivered;
+  // Delivery logging is the caller's job now (withReservedNotificationSlot
+  // finalizes the reservation with this deliveryLog on success, or deletes
+  // it on failure) — this function only reports what happened. The
+  // deliveryId is what the delivery-id-based ack (acknowledgePushReceived/
+  // getDeliveredToday) correlates against once the row exists.
+  return {
+    success: delivered,
+    deliveryLog: {
+      deviceId,
+      notificationType: type,
+      title,
+      body,
+      channel: fcmSuccess ? 'fcm' : 'expo',
+      priority: reminder.priority || 3,
+      deliveryId,
+    },
+  };
 }
 
 /**
@@ -386,13 +424,19 @@ function getScreenForType(type) {
 }
 
 /**
- * Map reminder type to Expo notification type
+ * Map reminder type to Expo notification type. REMINDER_TYPES values are
+ * lowercase snake_case (e.g. 'hydration_morning') — the previous version of
+ * this function checked uppercase substrings ('HYDRATION', 'FOOD', ...),
+ * which never matched anything, so every reminder silently fell through to
+ * DAILY_REMINDER regardless of its real category. Confirmed via a real
+ * regression test (toggleEnforcement.test.js) before this fix.
  */
-function mapTypeToExpo(reminderType) {
-  if (reminderType.includes('HYDRATION')) return NOTIFICATION_TYPES.HYDRATION_NUDGE;
-  if (reminderType.includes('FOOD')) return NOTIFICATION_TYPES.DAILY_REMINDER;
-  if (reminderType.includes('STREAK')) return NOTIFICATION_TYPES.STREAK_CELEBRATION;
-  if (reminderType.includes('MOOD') || reminderType.includes('ACTIVITY')) return NOTIFICATION_TYPES.INSIGHT_DROP;
+export function mapTypeToExpo(reminderType) {
+  if (reminderType.includes('hydration')) return NOTIFICATION_TYPES.HYDRATION_NUDGE;
+  if (reminderType.includes('food')) return NOTIFICATION_TYPES.DAILY_REMINDER;
+  if (reminderType.includes('mood')) return NOTIFICATION_TYPES.MOOD_CHECKIN;
+  if (reminderType.includes('activity')) return NOTIFICATION_TYPES.ACTIVITY_REMINDER;
+  if (reminderType.includes('streak')) return NOTIFICATION_TYPES.STREAK_CELEBRATION;
   return NOTIFICATION_TYPES.DAILY_REMINDER;
 }
 
@@ -400,27 +444,11 @@ function mapTypeToExpo(reminderType) {
 // QUIET HOURS CHECK
 // ============================================================================
 
-function isInQuietHours(user) {
-  const notifications = user.notifications || {};
-  const quietHours = notifications.quietHours || {
-    start: CONFIG.DEFAULT_QUIET_START,
-    end: CONFIG.DEFAULT_QUIET_END,
-  };
-
-  // Calculate user's local hour
-  const offsetMinutes = user.timezoneOffset || 0;
-  const now = new Date();
-  // Double modulo handles negative offsets (e.g. UTC-5): JS % can return negative values.
-  const localHour = ((now.getUTCHours() + Math.floor(offsetMinutes / 60)) % 24 + 24) % 24;
-
-  const { start, end } = quietHours;
-
-  // Handle overnight quiet hours (e.g., 22:00 to 07:00)
-  if (start > end) {
-    return localHour >= start || localHour < end;
-  }
-  return localHour >= start && localHour < end;
-}
+// isInQuietHours(user) is now imported from utils/notificationPolicy.js —
+// same pure function (takes { notifications, timezoneOffset }), shared with
+// every other backend send path. Kept as a batched-fetch call here since
+// getEligibleUsersBatched already joins these fields for the whole batch;
+// see isInQuietHoursForUser in that module for callers that don't.
 
 // ============================================================================
 // MAIN JOB LOGIC
@@ -513,32 +541,84 @@ async function processUserReminders(user, runMetrics) {
   }
 
   try {
-    // Get smart reminders for this user
+    // Reminders reflect account-level patterns (not per-device state), so
+    // they're computed once and then filtered independently per device.
     const reminders = await getSmartReminders(userId);
 
     if (!reminders || reminders.length === 0) {
-      return;
-    }
-
-    // Send only the highest priority reminder to avoid spam
-    const topReminder = reminders[0];
-
-    // Check if this reminder type is enabled for user
-    const reminderCategory = getCategoryForType(topReminder.type);
-    if (notifications?.[reminderCategory] === false) {
       runMetrics.skipped++;
       return;
     }
 
-    // Deliver the notification
-    const success = await deliverNotification(user, topReminder);
+    // Real devices from the new per-device model, or the one legacy
+    // pseudo-device wrapping accountSettingsTable's single token — never
+    // both (see resolveSendTargets).
+    const targets = await resolveSendTargets(db, userId, user);
+    if (targets.length === 0) {
+      runMetrics.skipped++;
+      return;
+    }
 
-    if (success) {
-      runMetrics.sent++;
-      runMetrics.byType[topReminder.type] = (runMetrics.byType[topReminder.type] || 0) + 1;
-      console.log(`[SmartReminderJob] Sent ${topReminder.type} to user ${userId}`);
-    } else {
-      runMetrics.failed++;
+    for (const device of targets) {
+      // Legacy pseudo-devices (device.id === null) never own anything —
+      // getOwnedCategoriesForDevice returns an empty set for them, so they
+      // always see the full candidate list, exactly like every device did
+      // before this feature existed.
+      const ownedCategories = await getOwnedCategoriesForDevice(db, device.id);
+      const candidates = filterRemindersForDevice(
+        reminders,
+        ownedCategories,
+        (type) => mapReminderJobCategoryToLocalCategory(getCategoryForType(type))
+      );
+
+      if (candidates.length === 0) {
+        // Every candidate reminder for this device this cycle falls under a
+        // category it owns locally — correct suppression, not a failure.
+        // Logged (not just commented) so this decision is actually
+        // observable during device acceptance testing, not just inferred.
+        if (ownedCategories.size > 0) {
+          console.log(`[SmartReminderJob] Suppressed for user ${userId} (device ${device.id ?? 'legacy'}) — locally owned: ${[...ownedCategories].join(', ')}`);
+        }
+        continue;
+      }
+
+      // Send only the highest priority remaining reminder to avoid spam
+      const topReminder = candidates[0];
+
+      // Check if this reminder type is enabled for user (account-level pref)
+      const reminderCategory = getCategoryForType(topReminder.type);
+      if (notifications?.[reminderCategory] === false) {
+        console.log(`[SmartReminderJob] Suppressed ${topReminder.type} for user ${userId} (device ${device.id ?? 'legacy'}) — ${reminderCategory} disabled`);
+        continue;
+      }
+
+      // The backend's own daily cap for THIS device is reduced by whatever
+      // its local schedule already claims for its owned categories — see
+      // getEffectiveDailyCap. Reservation is atomic (advisory-lock-serialized
+      // per userId in notificationPolicy.js), so a concurrent send for this
+      // same user — another device in this same loop, or a different job
+      // entirely (nutrientDeficitJob, a gamification event) — cannot race
+      // past this check.
+      const effectiveDailyCap = getEffectiveDailyCap(CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_DAY, ownedCategories);
+      const result = await withReservedNotificationSlot(
+        db,
+        userId,
+        { maxPerDay: effectiveDailyCap },
+        () => deliverNotification(user, device, topReminder)
+      );
+
+      if (result.held) {
+        const capNote = result.held === 'daily_cap'
+          ? ` (effective cap ${effectiveDailyCap}/day — ${CONFIG.MAX_NOTIFICATIONS_PER_USER_PER_DAY - effectiveDailyCap} reserved for local schedule)`
+          : '';
+        console.log(`[SmartReminderJob] Held ${topReminder.type} for user ${userId} (device ${device.id ?? 'legacy'}) — ${result.held}${capNote}`);
+      } else if (result.success) {
+        runMetrics.sent++;
+        runMetrics.byType[topReminder.type] = (runMetrics.byType[topReminder.type] || 0) + 1;
+        console.log(`[SmartReminderJob] Sent ${topReminder.type} to user ${userId} (device ${device.id ?? 'legacy'})`);
+      } else {
+        runMetrics.failed++;
+      }
     }
 
   } catch (error) {
@@ -548,14 +628,27 @@ async function processUserReminders(user, runMetrics) {
 }
 
 /**
- * Get notification category for preference checking
+ * Maps a REMINDER_TYPES value to the exact preference key the settings
+ * screen writes (mobile/app/profile/notifications.jsx's NOTIFICATION_TYPES
+ * config) — used both for the per-category enable/disable check below and,
+ * via mapReminderJobCategoryToLocalCategory, for translating into the local
+ * scheduler's ownership category names. Previously returned made-up bucket
+ * names ('hydration', 'food', 'mood', 'activity', 'motivation') that never
+ * matched any real preference key, so notifications?.[reminderCategory]
+ * below was always undefined !== false — i.e. never actually suppressed
+ * anything a user had turned off. Confirmed via a real regression test
+ * (toggleEnforcement.test.js) before this fix. STREAK_AT_RISK is the only
+ * type with an unambiguous existing toggle (streakProtection); the other
+ * engagement types (weekly_summary, achievement_close, comeback) have no
+ * dedicated toggle and fall through to the master 'enabled' switch, exactly
+ * as before.
  */
-function getCategoryForType(type) {
-  if (type.includes('HYDRATION') || type.includes('hydration')) return 'hydration';
-  if (type.includes('FOOD') || type.includes('food')) return 'food';
-  if (type.includes('MOOD') || type.includes('mood')) return 'mood';
-  if (type.includes('ACTIVITY') || type.includes('activity')) return 'activity';
-  if (type.includes('STREAK') || type.includes('COMEBACK')) return 'motivation';
+export function getCategoryForType(type) {
+  if (type.includes('hydration')) return 'hydrationNudges';
+  if (type.includes('food')) return 'dailyReminder';
+  if (type.includes('mood')) return 'moodCheckins';
+  if (type.includes('activity')) return 'activityReminders';
+  if (type === REMINDER_TYPES.STREAK_AT_RISK) return 'streakProtection';
   return 'enabled';
 }
 

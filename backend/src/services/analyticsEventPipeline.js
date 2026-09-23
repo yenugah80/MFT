@@ -289,14 +289,16 @@ async function getUserContext(userId) {
       WHERE p.user_id = ${userId}
     `);
 
-    if (result.rows.length > 0) {
+    // db.execute() returns the row array directly on this driver, not
+    // { rows: [...] } — see gamificationRewardService.js.
+    if (result.length > 0) {
       const context = {
-        level: result.rows[0].level || 1,
-        streak: result.rows[0].streak || 0,
-        is_premium: result.rows[0].is_premium || false,
-        premium_tier: result.rows[0].premium_tier || 'free',
-        days_since_signup: Math.floor(result.rows[0].days_since_signup || 0),
-        user_segment: getUserSegment(result.rows[0]),
+        level: result[0].level || 1,
+        streak: result[0].streak || 0,
+        is_premium: result[0].is_premium || false,
+        premium_tier: result[0].premium_tier || 'free',
+        days_since_signup: Math.floor(result[0].days_since_signup || 0),
+        user_segment: getUserSegment(result[0]),
       };
       aggregationCache.set(cacheKey, context, 300);
       return context;
@@ -630,6 +632,11 @@ export function getRealTimeMetrics() {
  * Get funnel analysis
  */
 export async function getFunnelAnalysis(funnelId, startDate, endDate) {
+  // Not called anywhere in the codebase today (verified), but a bare Date
+  // interpolated into raw sql`` bypasses Drizzle's column-type
+  // serialization and throws at the driver. new Date(x).toISOString()
+  // accepts either a Date or an ISO string from the caller, since there's
+  // no real call site to pin the exact type down.
   const result = await db.execute(sql`
     WITH funnel_data AS (
       SELECT
@@ -640,7 +647,7 @@ export async function getFunnelAnalysis(funnelId, startDate, endDate) {
       FROM analytics_events
       WHERE event_name = 'funnel_step'
         AND properties->>'funnel_id' = ${funnelId}
-        AND timestamp BETWEEN ${startDate} AND ${endDate}
+        AND timestamp BETWEEN ${new Date(startDate).toISOString()} AND ${new Date(endDate).toISOString()}
     ),
     step_counts AS (
       SELECT
@@ -657,7 +664,7 @@ export async function getFunnelAnalysis(funnelId, startDate, endDate) {
   return {
     funnel_id: funnelId,
     period: { start: startDate, end: endDate },
-    steps: result.rows,
+    steps: result,
   };
 }
 
@@ -691,8 +698,8 @@ export async function getUserEngagementMetrics(userId, days = 30) {
   return {
     user_id: userId,
     period_days: days,
-    events: result.rows,
-    sessions: sessions.rows[0] || { session_count: 0, avg_session_duration: 0 },
+    events: result,
+    sessions: sessions[0] || { session_count: 0, avg_session_duration: 0 },
   };
 }
 

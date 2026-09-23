@@ -47,7 +47,16 @@ function isPermanentVoiceFailure(code, detail) {
     String(code) === '300' ||
     text.includes('failed to initialize recognizer') ||
     text.includes('not supported') ||
-    text.includes('restricted')
+    text.includes('restricted') ||
+    // AVFoundation's own internal assertion text when the audio input
+    // hardware reports an invalid format (0 channels/sample rate) — seen
+    // live as a raw "required condition is false:
+    // IsFormatSampleRateAndChannelCountValid(format)" string reaching a
+    // real user. Overwhelmingly a Simulator artifact (no real mic
+    // hardware routed to it), but on whatever device hits it, a retry
+    // asks the same broken input node the same question again.
+    text.includes('required condition is false') ||
+    text.includes('isformatsamplerateandchannelcountvalid')
   );
 }
 
@@ -75,6 +84,12 @@ function describeVoiceStartFailure(code, detail, locale) {
   if (text.includes('recognizer') || text.includes('unavailable')) {
     return 'Speech recognition is unavailable right now. Please try again in a moment.';
   }
+  // Raw AVFoundation assertion text (invalid audio input format) — a real
+  // user must never see "IsFormatSampleRateAndChannelCountValid(format)".
+  // Same category as the microphone genuinely being unusable right now.
+  if (text.includes('required condition is false') || text.includes('isformatsamplerateandchannelcountvalid')) {
+    return "Your microphone isn't available right now. Try text or photo logging instead.";
+  }
   // Unknown: keep the underlying text visible rather than hiding it.
   return `Couldn't start voice recording${detail ? ` — ${detail}` : ''}. Try text or photo logging instead.`;
 }
@@ -82,6 +97,23 @@ function describeVoiceStartFailure(code, detail, locale) {
 // Cache for recent transcription requests (in-memory + persisted)
 const TRANSCRIPTION_CACHE_KEY = 'voice_transcription_cache';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+// apiClient's default budget is 10s, which is fine for ordinary CRUD but far too
+// short for these two calls — and it applies to the whole round trip, not just
+// the server's own work.
+//
+// /voice/transcribe has to upload the audio over a mobile connection, run it
+// through OpenAI transcription, then usually make a second model call to
+// identify the foods, then write to the database. /voice/process skips the
+// upload but still makes the model call. Either can pass 10s on a slow network
+// or a cold backend, at which point the client gave up on a request the server
+// went on to complete successfully — the user saw a bare error after speaking a
+// whole meal, on every device, while the backend logs showed nothing wrong.
+//
+// Timeouts are deliberately not retried (see isRetryableError in apiClient), so
+// a longer budget cannot multiply into repeated model calls.
+const TRANSCRIBE_TIMEOUT_MS = 60000;
+const ANALYZE_TIMEOUT_MS = 30000;
 
 export const useServerVoice = (options = {}) => {
   const { voiceLanguage = 'en' } = options;
@@ -94,10 +126,6 @@ export const useServerVoice = (options = {}) => {
   const [transcript, setTranscript] = useState('');
   const [liveItems, setLiveItems] = useState([]);
   const [processingState, setProcessingState] = useState({ step: 0, label: '' });
-  // Set when the nutrition-analysis step (as opposed to transcription) is
-  // blocked pending OpenAI consent, so the caller can route to the same
-  // consent screen instead of surfacing a raw, unactionable error message.
-  const [needsAnalysisConsent, setNeedsAnalysisConsent] = useState(false);
 
   // Mirrors the module-level `_voiceUnsupported` into component state.
   // Mutating a module variable cannot trigger a re-render on its own, so
@@ -123,6 +151,15 @@ export const useServerVoice = (options = {}) => {
   // Refs for liveness and timer management
   const isActiveRef = useRef(false);
   const timersRef = useRef([]);
+  // Separate from isActiveRef (which tracks a mid-flight transcribe/analyze
+  // session, not the start call itself). Nothing previously stopped
+  // startRecording() from being re-entered while a first call was still
+  // awaiting Voice.start() — the exact class of bug that produced a real
+  // EXC_BAD_ACCESS crash in this same native module via a different hook.
+  // VoiceModal's own handleStart guard covers the current single caller,
+  // but the source of truth should refuse re-entry too, not rely solely on
+  // its one caller remembering to.
+  const isStartingRef = useRef(false);
 
   // Request deduplication and caching
   const pendingRequestsRef = useRef(new Map()); // Prevent duplicate concurrent requests
@@ -253,6 +290,16 @@ export const useServerVoice = (options = {}) => {
   };
 
   const startRecording = useCallback(async () => {
+    // Must be the very first thing this function does, synchronously,
+    // before any await — otherwise a second call arriving while the first
+    // is still mid-setup (awaiting requestRecordingPermissionsAsync,
+    // Voice.start(), etc.) races underneath it. See the comment on
+    // isStartingRef above for what that race actually does.
+    if (isStartingRef.current) {
+      console.warn('[useServerVoice] startRecording called while already starting — ignoring');
+      return;
+    }
+    isStartingRef.current = true;
     try {
       if (!Voice) {
         setError('Voice recording not available (requires development build)');
@@ -345,6 +392,13 @@ export const useServerVoice = (options = {}) => {
       if (audioRecorder.isRecording) {
         try { await audioRecorder.stop(); } catch {}
       }
+    } finally {
+      // Always released once this call settles, on every exit path (success,
+      // permission-denied early return, recogniser-unavailable-but-still-
+      // recording early return, or the general failure path) — the guard's
+      // only job is refusing a second call while this one is in flight, not
+      // permanently disabling the mic afterward.
+      isStartingRef.current = false;
     }
   }, [audioRecorder, speechLocale]);
 
@@ -383,9 +437,21 @@ export const useServerVoice = (options = {}) => {
 
       // upload(), not post() — post() JSON.stringifies the body, which turns
       // FormData into "{}" and silently drops the audio.
-      const response = await apiClient.upload('/voice/transcribe', formData);
+      const response = await apiClient.upload('/voice/transcribe', formData, {
+        _timeout: TRANSCRIBE_TIMEOUT_MS,
+      });
 
-      return { transcript: response?.text || '', items: response?.data || [] };
+      // response.data is the unifiedResponse object ({ items, totals, ... }),
+      // not an item array — `items: response?.data` previously stored the
+      // whole object under that name, which meant nothing downstream could
+      // actually use it (an object isn't a usable "items" list), silently
+      // forcing a second, redundant analysis call for every server-fallback
+      // transcription despite this endpoint already returning analysed items.
+      return {
+        transcript: response?.text || '',
+        items: response?.data?.items || [],
+        totals: response?.data?.totals || {},
+      };
     } catch (err) {
       const body = err?.response?.data;
 
@@ -398,7 +464,15 @@ export const useServerVoice = (options = {}) => {
       }
 
       console.error('[useServerVoice] Server transcription failed:', err?.message);
-      return null;
+      // Distinguishable from returning null for "nothing to send" (no uri,
+      // recording too short) — without this, stopRecording's caller couldn't
+      // tell a genuine network/server failure apart from silence, and told
+      // the user "No speech detected" for a problem retrying speech clearer
+      // cannot fix.
+      return {
+        serverError: true,
+        error: 'Could not reach the transcription service. Please check your connection and try again.',
+      };
     } finally {
       setIsProcessing(false);
     }
@@ -466,12 +540,18 @@ export const useServerVoice = (options = {}) => {
           // The endpoint returns analysed foods alongside the text, so the
           // caller can skip the separate analysis round trip entirely.
           items: remote.items,
+          totals: remote.totals,
         };
       }
 
       if (remote?.needsConsent) {
         setError(remote.error);
         return { transcript: '', confidence: 0, recordingUri: capturedUri, isEmpty: true, needsConsent: true };
+      }
+
+      if (remote?.serverError) {
+        setError(remote.error);
+        return { transcript: '', confidence: 0, recordingUri: capturedUri, isEmpty: true };
       }
     }
 
@@ -512,7 +592,6 @@ export const useServerVoice = (options = {}) => {
 
     setIsProcessing(true);
     setError(null);
-    setNeedsAnalysisConsent(false);
     isActiveRef.current = true;
 
     try {
@@ -525,7 +604,7 @@ export const useServerVoice = (options = {}) => {
         language: voiceLanguage, // Pass language for multi-language nutrition analysis
       };
 
-      const response = await apiClient.post('/voice/process', payload);
+      const response = await apiClient.post('/voice/process', payload, { _timeout: ANALYZE_TIMEOUT_MS });
 
       if (!isActiveRef.current) return null;
 
@@ -543,6 +622,11 @@ export const useServerVoice = (options = {}) => {
         nutrition: response.data,
         items: analysisData?.items || [],
         totals: analysisData?.totals || {},
+        // True when zero items came back specifically because AI was
+        // available but skipped for lack of consent, not because AI (or
+        // local matching) genuinely found nothing — see VoiceModal's
+        // zero-items handling for why that distinction matters.
+        aiSkippedForConsent: response.data?.aiSkippedForConsent === true,
       };
     } catch (err) {
       console.error('[useServerVoice] Analysis error:', err);
@@ -552,7 +636,6 @@ export const useServerVoice = (options = {}) => {
       if (err.response?.data?.code === 'openai_consent_required') {
         msg = err.response.data.error || 'AI analysis needs your consent. Enable it in Privacy & Data.';
         if (isActiveRef.current) {
-          setNeedsAnalysisConsent(true);
           setError(msg);
         }
         // Truthy and distinguishable from other failures (which return null),
@@ -700,7 +783,7 @@ export const useServerVoice = (options = {}) => {
             language: voiceLanguage, // Pass language for multi-language nutrition analysis
           };
 
-          const response = await apiClient.post('/voice/process', payload);
+          const response = await apiClient.post('/voice/process', payload, { _timeout: ANALYZE_TIMEOUT_MS });
 
           // OPTIMIZATION 3: Calculate real progress based on actual API timing
           const apiDuration = Date.now() - apiStartTimeRef.current;
@@ -849,7 +932,6 @@ export const useServerVoice = (options = {}) => {
     liveItems,          // Live parsed items for UI Pills
     processingState,
     error,
-    needsAnalysisConsent, // True when analyzeTranscript was blocked pending OpenAI consent
     recordingUri,       // Audio file URI for playback
 
     // True once this device has proven it cannot do speech recognition (see
