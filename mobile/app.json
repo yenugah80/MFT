@@ -155,6 +155,7 @@
     },
     "extra": {
       "apiUrl": "https://api.my-food-tracker.com/api",
+      "appReviewEmail": "support@my-food-tracker.com",
       "router": {},
       "eas": {
         "projectId": "91264355-29bc-4019-be18-08002c3180c2"

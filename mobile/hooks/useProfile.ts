@@ -9,10 +9,22 @@ import apiClient from '@/services/apiClient';
 import type { Profile } from '@/types/api';
 
 /**
- * Fetch user profile from backend
+ * Fetch user profile from backend.
+ *
+ * A brand-new account (first Apple/Google/email sign-in) has no profile row
+ * yet, and the backend answers 404. That is a definite "no profile", not a
+ * failure: resolving it to null lets ProfileProvider route to onboarding.
+ * Throwing instead made React Query retry and then show "Couldn't load your
+ * profile — check your connection", a dead end for every new account that
+ * entered through "/".
  */
-const fetchProfile = async (): Promise<Profile> => {
-  return await apiClient.get('/profile/me');
+export const fetchProfile = async (): Promise<Profile | null> => {
+  try {
+    return await apiClient.get('/profile/me');
+  } catch (error: any) {
+    if (error?.response?.status === 404) return null;
+    throw error;
+  }
 };
 
 /**

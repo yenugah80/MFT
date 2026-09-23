@@ -24,6 +24,7 @@ import complianceRouter from "./routes/compliance.js";
 import foodRouter from "./routes/food.js";
 import resolveRouter from "./routes/resolve.js";
 import profileRouter from "./routes/profile.js";
+import appReviewRouter from "./routes/appReview.js";
 import deviceDeregistrationRouter from "./routes/deviceDeregistration.js";
 import loggingRouter from "./routes/logging.js";
 import moodRouter from "./routes/mood.js";
@@ -1035,6 +1036,10 @@ app.use("/api/sleep", sleepRouter);
 
 // Mount Stress Router (Stress Tracking & Patterns)
 app.use("/api/stress", stressRouter);
+
+// App Store review demo-account sign-in (unauthenticated by design; inert
+// unless APP_REVIEW_EMAIL is set). See routes/appReview.js.
+app.use("/api/auth/app-review", appReviewRouter);
 
 // Mount ML Analytics Router (Thompson Sampling, A/B Testing, Drift Detection)
 // Note: This router provides machine learning enhanced recommendations with full

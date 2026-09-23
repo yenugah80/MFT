@@ -11,6 +11,7 @@ import SignInScreen, { HAS_SIGNED_IN_KEY } from "../../app/(auth)/sign-in";
 import { mockRouter } from "./__mocks__/expoRouter";
 import { __mocks as clerkMocks } from "@clerk/clerk-expo";
 import { __mocks as appleMocks } from "expo-apple-authentication";
+import { __mocks as apiMocks } from "../../services/apiClient";
 
 jest.mock("@clerk/clerk-expo", () => require("./__mocks__/clerkExpo"));
 jest.mock("expo-apple-authentication", () => require("./__mocks__/expoAppleAuthentication"));
@@ -22,6 +23,10 @@ jest.mock("expo-image", () => require("./__mocks__/expoImage"));
 jest.mock("expo-linear-gradient", () => require("./__mocks__/expoLinearGradient"));
 jest.mock("react-native-svg", () => require("./__mocks__/reactNativeSvg"));
 jest.mock("expo-haptics", () => require("./__mocks__/expoHaptics"));
+jest.mock("../../services/apiClient", () => require("./__mocks__/apiClient"));
+jest.mock("expo-constants", () => ({
+  expoConfig: { version: "1.0.0", extra: { appReviewEmail: "review@example.com" } },
+}));
 
 const { signInMock, setActiveMock, useSignInReturn, signUpMock, setSignUpActiveMock } = clerkMocks;
 const { startOAuthFlowMock } = clerkMocks;
@@ -396,6 +401,27 @@ describe("Apple sign-in", () => {
     expect(setSignUpActiveMock).toHaveBeenCalledWith({ session: "sess_a3" });
   });
 
+  test("missing_requirements never navigates without a session", async () => {
+    await renderReturningUser(false);
+    signInAsync.mockResolvedValueOnce({ identityToken: "tok_mr" });
+    signInMock.create.mockResolvedValueOnce({
+      status: "needs_identifier",
+      firstFactorVerification: { status: "transferable" },
+    });
+    signUpMock.create.mockResolvedValueOnce({ status: "missing_requirements", missingFields: ["first_name"] });
+
+    fireEvent.press(screen.getByText("Continue with Apple"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Apple sign-up did not complete (status: missing_requirements; missing: first_name).")
+      ).toBeOnTheScreen()
+    );
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(setActiveMock).not.toHaveBeenCalled();
+    expect(setSignUpActiveMock).not.toHaveBeenCalled();
+  });
+
   test("a cancelled system dialog produces no error notice", async () => {
     await renderReturningUser(false);
     signInAsync.mockRejectedValueOnce({ code: "ERR_REQUEST_CANCELED" });
@@ -414,9 +440,84 @@ describe("Apple sign-in", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText("Apple sign-in failed. Make sure you're signed into an Apple ID on this device.")
+        screen.getByText(
+          "Apple sign-in failed. Make sure you're signed into an Apple ID on this device. (ERR_REQUEST_UNKNOWN)"
+        )
       ).toBeOnTheScreen()
     );
+  });
+});
+
+// Clerk Device Trust demands an emailed code on every new device. App
+// Review signs in on a clean iPad and can't read the demo inbox, so for the
+// one configured review account the app asks the backend for a single-use
+// sign-in ticket instead. Everyone else keeps the emailed-code step.
+describe("App Review demo account on a new device", () => {
+  const deviceTrustAttempt = (overrides = {}) => ({
+    status: "needs_second_factor",
+    supportedSecondFactors: [{ strategy: "email_code", emailAddressId: "idn_1" }],
+    prepareSecondFactor: jest.fn().mockResolvedValue({}),
+    ...overrides,
+  });
+
+  async function submit(emailAddress, password) {
+    fireEvent.changeText(screen.getByPlaceholderText("Enter your email address"), emailAddress);
+    fireEvent.changeText(screen.getByPlaceholderText("Enter your password"), password);
+    fireEvent.press(screen.getByText("Continue"));
+  }
+
+  test("redeems a backend ticket, activates the session and goes home with no code prompt", async () => {
+    await renderReturningUser(false);
+    const attempt = deviceTrustAttempt();
+    signInMock.create
+      .mockResolvedValueOnce(attempt)
+      .mockResolvedValueOnce({ status: "complete", createdSessionId: "sess_review" });
+    apiMocks.post.mockResolvedValueOnce({ ticket: "tkt_1" });
+
+    await submit(" Review@Example.com ", "correct-horse");
+
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/"));
+    expect(apiMocks.post).toHaveBeenCalledWith("/auth/app-review/sign-in", {
+      email: "Review@Example.com",
+      password: "correct-horse",
+    });
+    expect(signInMock.create).toHaveBeenLastCalledWith({ strategy: "ticket", ticket: "tkt_1" });
+    expect(setActiveMock).toHaveBeenCalledWith({ session: "sess_review" });
+    expect(attempt.prepareSecondFactor).not.toHaveBeenCalled();
+  });
+
+  test("if the backend refuses, falls back to the normal emailed-code step", async () => {
+    await renderReturningUser(false);
+    const attempt = deviceTrustAttempt();
+    signInMock.create.mockResolvedValueOnce(attempt);
+    apiMocks.post.mockRejectedValueOnce(Object.assign(new Error("HTTP 401"), { response: { status: 401 } }));
+
+    await submit("review@example.com", "wrong");
+
+    await waitFor(() => expect(screen.getByText("Verify it's you")).toBeOnTheScreen());
+    expect(attempt.prepareSecondFactor).toHaveBeenCalledWith({ strategy: "email_code" });
+    expect(setActiveMock).not.toHaveBeenCalled();
+  });
+
+  test("any other account never calls the review endpoint", async () => {
+    await renderReturningUser(false);
+    signInMock.create.mockResolvedValueOnce(deviceTrustAttempt());
+
+    await submit("someone@else.com", "hunter2");
+
+    await waitFor(() => expect(screen.getByText("Verify it's you")).toBeOnTheScreen());
+    expect(apiMocks.post).not.toHaveBeenCalled();
+  });
+
+  test("a device Clerk already trusts signs the review account in directly, as before", async () => {
+    await renderReturningUser(false);
+    signInMock.create.mockResolvedValueOnce({ status: "complete", createdSessionId: "sess_known" });
+
+    await submit("review@example.com", "correct-horse");
+
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/"));
+    expect(apiMocks.post).not.toHaveBeenCalled();
+    expect(setActiveMock).toHaveBeenCalledWith({ session: "sess_known" });
   });
 });
 

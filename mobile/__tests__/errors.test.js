@@ -63,8 +63,9 @@ describe("mapAppleAuthErrorCode", () => {
     ["ERR_REQUEST_NOT_HANDLED", "Apple sign-in could not be completed. Please try again."],
     ["ERR_REQUEST_NOT_INTERACTIVE", "Apple sign-in requires user interaction. Please try again."],
     ["ERR_INVALID_RESPONSE", "Apple returned an invalid response. Please try again."],
-  ])("maps %s to its message", (code, expected) => {
-    expect(mapAppleAuthErrorCode(code)).toBe(expected);
+    ["ERR_REQUEST_FAILED", "Apple sign-in failed. Please try again."],
+  ])("maps %s to its message with the code appended", (code, expected) => {
+    expect(mapAppleAuthErrorCode(code)).toBe(`${expected} (${code})`);
   });
 
   test("an unmapped code returns undefined so callers can fall through", () => {

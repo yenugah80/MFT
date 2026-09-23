@@ -37,10 +37,16 @@ export const parseClerkError = (error) => {
  * @param {string} code
  * @returns {string|undefined}
  */
+const APPLE_AUTH_ERROR_MESSAGES = {
+  ERR_REQUEST_UNKNOWN: "Apple sign-in failed. Make sure you're signed into an Apple ID on this device.",
+  ERR_REQUEST_NOT_HANDLED: "Apple sign-in could not be completed. Please try again.",
+  ERR_REQUEST_NOT_INTERACTIVE: "Apple sign-in requires user interaction. Please try again.",
+  ERR_INVALID_RESPONSE: "Apple returned an invalid response. Please try again.",
+  ERR_REQUEST_FAILED: "Apple sign-in failed. Please try again.",
+};
+
+// The native code is appended because these messages are all that reaches us
+// from a device we cannot inspect (e.g. an App Review screenshot), and
+// several codes share near-identical wording.
 export const mapAppleAuthErrorCode = (code) =>
-  ({
-    ERR_REQUEST_UNKNOWN: "Apple sign-in failed. Make sure you're signed into an Apple ID on this device.",
-    ERR_REQUEST_NOT_HANDLED: "Apple sign-in could not be completed. Please try again.",
-    ERR_REQUEST_NOT_INTERACTIVE: "Apple sign-in requires user interaction. Please try again.",
-    ERR_INVALID_RESPONSE: "Apple returned an invalid response. Please try again.",
-  }[code]);
+  APPLE_AUTH_ERROR_MESSAGES[code] && `${APPLE_AUTH_ERROR_MESSAGES[code]} (${code})`;

@@ -46,7 +46,10 @@ export const ProfileProvider = ({ children }) => {
   const onboardingComplete = useMemo(() => {
     // Return null (unknown) while loading or when there's no data yet.
     // Callers must treat null as "still loading" to avoid premature redirects.
-    if (isLoading || !profile) return null;
+    // `undefined` = not fetched yet; `null` = fetched, and no profile exists
+    // (new account, backend 404) — that user needs onboarding.
+    if (isLoading || profile === undefined) return null;
+    if (profile === null) return false;
 
     const hasCompletedAtTimestamp = !!profile.onboardingCompletedAt;
     // Fallback for legacy users who completed setup before onboardingCompletedAt existed.

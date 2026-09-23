@@ -24,6 +24,10 @@ import {
   IS_COMPACT,
 } from "../../components/auth/LaunchAuthDesign";
 import { mapAppleAuthErrorCode, parseClerkError } from "../../utils/errors";
+import { authenticateAppleCredential } from "../../utils/appleAuth";
+import { logAuthFailure, logAuthStage } from "../../utils/authDiagnostics";
+import { isAppReviewAccount } from "../../utils/appReview";
+import apiClient from "../../services/apiClient";
 
 // Required for Clerk OAuth on Expo — closes the browser after redirect
 WebBrowser.maybeCompleteAuthSession();
@@ -168,9 +172,14 @@ export default function SignInScreen() {
   };
 
   const handleAppleSignIn = async () => {
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
     setAppleLoading(true);
     setMessage(null);
     try {
+      logAuthStage("APPLE_AUTH_STARTED");
       // isAvailableAsync must be inside the try: on some devices/builds it can
       // itself reject, and with no catch around it that left the button
       // appearing to do nothing at all — no notice, no loading state, no
@@ -188,83 +197,54 @@ export default function SignInScreen() {
         ],
       });
 
-      const finishSignIn = async (sessionId, activate) => {
-        await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
-        await activate({ session: sessionId });
-        router.replace("/");
-      };
+      logAuthStage("APPLE_CREDENTIAL_RECEIVED");
 
-      try {
-        // `oauth_token_apple`, NOT `oauth_apple`. The latter is Clerk's
-        // browser-redirect flow and ignores a supplied token entirely, which
-        // is why the attempt came back `needs_identifier` — Clerk never saw
-        // an identity at all. `oauth_token_apple` is the native strategy that
-        // accepts the identityToken from expo-apple-authentication. The
-        // instance advertises both in supported_first_factors.
-        const attempt = await signIn.create({
-          strategy: "oauth_token_apple",
-          token: credential.identityToken,
-        });
+      // `oauth_token_apple` (the native strategy), never `oauth_apple` — see
+      // docs/architecture/auth-oauth-reference.md. The helper handles the
+      // transferable hand-offs in both directions and only returns when Clerk
+      // actually created a session.
+      const { sessionId, flow } = await authenticateAppleCredential({
+        credential,
+        signIn,
+        signUp,
+        startWith: "sign_in",
+        log: logAuthStage,
+      });
 
-        if (attempt.status === "complete") {
-          await finishSignIn(attempt.createdSessionId, setActive);
-          return;
-        }
-
-        // `transferable` means Clerk recognises this person (an account with
-        // this email already exists) but has no Apple identity attached to it
-        // yet — e.g. an account created with Google or email/password. Clerk
-        // will not return `complete` until the identity is explicitly linked
-        // via a transfer. Without this branch the user authenticates with
-        // Face ID and then nothing happens at all, which is exactly the bug.
-        if (attempt.firstFactorVerification?.status === "transferable") {
-          const transferred = await signUp.create({ transfer: true });
-          if (transferred.status === "complete") {
-            await finishSignIn(transferred.createdSessionId, setSignUpActive);
-            return;
-          }
-          throw new Error(`Apple account link did not complete (status: ${transferred.status}).`);
-        }
-
-        throw new Error(`Apple sign-in did not complete (status: ${attempt.status}).`);
-      } catch (clerkErr) {
-        if (clerkErr?.errors?.[0]?.code === "external_account_not_found") {
-          const attempt = await signUp.create({
-            strategy: "oauth_token_apple",
-            token: credential.identityToken,
-            ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
-            ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),
-          });
-
-          if (attempt.status === "complete" || attempt.status === "missing_requirements") {
-            await finishSignIn(attempt.createdSessionId, setSignUpActive);
-            return;
-          }
-
-          // Mirror image of the case above: signing *up* discovered the
-          // identity already belongs to an existing user, so transfer back
-          // into a sign-in rather than dead-ending.
-          if (attempt.verifications?.externalAccount?.status === "transferable") {
-            const transferred = await signIn.create({ transfer: true });
-            if (transferred.status === "complete") {
-              await finishSignIn(transferred.createdSessionId, setActive);
-              return;
-            }
-          }
-
-          throw new Error(`Apple sign-up did not complete (status: ${attempt.status}).`);
-        } else {
-          throw clerkErr;
-        }
-      }
+      await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
+      await (flow === "sign_up" ? setSignUpActive : setActive)({ session: sessionId });
+      logAuthStage("SESSION_CREATED", { flow });
+      // "/" decides between onboarding (new account) and the dashboard.
+      router.replace("/");
+      logAuthStage("AUTH_NAVIGATION_STARTED", { flow });
     } catch (err) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
-      console.warn("[Auth] Apple sign-in failed:", err);
+      logAuthFailure("APPLE_AUTH", err);
       const appleMsg = mapAppleAuthErrorCode(err.code);
       setNotice("error", appleMsg || parseClerkError(err) || "Apple sign-in failed. Please try again or use email.");
     } finally {
       setAppleLoading(false);
     }
+  };
+
+  const trySignInWithReviewTicket = async (identifier, pwd) => {
+    if (!isAppReviewAccount(identifier)) return null;
+    try {
+      logAuthStage("APP_REVIEW_TICKET_REQUESTED");
+      const { ticket } = await apiClient.post("/auth/app-review/sign-in", {
+        email: identifier.trim(),
+        password: pwd.trim(),
+      });
+      if (!ticket) return null;
+      const ticketAttempt = await signIn.create({ strategy: "ticket", ticket });
+      if (ticketAttempt.status === "complete" && ticketAttempt.createdSessionId) {
+        return ticketAttempt.createdSessionId;
+      }
+      logAuthFailure("APP_REVIEW_TICKET", null, { status: ticketAttempt.status });
+    } catch (err) {
+      logAuthFailure("APP_REVIEW_TICKET", err);
+    }
+    return null;
   };
 
   const handleSignIn = async () => {
@@ -295,6 +275,20 @@ export default function SignInScreen() {
       // misleading "check your credentials" for a password that Clerk
       // itself just reported as `first_factor_verification: verified`.
       if (attempt.status === "needs_second_factor") {
+        // App Review cannot read the demo account's inbox, so Device Trust's
+        // new-device code would block the reviewer. For that one configured
+        // account only, the backend re-verifies the password and returns a
+        // single-use Clerk sign-in ticket. Every other account, and any
+        // failure here, continues to the normal emailed-code step below.
+        const sessionId = await trySignInWithReviewTicket(email, password);
+        if (sessionId) {
+          await AsyncStorage.setItem(HAS_SIGNED_IN_KEY, "true");
+          await setActive({ session: sessionId });
+          logAuthStage("SESSION_CREATED", { flow: "app_review_ticket" });
+          router.replace("/");
+          return;
+        }
+
         const emailFactor = attempt.supportedSecondFactors?.find(
           (factor) => factor.strategy === "email_code"
         );

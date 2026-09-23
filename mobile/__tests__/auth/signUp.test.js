@@ -197,15 +197,43 @@ describe("Apple sign-up", () => {
     expect(setSignUpActiveMock).toHaveBeenCalledWith({ session: "sess_1" });
   });
 
-  test("missing_requirements with no session id still proceeds without activating", async () => {
+  // Used to navigate to onboarding with no session, where the onboarding
+  // guard bounced the user straight back to sign-in: Apple succeeded, then
+  // the app "could not proceed". Now it stays put and says why.
+  test("missing_requirements with no session shows the reason and never navigates", async () => {
     await renderDetailsStep();
     signInAsync.mockResolvedValueOnce({ identityToken: "tok_2" });
-    signUpMock.create.mockResolvedValueOnce({ status: "missing_requirements", createdSessionId: null });
+    signUpMock.create.mockResolvedValueOnce({
+      status: "missing_requirements",
+      missingFields: ["first_name"],
+      createdSessionId: null,
+    });
 
     fireEvent.press(screen.getByText("Continue with Apple"));
 
-    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/onboarding/step-1"));
+    await waitFor(() =>
+      expect(
+        screen.getByText("Apple sign-up did not complete (status: missing_requirements; missing: first_name).")
+      ).toBeOnTheScreen()
+    );
+    expect(mockRouter.replace).not.toHaveBeenCalled();
     expect(setSignUpActiveMock).not.toHaveBeenCalled();
+  });
+
+  test("returning Apple user (no name, no email) on the sign-up screen goes home, not to onboarding", async () => {
+    await renderDetailsStep();
+    signInAsync.mockResolvedValueOnce({ identityToken: "tok_ret", email: null, fullName: null });
+    signUpMock.create.mockResolvedValueOnce({
+      status: "missing_requirements",
+      verifications: { externalAccount: { status: "transferable" } },
+    });
+    signInMock.create.mockResolvedValueOnce({ status: "complete", createdSessionId: "sess_ret" });
+
+    fireEvent.press(screen.getByText("Continue with Apple"));
+
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/"));
+    expect(signUpMock.create).toHaveBeenCalledWith({ strategy: "oauth_token_apple", token: "tok_ret" });
+    expect(setActiveMock).toHaveBeenCalledWith({ session: "sess_ret" });
   });
 
   test("transferable identity hands off to sign-in and completes there", async () => {

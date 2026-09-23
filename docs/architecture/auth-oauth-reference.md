@@ -204,6 +204,46 @@ confirmed live on a physical device with a real provider token (OAuth's
 `external_account` factor can't be tested via curl), so treat it as
 high-confidence rather than verified.
 
+### 7. App Review could not sign in (Build 39, Guideline 2.1(a))
+
+**Two separate failures on Apple's clean iPad, plus one found while tracing.**
+
+**Demo account.** Device Trust (cause #6) is on, so a clean device gets
+`needs_second_factor` and an emailed code the reviewer cannot read. A device
+Clerk already trusts (e.g. the developer's own iPhone) gets `complete`, which
+is why the credentials "worked" locally. Device Trust stays on for everyone.
+For the one account named by the backend's `APP_REVIEW_EMAIL`, the app calls
+`POST /api/auth/app-review/sign-in` (`backend/src/routes/appReview.js`): the
+backend re-verifies the password with Clerk (`users.verifyPassword`) and
+returns a single-use, 120-second Clerk sign-in token, which the app redeems
+with `signIn.create({ strategy: "ticket" })`. Device Trust only applies to
+password sign-ins, so the ticket completes. The endpoint 404s when
+`APP_REVIEW_EMAIL` is unset and is rate-limited per IP and globally. The app
+only calls it when the email matches `expo.extra.appReviewEmail` in
+`mobile/app.json`, and falls back to the normal emailed-code step on any
+failure.
+
+**Apple.** The user-visible error was one of the `expo-apple-authentication`
+native messages ("…signed into an Apple ID…"), i.e. `ASAuthorizationController`
+itself failed **before Clerk was called**. The entitlement is generated
+(`npx expo config --type introspect` → `com.apple.developer.applesignin:
+["Default"]`), so this is Apple Developer / provisioning configuration — see
+the Apple Developer bullet under *Config that lives outside this repo*. The
+native error code is now appended to the message (e.g.
+`(ERR_REQUEST_UNKNOWN)`) so a screenshot identifies it.
+
+**Found while tracing, fixed in code:**
+- Both Apple handlers treated `missing_requirements` as success and
+  navigated with no session; the route guards bounced the user back to
+  sign-in. `mobile/utils/appleAuth.js` now only succeeds on a real
+  `createdSessionId`, fills a missing name from Apple's first-time
+  credential when Clerk asks for it, and otherwise shows the status and
+  missing fields.
+- A brand-new account arriving at `/` got a 404 from `/profile/me`, which
+  was retried as a failure and ended on "Couldn't load your profile — check
+  your connection". A 404 now resolves to "no profile" and routes to
+  onboarding (`hooks/useProfile.ts`, `providers/ProfileProvider.jsx`).
+
 ---
 
 ## Failure signatures — what each message actually means
@@ -218,6 +258,8 @@ high-confidence rather than verified.
 | 401 on every API call | app and backend on **different Clerk instances** |
 | `AKAuthenticationError -7026` | no Apple ID signed into the device (always true on Simulator) |
 | `needs_second_factor` on password sign-in | reverification/step-up, not classic MFA — see cause #6. Handle it, don't dashboard-hunt first |
+| "…(ERR_REQUEST_UNKNOWN)" on Apple | Apple's own sheet failed before Clerk — Apple Developer App ID capability / provisioning, or no Apple ID on the device |
+| "Apple sign-up did not complete (status: missing_requirements; missing: …)" | Clerk requires a field Apple didn't provide on this attempt — check Clerk → User & authentication required fields |
 
 ---
 
@@ -239,6 +281,11 @@ high-confidence rather than verified.
    look identical and is undiagnosable from a device you cannot inspect.
 6. **Use `oauth_token_apple`, not `oauth_apple`,** for native Apple sign-in.
    The latter is the redirect flow and silently discards the token.
+7. **Never treat `missing_requirements` as success.** It has no session.
+   Both Apple entry points go through `authenticateAppleCredential`
+   (`mobile/utils/appleAuth.js`); keep it that way.
+8. **A 404 from `/profile/me` means "new account", not "offline".** Route it
+   to onboarding.
 
 ---
 
@@ -285,6 +332,8 @@ CI will catch it:
   Key ID / `.p8`)
 - Clerk → Protect → Bot sign-up protection
 - Railway → `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`
+- Railway → `APP_REVIEW_EMAIL` (the App Store demo account; unset disables
+  the review sign-in endpoint). Must match `expo.extra.appReviewEmail`.
 - EAS → `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` (production environment)
 - Google Cloud Console → authorized redirect URIs for the Clerk OAuth client
 - Apple Developer → App ID capability **Sign in with Apple**, and a key with

@@ -31,6 +31,8 @@ import {
   IS_COMPACT,
 } from "../../components/auth/LaunchAuthDesign";
 import { mapAppleAuthErrorCode, parseClerkError } from "../../utils/errors";
+import { authenticateAppleCredential } from "../../utils/appleAuth";
+import { logAuthFailure, logAuthStage } from "../../utils/authDiagnostics";
 import VerifyEmail from "./verify-email";
 
 // Required for Clerk OAuth on Expo — closes the browser after redirect
@@ -102,9 +104,14 @@ export default function SignUpScreen() {
   };
 
   const handleAppleSignUp = async () => {
+    if (!isLoaded) {
+      setNotice("error", "Still getting ready — please try again in a moment.");
+      return;
+    }
     setAppleLoading(true);
     setMessage(null);
     try {
+      logAuthStage("APPLE_AUTH_STARTED");
       // isAvailableAsync must be inside the try: on some devices/builds it can
       // itself reject, and with no catch around it that left the button
       // appearing to do nothing at all — no notice, no loading state, no
@@ -122,45 +129,27 @@ export default function SignUpScreen() {
         ],
       });
 
-      // `oauth_token_apple` is the native token strategy; `oauth_apple` is the
-      // browser-redirect one and silently ignores the token (see the matching
-      // comment in sign-in.jsx).
-      const attempt = await signUp.create({
-        strategy: "oauth_token_apple",
-        token: credential.identityToken,
-        ...(credential.fullName?.givenName && { firstName: credential.fullName.givenName }),
-        ...(credential.fullName?.familyName && { lastName: credential.fullName.familyName }),
+      logAuthStage("APPLE_CREDENTIAL_RECEIVED");
+
+      // Same helper as sign-in, entered from the sign-up side. It only
+      // returns when Clerk created a session — `missing_requirements` used to
+      // navigate here with no session, which the onboarding guard bounced
+      // straight back to sign-in.
+      const { sessionId, flow, isNewUser } = await authenticateAppleCredential({
+        credential,
+        signIn,
+        signUp,
+        startWith: "sign_up",
+        log: logAuthStage,
       });
 
-      if (attempt.status === "complete" || attempt.status === "missing_requirements") {
-        // The session was never activated here, so even a "successful" Apple
-        // sign-up left the user unauthenticated. Only `complete` carries a
-        // session id; `missing_requirements` still needs the onboarding step.
-        if (attempt.createdSessionId) {
-          await setSignUpActive({ session: attempt.createdSessionId });
-        }
-        router.replace("/onboarding/step-1");
-        return;
-      }
-
-      // Clerk found an existing account for this identity — hand the attempt
-      // back to sign-in instead of dead-ending on a status we don't handle.
-      if (attempt.verifications?.externalAccount?.status === "transferable") {
-        const transferred = await signIn.create({ transfer: true });
-        if (transferred.status === "complete") {
-          await setSignInActive({ session: transferred.createdSessionId });
-          router.replace("/");
-          return;
-        }
-        throw new Error(`Apple account link did not complete (status: ${transferred.status}).`);
-      }
-
-      // Previously fell through to nothing — Apple would authenticate, then the
-      // screen sat there with no error and no navigation.
-      throw new Error(`Apple sign-up did not complete (status: ${attempt.status}).`);
+      await (flow === "sign_up" ? setSignUpActive : setSignInActive)({ session: sessionId });
+      logAuthStage("SESSION_CREATED", { flow });
+      router.replace(isNewUser ? "/onboarding/step-1" : "/");
+      logAuthStage("AUTH_NAVIGATION_STARTED", { flow });
     } catch (err) {
       if (err.code === "ERR_REQUEST_CANCELED") return;
-      console.warn("[Auth] Apple sign-up failed:", err);
+      logAuthFailure("APPLE_SIGN_UP", err);
       const appleMsg = mapAppleAuthErrorCode(err.code);
       setNotice("error", appleMsg || parseClerkError(err) || "Apple sign-up failed. Please try again or use email.");
     } finally {

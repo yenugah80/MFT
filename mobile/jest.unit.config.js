@@ -15,6 +15,7 @@ module.exports = {
     '**/__tests__/**/spacingScale.test.js',
     '**/__tests__/**/decisionBrainInsights.test.js',
     '**/__tests__/**/foodResolution.test.js',
+    '**/__tests__/**/appleAuth.test.js',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
